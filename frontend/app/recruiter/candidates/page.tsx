@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { createCandidate, getCandidates, CandidateResponse, CandidateCreate, uploadCandidatePhoto } from '@/lib/api'
+import { createCandidate, getCandidates, CandidateResponse, CandidateCreate, uploadCandidatePhoto, parseCv } from '@/lib/api'
 import { getToken, isAuthenticated } from '@/lib/auth'
-import { Plus, X, Tag, List, LayoutGrid, Image as ImageIcon } from 'lucide-react'
+import { Plus, X, Tag, List, LayoutGrid, Image as ImageIcon, Upload, FileText, UserPlus, ChevronDown } from 'lucide-react'
 import { useToastContext } from '@/components/ToastProvider'
 
 export default function RecruiterCandidatesPage() {
@@ -38,6 +38,27 @@ export default function RecruiterCandidatesPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [tagInput, setTagInput] = useState('')
   const [skillInput, setSkillInput] = useState('')
+  const [isParsingCv, setIsParsingCv] = useState(false)
+  const [isDragOver, setIsDragOver] = useState(false)
+  const [showAddMenu, setShowAddMenu] = useState(false)
+  const [addMode, setAddMode] = useState<'manual' | 'auto'>('manual')
+
+  // Fermer le menu déroulant quand on clique en dehors
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (showAddMenu && !target.closest('.relative')) {
+        setShowAddMenu(false)
+      }
+    }
+
+    if (showAddMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }
+  }, [showAddMenu])
 
   useEffect(() => {
     // Vérifier l'authentification avant de charger les données
@@ -49,6 +70,7 @@ export default function RecruiterCandidatesPage() {
     // Vérifier si on doit afficher le formulaire de création
     const action = searchParams.get('action')
     if (action === 'new') {
+      setAddMode('manual')
       setIsModalOpen(true)
     }
 
@@ -118,6 +140,80 @@ export default function RecruiterCandidatesPage() {
     })
   }
 
+  const handleCvParse = async (file: File) => {
+    // Vérifier le type de fichier
+    const fileExtension = file.name.toLowerCase().split('.').pop()
+    
+    if (!['pdf', 'doc', 'docx'].includes(fileExtension || '')) {
+      showError('Format de fichier non supporté. Veuillez utiliser un fichier PDF ou Word (.doc, .docx)')
+      return
+    }
+
+    setIsParsingCv(true)
+    try {
+      const parsedData = await parseCv(file)
+      
+      // Pré-remplir le formulaire avec les données parsées
+      setFormData({
+        first_name: parsedData.first_name || '',
+        last_name: parsedData.last_name || '',
+        profile_title: parsedData.profile_title || '',
+        years_of_experience: parsedData.years_of_experience,
+        email: parsedData.email || '',
+        phone: parsedData.phone || '',
+        tags: parsedData.tags || [],
+        skills: parsedData.skills || [],
+        source: parsedData.source || '',
+        notes: parsedData.notes || '',
+      })
+      
+      // Sauvegarder le fichier CV pour l'upload final
+      setCvFile(file)
+      
+      success('CV analysé avec succès ! Vérifiez et complétez les informations ci-dessous.')
+      
+      // Faire défiler vers le formulaire
+      setTimeout(() => {
+        const formElement = document.querySelector('form')
+        if (formElement) {
+          formElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }, 100)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur lors de l\'analyse du CV'
+      showError(errorMessage)
+    } finally {
+      setIsParsingCv(false)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length > 0) {
+      handleCvParse(files[0])
+    }
+  }
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (files && files.length > 0) {
+      handleCvParse(files[0])
+    }
+  }
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -158,6 +254,7 @@ export default function RecruiterCandidatesPage() {
       
       success('Candidat créé avec succès')
       setIsModalOpen(false)
+      setAddMode('manual')
       setFormData({
         first_name: '',
         last_name: '',
@@ -223,13 +320,50 @@ export default function RecruiterCandidatesPage() {
               Kanban
             </button>
           </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Ajouter un candidat
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowAddMenu(!showAddMenu)}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Ajouter un candidat
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            
+            {showAddMenu && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                <button
+                  onClick={() => {
+                    setAddMode('manual')
+                    setIsModalOpen(true)
+                    setShowAddMenu(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors rounded-t-lg"
+                >
+                  <UserPlus className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <div className="font-medium text-gray-900">Ajout manuel</div>
+                    <div className="text-xs text-gray-500">Saisir les informations</div>
+                  </div>
+                </button>
+                <div className="border-t border-gray-200"></div>
+                <button
+                  onClick={() => {
+                    setAddMode('auto')
+                    setIsModalOpen(true)
+                    setShowAddMenu(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors rounded-b-lg"
+                >
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <div className="font-medium text-gray-900">Import automatique</div>
+                    <div className="text-xs text-gray-500">Analyser un CV</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -364,7 +498,10 @@ export default function RecruiterCandidatesPage() {
               <div className="text-center py-12 text-gray-500">
                 <p>Aucun candidat trouvé</p>
                 <button
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={() => {
+                    setAddMode('manual')
+                    setIsModalOpen(true)
+                  }}
                   className="mt-4 inline-block text-blue-600 hover:text-blue-700 font-medium"
                 >
                   Ajouter votre premier candidat
@@ -442,15 +579,67 @@ export default function RecruiterCandidatesPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Ajouter un candidat</h2>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {addMode === 'auto' ? 'Import automatique de CV' : 'Ajouter un candidat'}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {addMode === 'auto' 
+                    ? 'Importez un CV pour extraire automatiquement les informations'
+                    : 'Saisissez manuellement les informations du candidat'}
+                </p>
+              </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false)
+                  setAddMode('manual')
+                }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* Zone Drag & Drop pour l'import de CV - Affichée uniquement en mode auto */}
+              {addMode === 'auto' && (
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                    isDragOver
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-300 hover:border-blue-400'
+                  } ${isParsingCv ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  {isParsingCv ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <p className="text-sm text-gray-600">Analyse du CV en cours...</p>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Glissez-déposez un CV ici ou cliquez pour sélectionner
+                      </p>
+                      <p className="text-xs text-gray-500 mb-4">
+                        Formats acceptés: PDF, Word (.doc, .docx)
+                      </p>
+                      <label className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors">
+                        <Upload className="w-4 h-4 mr-2" />
+                        Importer un CV
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx"
+                          onChange={handleFileInput}
+                          className="hidden"
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

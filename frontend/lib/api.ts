@@ -127,6 +127,40 @@ export async function validateJob(jobId: string, validation: JobValidation): Pro
 
 // ===== CANDIDATES API =====
 
+export async function parseCv(cvFile: File): Promise<CandidateCreate> {
+  const formData = new FormData()
+  formData.append('cv_file', cvFile)
+
+  try {
+    const response = await authenticatedFetch(`${API_URL}/candidates/parse-cv`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        console.warn('⚠️ [AUTH] Token expiré ou invalide, redirection vers login')
+        const { removeToken } = await import('@/lib/auth')
+        removeToken()
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/choice'
+        }
+        throw new Error('Session expirée. Veuillez vous reconnecter.')
+      }
+      const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'analyse du CV' }))
+      throw new Error(error.detail || 'Erreur lors de l\'analyse du CV')
+    }
+
+    return response.json()
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      console.error('Erreur de connexion au backend. Vérifiez que le serveur est démarré.')
+      throw new Error('Impossible de se connecter au serveur. Vérifiez que le backend est démarré.')
+    }
+    throw error
+  }
+}
+
 export interface CandidateCreate {
   first_name: string
   last_name: string

@@ -3,6 +3,8 @@ Routes pour la gestion des candidats (US04)
 """
 import os
 import shutil
+import json
+import tempfile
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
@@ -10,6 +12,23 @@ from sqlmodel import Session, select
 from sqlalchemy import text
 from typing import List, Optional
 from uuid import UUID, uuid4
+
+# Imports pour l'extraction de texte
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+
+try:
+    from docx import Document
+except ImportError:
+    Document = None
+
+# Import pour OpenAI
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
 
 from database import get_session, engine
 from models import Candidate, User, UserRole, Interview, Application
@@ -38,6 +57,166 @@ def is_allowed_file(filename: str) -> bool:
 def is_allowed_image(filename: str) -> bool:
     """Vérifie si le fichier est une image autorisée"""
     return Path(filename).suffix.lower() in ALLOWED_IMAGE_EXTENSIONS
+
+
+def extract_text_from_pdf(file_path: str) -> str:
+    """Extrait le texte d'un fichier PDF"""
+    if fitz is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="PyMuPDF n'est pas installé. Installez-le avec: pip install pymupdf"
+        )
+    
+    try:
+        doc = fitz.open(file_path)
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        doc.close()
+        return text
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erreur lors de l'extraction du PDF: {str(e)}"
+        )
+
+
+def extract_text_from_docx(file_path: str) -> str:
+    """Extrait le texte d'un fichier Word (.docx)"""
+    if Document is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="python-docx n'est pas installé. Installez-le avec: pip install python-docx"
+        )
+    
+    try:
+        doc = Document(file_path)
+        text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+        return text
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erreur lors de l'extraction du document Word: {str(e)}"
+        )
+
+
+def extract_text_from_cv(file: UploadFile) -> str:
+    """Extrait le texte brut d'un CV (PDF ou Word)"""
+    file_extension = Path(file.filename).suffix.lower()
+    
+    # Créer un fichier temporaire
+    with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
+        tmp_path = tmp_file.name
+        try:
+            # Écrire le contenu du fichier uploadé
+            shutil.copyfileobj(file.file, tmp_file)
+            tmp_file.flush()
+            
+            # Extraire le texte selon le type de fichier
+            if file_extension == ".pdf":
+                text = extract_text_from_pdf(tmp_path)
+            elif file_extension in {".doc", ".docx"}:
+                text = extract_text_from_docx(tmp_path)
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Format de fichier non supporté: {file_extension}"
+                )
+            
+            return text
+        finally:
+            # Nettoyer le fichier temporaire
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+
+def parse_cv_with_llm(cv_text: str) -> dict:
+    """Utilise un LLM pour parser le texte du CV et extraire les informations structurées"""
+    if OpenAI is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI n'est pas installé. Installez-le avec: pip install openai"
+        )
+    
+    # Récupérer la clé API depuis les variables d'environnement
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OPENAI_API_KEY n'est pas configurée dans les variables d'environnement"
+        )
+    
+    client = OpenAI(api_key=api_key)
+    
+    # Prompt pour extraire les informations du CV
+    prompt = f"""Tu es un assistant expert en recrutement. Analyse le CV suivant et extrais les informations pertinentes au format JSON.
+
+CV:
+{cv_text}
+
+Extrais les informations suivantes au format JSON strict (sans commentaires, sans markdown):
+{{
+  "first_name": "Prénom du candidat",
+  "last_name": "Nom du candidat",
+  "profile_title": "Titre du poste actuel ou recherché (ex: Développeur Fullstack, Chef de projet, etc.)",
+  "years_of_experience": nombre d'années d'expérience total (entier, 0 si débutant),
+  "email": "Email du candidat",
+  "phone": "Téléphone du candidat",
+  "skills": ["compétence1", "compétence2", ...],
+  "source": "Source du CV si mentionnée (LinkedIn, APEC, etc.)",
+  "notes": "Notes pertinentes extraites du CV"
+}}
+
+Règles importantes:
+- Si une information n'est pas trouvée, utilise null pour les champs optionnels
+- first_name et last_name sont obligatoires (extrais-les du nom complet)
+- years_of_experience doit être un nombre entier (calcule-le à partir des dates d'expérience)
+- skills doit être une liste de chaînes (extrais les technologies, langages, outils mentionnés)
+- Retourne UNIQUEMENT le JSON, sans texte avant ou après
+"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # Modèle économique et rapide
+            messages=[
+                {"role": "system", "content": "Tu es un assistant expert en extraction de données de CV. Tu retournes uniquement du JSON valide."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.1,  # Faible température pour plus de cohérence
+            max_tokens=2000
+        )
+        
+        # Extraire le JSON de la réponse
+        response_text = response.choices[0].message.content.strip()
+        
+        # Nettoyer la réponse (enlever les markdown code blocks si présents)
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+        
+        # Parser le JSON
+        parsed_data = json.loads(response_text)
+        
+        # Valider que first_name et last_name sont présents
+        if not parsed_data.get("first_name") or not parsed_data.get("last_name"):
+            raise ValueError("first_name et last_name sont obligatoires")
+        
+        return parsed_data
+        
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors du parsing JSON de la réponse LLM: {str(e)}. Réponse reçue: {response_text[:200]}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'appel à l'API OpenAI: {str(e)}"
+        )
 
 
 @router.post("/upload-photo", status_code=status.HTTP_200_OK)
@@ -78,6 +257,72 @@ async def upload_candidate_photo(
     photo_url = f"/static/uploads/{unique_filename}"
     
     return {"photo_url": photo_url, "filename": unique_filename}
+
+
+@router.post("/parse-cv", response_model=CandidateCreate)
+async def parse_cv(
+    cv_file: UploadFile = File(..., description="Fichier CV (PDF ou Word)"),
+    current_user: User = Depends(require_recruteur),
+):
+    """
+    Parse un CV et extrait automatiquement les informations du candidat
+    
+    Accepte un fichier PDF ou Word, extrait le texte, et utilise un LLM
+    pour structurer les données selon le modèle CandidateCreate.
+    """
+    try:
+        # Vérifier que le fichier est autorisé
+        if not is_allowed_file(cv_file.filename):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Format de fichier non supporté. Formats acceptés: {', '.join(ALLOWED_EXTENSIONS)}"
+            )
+        
+        # Extraire le texte du CV
+        cv_text = extract_text_from_cv(cv_file)
+        
+        if not cv_text or len(cv_text.strip()) < 50:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le CV semble vide ou le texte n'a pas pu être extrait correctement"
+            )
+        
+        # Parser le texte avec le LLM
+        parsed_data = parse_cv_with_llm(cv_text)
+        
+        # Valider et retourner les données
+        # Convertir years_of_experience en int si présent
+        if "years_of_experience" in parsed_data and parsed_data["years_of_experience"] is not None:
+            try:
+                parsed_data["years_of_experience"] = int(parsed_data["years_of_experience"])
+            except (ValueError, TypeError):
+                parsed_data["years_of_experience"] = None
+        
+        # S'assurer que skills est une liste
+        if "skills" in parsed_data and parsed_data["skills"] is None:
+            parsed_data["skills"] = []
+        elif "skills" not in parsed_data:
+            parsed_data["skills"] = []
+        
+        # S'assurer que tags est une liste (peut être vide)
+        if "tags" not in parsed_data:
+            parsed_data["tags"] = []
+        
+        # Valider avec le schéma Pydantic
+        candidate_data = CandidateCreate.model_validate(parsed_data)
+        
+        return candidate_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erreur lors du parsing du CV: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors du parsing du CV: {str(e)}"
+        )
 
 
 @router.post("/", response_model=CandidateResponse, status_code=status.HTTP_201_CREATED)
