@@ -365,3 +365,35 @@ class Setting(SQLModel, table=True):
     
     # Relationships
     updater: User = Relationship(sa_relationship_kwargs={"lazy": "select"})
+
+
+class Team(SQLModel, table=True):
+    """Modèle équipe"""
+    __tablename__ = "teams"
+    
+    id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
+    name: str = Field(max_length=255, index=True)  # Nom de l'équipe
+    description: str | None = Field(default=None, sa_column=Column(Text))  # Description de l'équipe
+    department: str | None = Field(default=None, max_length=100)  # Département
+    manager_id: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")))  # Manager de l'équipe
+    is_active: bool = Field(default=True)  # Équipe active ou non
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    manager: User = Relationship(sa_relationship_kwargs={"lazy": "select", "foreign_keys": "[Team.manager_id]"})
+
+
+class TeamMember(SQLModel, table=True):
+    """Modèle membre d'équipe (table de liaison many-to-many entre User et Team)"""
+    __tablename__ = "team_members"
+    
+    id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
+    team_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), primary_key=False))
+    user_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=False))
+    role: str | None = Field(default=None, max_length=50)  # Rôle dans l'équipe (membre, lead, etc.)
+    joined_at: datetime = Field(default_factory=datetime.utcnow)  # Date d'ajout à l'équipe
+    
+    # Relationships
+    team: Team = Relationship(sa_relationship_kwargs={"lazy": "select"})
+    user: User = Relationship(sa_relationship_kwargs={"lazy": "select"})

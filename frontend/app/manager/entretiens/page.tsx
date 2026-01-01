@@ -42,7 +42,9 @@ import {
   Search,
   Briefcase,
   Mail,
-  Phone
+  Phone,
+  Edit,
+  Trash2
 } from 'lucide-react'
 
 type ViewMode = 'calendar' | 'list'
@@ -674,52 +676,57 @@ export default function ManagerInterviewsPage() {
   const monthName = currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Planification des Entretiens</h1>
-          <p className="text-gray-600 mt-2">Planifiez et gérez vos entretiens avec les candidats</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-1">
-            <button
-              onClick={() => setViewMode('calendar')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'calendar'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <Calendar className="w-4 h-4 inline mr-2" />
-              Calendrier
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              Liste
-            </button>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header moderne avec gradient */}
+        <div className="mb-8">
+          <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 rounded-2xl shadow-xl p-8 text-white">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <h1 className="text-4xl font-bold mb-2">Planification des Entretiens</h1>
+                <p className="text-indigo-100 text-lg">Planifiez et gérez vos entretiens avec les candidats</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-xl border border-white/30 p-1">
+                  <button
+                    onClick={() => setViewMode('calendar')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      viewMode === 'calendar'
+                        ? 'bg-white text-indigo-600 shadow-lg'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <Calendar className="w-4 h-4 inline mr-2" />
+                    Calendrier
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      viewMode === 'list'
+                        ? 'bg-white text-indigo-600 shadow-lg'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    Liste
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    resetForm()
+                    if (currentUserId && !selectedInterviewerId) {
+                      setSelectedInterviewerId(currentUserId)
+                    }
+                    setShowModal(true)
+                  }}
+                  className="flex items-center gap-2 bg-white text-indigo-600 px-6 py-3 rounded-xl hover:bg-indigo-50 transition-all shadow-lg hover:shadow-xl font-semibold"
+                >
+                  <Plus className="w-5 h-5" />
+                  Planifier un entretien
+                </button>
+              </div>
+            </div>
           </div>
-          <button
-            onClick={() => {
-              resetForm()
-              // S'assurer que selectedInterviewerId est défini avant d'ouvrir le modal
-              if (currentUserId && !selectedInterviewerId) {
-                setSelectedInterviewerId(currentUserId)
-              }
-              setShowModal(true)
-            }}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Planifier un entretien
-          </button>
         </div>
-      </div>
 
       {error && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
@@ -727,223 +734,217 @@ export default function ManagerInterviewsPage() {
         </div>
       )}
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Aujourd'hui</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {interviews.filter(i => {
-                  const date = new Date(i.scheduled_at)
-                  const today = new Date()
-                  return date.toDateString() === today.toDateString()
-                }).length}
-              </p>
+        {/* Statistiques modernes */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-indigo-100 rounded-xl group-hover:bg-indigo-200 transition-colors">
+                <Calendar className="w-6 h-6 text-indigo-600" />
+              </div>
             </div>
-            <Calendar className="w-8 h-8 text-indigo-600" />
+            <p className="text-sm font-medium text-gray-600 mb-1">Aujourd'hui</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {interviews.filter(i => {
+                const date = new Date(i.scheduled_at)
+                const today = new Date()
+                return date.toDateString() === today.toDateString()
+              }).length}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-green-100 rounded-xl group-hover:bg-green-200 transition-colors">
+                <Clock className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+            <p className="text-sm font-medium text-gray-600 mb-1">Cette semaine</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {interviews.filter(i => {
+                const date = new Date(i.scheduled_at)
+                const weekStart = new Date()
+                weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+                return date >= weekStart
+              }).length}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-yellow-100 rounded-xl group-hover:bg-yellow-200 transition-colors">
+                <MessageSquare className="w-6 h-6 text-yellow-600" />
+              </div>
+            </div>
+            <p className="text-sm font-medium text-gray-600 mb-1">En attente feedback</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {interviews.filter(i => !i.feedback && new Date(i.scheduled_at) < new Date()).length}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-purple-100 rounded-xl group-hover:bg-purple-200 transition-colors">
+                <Users className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+            <p className="text-sm font-medium text-gray-600 mb-1">Total</p>
+            <p className="text-3xl font-bold text-gray-900">{interviews.length}</p>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-green-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Cette semaine</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {interviews.filter(i => {
-                  const date = new Date(i.scheduled_at)
-                  const weekStart = new Date()
-                  weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-                  return date >= weekStart
-                }).length}
-              </p>
-            </div>
-            <Clock className="w-8 h-8 text-green-600" />
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">En attente feedback</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {interviews.filter(i => !i.feedback && new Date(i.scheduled_at) < new Date()).length}
-              </p>
-            </div>
-            <MessageSquare className="w-8 h-8 text-yellow-600" />
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-purple-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total</p>
-              <p className="text-2xl font-bold text-gray-900">{interviews.length}</p>
-            </div>
-            <Users className="w-8 h-8 text-purple-600" />
-          </div>
-        </div>
-      </div>
 
-      {/* Contenu selon la vue */}
-      {viewMode === 'calendar' ? (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900 capitalize">{monthName}</h2>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => navigateMonth('prev')}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setCurrentDate(new Date())}
-                  className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  Aujourd'hui
-                </button>
-                <button
-                  onClick={() => navigateMonth('next')}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
+        {/* Contenu selon la vue */}
+        {viewMode === 'calendar' ? (
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900 capitalize">{monthName}</h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigateMonth('prev')}
+                    className="p-2 hover:bg-white rounded-xl transition-all shadow-sm hover:shadow-md"
+                  >
+                    <ChevronLeft className="w-5 h-5 text-gray-700" />
+                  </button>
+                  <button
+                    onClick={() => setCurrentDate(new Date())}
+                    className="px-4 py-2 text-sm font-medium text-indigo-600 bg-white hover:bg-indigo-50 rounded-xl transition-all shadow-sm hover:shadow-md"
+                  >
+                    Aujourd'hui
+                  </button>
+                  <button
+                    onClick={() => navigateMonth('next')}
+                    className="p-2 hover:bg-white rounded-xl transition-all shadow-sm hover:shadow-md"
+                  >
+                    <ChevronRight className="w-5 h-5 text-gray-700" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              {/* En-têtes des jours */}
+              <div className="grid grid-cols-7 gap-3 mb-4">
+                {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
+                  <div key={day} className="text-center text-sm font-semibold text-gray-700 py-3 bg-gray-50 rounded-lg">
+                    {day}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Grille du calendrier */}
+              <div className="grid grid-cols-7 gap-3">
+                {days.map((day, index) => {
+                  if (!day) {
+                    return <div key={`empty-${index}`} className="aspect-square"></div>
+                  }
+                  
+                  const dayInterviews = getInterviewsForDate(day)
+                  const isToday = day.toDateString() === new Date().toDateString()
+                  const isPast = day < new Date() && !isToday
+                  
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      onClick={() => handleDateClick(day)}
+                      className={`aspect-square border-2 rounded-xl p-3 cursor-pointer transition-all hover:shadow-lg ${
+                        isToday
+                          ? 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-purple-50 shadow-md'
+                          : isPast
+                          ? 'border-gray-200 bg-gray-50 opacity-75'
+                          : 'border-gray-200 bg-white hover:border-indigo-300 hover:shadow-md'
+                      }`}
+                    >
+                      <div className={`text-lg font-bold mb-2 ${isToday ? 'text-indigo-700' : 'text-gray-800'}`}>
+                        {day.getDate()}
+                      </div>
+                      <div className="space-y-1.5">
+                        {dayInterviews.slice(0, 3).map(interview => (
+                          <div
+                            key={interview.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditModal(interview)
+                            }}
+                            className={`text-xs px-2 py-1 rounded-lg truncate border ${getInterviewTypeColor(interview.interview_type)} cursor-pointer hover:scale-105 transition-transform font-medium`}
+                            title={`${getInterviewTypeLabel(interview.interview_type)} - ${interview.candidate_name}`}
+                          >
+                            {interview.candidate_name.split(' ')[0]}
+                          </div>
+                        ))}
+                        {dayInterviews.length > 3 && (
+                          <div className="text-xs text-gray-500 font-medium">
+                            +{dayInterviews.length - 3} autre{dayInterviews.length - 3 > 1 ? 's' : ''}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
-          
-          <div className="p-6">
-            {/* En-têtes des jours */}
-            <div className="grid grid-cols-7 gap-2 mb-2">
-              {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
-                <div key={day} className="text-center text-sm font-medium text-gray-600 py-2">
-                  {day}
-                </div>
-              ))}
+        ) : (
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-900">
+                {interviews.length} entretien{interviews.length > 1 ? 's' : ''} planifié{interviews.length > 1 ? 's' : ''}
+              </h2>
             </div>
-            
-            {/* Grille du calendrier */}
-            <div className="grid grid-cols-7 gap-2">
-              {days.map((day, index) => {
-                if (!day) {
-                  return <div key={`empty-${index}`} className="aspect-square"></div>
-                }
-                
-                const dayInterviews = getInterviewsForDate(day)
-                const isToday = day.toDateString() === new Date().toDateString()
-                const isPast = day < new Date() && !isToday
-                
-                return (
-                  <div
-                    key={day.toISOString()}
-                    onClick={() => handleDateClick(day)}
-                    className={`aspect-square border-2 rounded-lg p-2 cursor-pointer transition-all hover:shadow-md ${
-                      isToday
-                        ? 'border-indigo-500 bg-indigo-50'
-                        : isPast
-                        ? 'border-gray-200 bg-gray-50'
-                        : 'border-gray-200 bg-white hover:border-indigo-300'
-                    }`}
-                  >
-                    <div className={`text-sm font-medium mb-1 ${isToday ? 'text-indigo-700' : 'text-gray-700'}`}>
-                      {day.getDate()}
-                    </div>
-                    <div className="space-y-1">
-                      {dayInterviews.slice(0, 3).map(interview => (
-                        <div
-                          key={interview.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSelectedInterview(interview)
-                            if (!interview.feedback && new Date(interview.scheduled_at) < new Date()) {
-                              setShowFeedbackModal(interview.id)
-                            }
-                          }}
-                          className={`text-xs p-1 rounded truncate border ${getInterviewTypeColor(interview.interview_type)} cursor-pointer`}
-                          title={`${getInterviewTypeLabel(interview.interview_type)} - ${interview.candidate_name}`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openEditModal(interview)
-                          }}
-                        >
-                          {interview.candidate_name.split(' ')[0]}
-                        </div>
-                      ))}
-                      {dayInterviews.length > 3 && (
-                        <div className="text-xs text-gray-500">
-                          +{dayInterviews.length - 3} autre{dayInterviews.length - 3 > 1 ? 's' : ''}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">
-              {interviews.length} entretien{interviews.length > 1 ? 's' : ''}
-            </h2>
-          </div>
-          <div className="p-6">
-            {interviews.length > 0 ? (
-              <div className="space-y-4">
-                {interviews
-                  .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-                  .map((interview) => (
-                    <div
-                      key={interview.id}
-                      className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className={`px-3 py-1 text-xs font-medium rounded-full border ${getInterviewTypeColor(interview.interview_type)}`}>
+            <div className="p-6">
+              {interviews.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {interviews
+                    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+                    .map((interview) => (
+                      <div
+                        key={interview.id}
+                        className="group p-6 border-2 border-gray-200 rounded-xl hover:border-indigo-300 hover:shadow-xl transition-all bg-white"
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${getInterviewTypeColor(interview.interview_type)}`}>
                               {getInterviewTypeLabel(interview.interview_type)}
                             </span>
                             {getDecisionBadge(interview.decision || 'en_attente')}
                           </div>
-                          <h3 className="font-medium text-gray-900 mb-1">
-                            {interview.candidate_name}
-                          </h3>
-                          <p className="text-sm text-gray-600 mb-2">{interview.job_title}</p>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />
-                              {formatDateTime(interview.scheduled_at)}
-                            </span>
-                            {interview.location && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-4 h-4" />
-                                {interview.location}
-                              </span>
-                            )}
-                            {interview.interviewer_name && (
-                              <span className="flex items-center gap-1">
-                                <User className="w-4 h-4" />
-                                {interview.interviewer_name}
-                              </span>
-                            )}
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">
+                          {interview.candidate_name}
+                        </h3>
+                        <p className="text-sm font-medium text-gray-600 mb-4">{interview.job_title}</p>
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Calendar className="w-4 h-4 text-indigo-600" />
+                            <span className="font-medium">{formatDateTime(interview.scheduled_at)}</span>
                           </div>
-                          {interview.feedback && (
-                            <p className="text-sm text-gray-600 mt-2">{interview.feedback}</p>
+                          {interview.location && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <MapPin className="w-4 h-4 text-indigo-600" />
+                              <span>{interview.location}</span>
+                            </div>
+                          )}
+                          {interview.interviewer_name && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <User className="w-4 h-4 text-indigo-600" />
+                              <span>{interview.interviewer_name}</span>
+                            </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        {interview.feedback && (
+                          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                            <p className="text-sm text-gray-700">{interview.feedback}</p>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
                           <button
                             onClick={() => openEditModal(interview)}
-                            className="flex items-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
                           >
+                            <Edit className="w-4 h-4" />
                             Modifier
                           </button>
                           <button
                             onClick={() => handleDeleteInterview(interview.id)}
-                            className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                            className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
                           >
-                            <X className="w-4 h-4" />
-                            Supprimer
+                            <Trash2 className="w-4 h-4" />
                           </button>
                           {!interview.feedback && new Date(interview.scheduled_at) < new Date() && (
                             <button
@@ -951,38 +952,42 @@ export default function ManagerInterviewsPage() {
                                 setSelectedInterview(interview)
                                 setShowFeedbackModal(interview.id)
                               }}
-                              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
                             >
                               <MessageSquare className="w-4 h-4" />
-                              Ajouter feedback
+                              Feedback
                             </button>
                           )}
                         </div>
                       </div>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-gray-500">
-                <p>Aucun entretien planifié</p>
-                <button
-                  onClick={() => {
-                    resetForm()
-                    // S'assurer que selectedInterviewerId est défini avant d'ouvrir le modal
-                    if (currentUserId && !selectedInterviewerId) {
-                      setSelectedInterviewerId(currentUserId)
-                    }
-                    setShowModal(true)
-                  }}
-                  className="mt-4 inline-block text-indigo-600 hover:text-indigo-700 font-medium"
-                >
-                  Planifier votre premier entretien
-                </button>
-              </div>
-            )}
+                    ))}
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <div className="inline-flex items-center justify-center w-20 h-20 bg-indigo-100 rounded-full mb-4">
+                    <Calendar className="w-10 h-10 text-indigo-600" />
+                  </div>
+                  <p className="text-xl font-semibold text-gray-900 mb-2">Aucun entretien planifié</p>
+                  <p className="text-gray-600 mb-6">Commencez par planifier votre premier entretien</p>
+                  <button
+                    onClick={() => {
+                      resetForm()
+                      if (currentUserId && !selectedInterviewerId) {
+                        setSelectedInterviewerId(currentUserId)
+                      }
+                      setShowModal(true)
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl font-semibold"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Planifier votre premier entretien
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Modal de planification */}
       {showModal && (
@@ -1000,20 +1005,24 @@ export default function ManagerInterviewsPage() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <form onSubmit={handleCreateInterview} className="p-6 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
-              {/* Recherche de candidature */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Candidat / Candidature *
-                </label>
+            <form onSubmit={handleCreateInterview} className="p-8 space-y-6 max-h-[calc(100vh-250px)] overflow-y-auto bg-gray-50">
+              {/* Section 1: Candidat et Candidature */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <User className="w-5 h-5 text-indigo-600" />
+                  <label className="text-base font-semibold text-gray-900">
+                    Candidat / Candidature
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                </div>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
                     value={applicationSearchQuery}
                     onChange={(e) => setApplicationSearchQuery(e.target.value)}
                     placeholder="Rechercher un candidat par nom, prénom ou email..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
                   />
                 </div>
                 {applicationSearchQuery && availableApplications.length > 0 && (
@@ -1137,190 +1146,233 @@ export default function ManagerInterviewsPage() {
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Type d'entretien *
-                </label>
-                <select
-                  required
-                  value={formData.interview_type}
-                  onChange={(e) => setFormData({ ...formData, interview_type: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="prequalification">Préqualification</option>
-                  <option value="qualification">Qualification</option>
-                  <option value="rh">Entretien RH</option>
-                  <option value="technique">Entretien Technique</option>
-                  <option value="client">Entretien Client</option>
-                  <option value="autre">Autre</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Heure de début *
+              {/* Section 2: Détails de l'entretien */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <Calendar className="w-5 h-5 text-indigo-600" />
+                  <label className="text-base font-semibold text-gray-900">
+                    Détails de l'entretien
                   </label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={formData.scheduled_at}
-                    onChange={(e) => {
-                      setFormData({ ...formData, scheduled_at: e.target.value })
-                      // Si pas d'heure de fin, définir automatiquement 1h après
-                      if (!formData.scheduled_end_at && e.target.value) {
-                        const startDate = new Date(e.target.value)
-                        startDate.setHours(startDate.getHours() + 1)
-                        setFormData(prev => ({
-                          ...prev,
-                          scheduled_at: e.target.value,
-                          scheduled_end_at: startDate.toISOString().slice(0, 16)
-                        }))
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Heure de fin *
-                  </label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={formData.scheduled_end_at || ''}
-                    onChange={(e) => setFormData({ ...formData, scheduled_end_at: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Interviewer principal *
-                </label>
-                <select
-                  required
-                  value={selectedInterviewerId}
-                  onChange={(e) => setSelectedInterviewerId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">Sélectionner un interviewer</option>
-                  {currentUserId && users.find(u => u.id === currentUserId) && (
-                    <option value={currentUserId}>
-                      {users.find(u => u.id === currentUserId)?.first_name} {users.find(u => u.id === currentUserId)?.last_name} ({users.find(u => u.id === currentUserId)?.role}) - Vous
-                    </option>
-                  )}
-                  {users
-                    .filter(u => u.id !== currentUserId)
-                    .map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.first_name} {user.last_name} ({user.role})
-                      </option>
-                    ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Par défaut, vous êtes sélectionné comme interviewer principal. Vous pouvez changer si nécessaire.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Participants additionnels
-                </label>
-                <div className="border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto">
-                  {users.length === 0 ? (
-                    <p className="text-sm text-gray-500">Aucun utilisateur disponible</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {users.map((user) => (
-                        <label
-                          key={user.id}
-                          className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={formData.participants?.includes(user.id) || false}
-                            onChange={() => toggleParticipant(user.id)}
-                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                          />
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-900">
-                              {user.first_name} {user.last_name}
-                            </div>
-                            <div className="text-xs text-gray-500">{user.email} • {user.role}</div>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {formData.participants && formData.participants.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {formData.participants.map((userId) => {
-                      const user = users.find(u => u.id === userId)
-                      return user ? (
-                        <span
-                          key={userId}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs rounded-full"
-                        >
-                          {user.first_name} {user.last_name}
-                          <button
-                            type="button"
-                            onClick={() => toggleParticipant(userId)}
-                            className="hover:text-indigo-900"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </span>
-                      ) : null
-                    })}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Type d'entretien *
+                    </label>
+                    <select
+                      required
+                      value={formData.interview_type}
+                      onChange={(e) => setFormData({ ...formData, interview_type: e.target.value as any })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    >
+                      <option value="prequalification">Préqualification</option>
+                      <option value="qualification">Qualification</option>
+                      <option value="rh">Entretien RH</option>
+                      <option value="technique">Entretien Technique</option>
+                      <option value="client">Entretien Client</option>
+                      <option value="autre">Autre</option>
+                    </select>
                   </div>
-                )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Heure de début *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        required
+                        value={formData.scheduled_at}
+                        onChange={(e) => {
+                          setFormData({ ...formData, scheduled_at: e.target.value })
+                          if (!formData.scheduled_end_at && e.target.value) {
+                            const startDate = new Date(e.target.value)
+                            startDate.setHours(startDate.getHours() + 1)
+                            setFormData(prev => ({
+                              ...prev,
+                              scheduled_at: e.target.value,
+                              scheduled_end_at: startDate.toISOString().slice(0, 16)
+                            }))
+                          }
+                        }}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Heure de fin *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        required
+                        value={formData.scheduled_end_at || ''}
+                        onChange={(e) => setFormData({ ...formData, scheduled_end_at: e.target.value })}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Lieu / Lien visioconférence
-                </label>
-                <input
-                  type="text"
-                  value={formData.location || ''}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  placeholder="Lieu physique ou lien Zoom/Teams"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
+              {/* Section 3: Participants */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <Users className="w-5 h-5 text-indigo-600" />
+                  <label className="text-base font-semibold text-gray-900">
+                    Participants
+                  </label>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Interviewer principal *
+                    </label>
+                    <select
+                      required
+                      value={selectedInterviewerId}
+                      onChange={(e) => setSelectedInterviewerId(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    >
+                      <option value="">Sélectionner un interviewer</option>
+                      {currentUserId && users.find(u => u.id === currentUserId) && (
+                        <option value={currentUserId}>
+                          {users.find(u => u.id === currentUserId)?.first_name} {users.find(u => u.id === currentUserId)?.last_name} ({users.find(u => u.id === currentUserId)?.role}) - Vous
+                        </option>
+                      )}
+                      {users
+                        .filter(u => u.id !== currentUserId)
+                        .map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.first_name} {user.last_name} ({user.role})
+                          </option>
+                        ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Par défaut, vous êtes sélectionné comme interviewer principal. Vous pouvez changer si nécessaire.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Participants additionnels
+                    </label>
+                    <div className="border-2 border-gray-200 rounded-xl p-4 max-h-48 overflow-y-auto bg-gray-50">
+                      {users.length === 0 ? (
+                        <p className="text-sm text-gray-500">Aucun utilisateur disponible</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {users.map((user) => (
+                            <label
+                              key={user.id}
+                              className="flex items-center gap-3 p-3 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-indigo-200"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={formData.participants?.includes(user.id) || false}
+                                onChange={() => toggleParticipant(user.id)}
+                                className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                              />
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900">
+                                  {user.first_name} {user.last_name}
+                                </div>
+                                <div className="text-xs text-gray-500">{user.email} • {user.role}</div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {formData.participants && formData.participants.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {formData.participants.map((userId) => {
+                          const user = users.find(u => u.id === userId)
+                          return user ? (
+                            <span
+                              key={userId}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-100 text-indigo-800 text-sm rounded-lg font-medium"
+                            >
+                              {user.first_name} {user.last_name}
+                              <button
+                                type="button"
+                                onClick={() => toggleParticipant(userId)}
+                                className="hover:text-indigo-900"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </span>
+                          ) : null
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes de préparation
-                </label>
-                <textarea
-                  value={formData.preparation_notes || ''}
-                  onChange={(e) => setFormData({ ...formData, preparation_notes: e.target.value })}
-                  rows={4}
-                  placeholder="Notes pour préparer l'entretien..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
+              {/* Section 4: Informations complémentaires */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <MapPin className="w-5 h-5 text-indigo-600" />
+                  <label className="text-base font-semibold text-gray-900">
+                    Informations complémentaires
+                  </label>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Lieu / Lien visioconférence
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.location || ''}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      placeholder="Lieu physique ou lien Zoom/Teams"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Notes de préparation
+                    </label>
+                    <textarea
+                      value={formData.preparation_notes || ''}
+                      onChange={(e) => setFormData({ ...formData, preparation_notes: e.target.value })}
+                      rows={4}
+                      placeholder="Notes pour préparer l'entretien..."
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+              {/* Boutons d'action */}
+              <div className="flex justify-end gap-3 pt-6 border-t-2 border-gray-200 bg-white -mx-8 -mb-8 px-8 pb-8 rounded-b-2xl">
                 <button
                   type="button"
                   onClick={() => {
                     setShowModal(false)
                     resetForm()
                   }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-6 py-3 border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-all font-medium text-gray-700"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg"
                 >
-                  {isLoading ? 'Planification...' : 'Planifier l\'entretien'}
+                  {isLoading ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Planification...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5" />
+                      Planifier l'entretien
+                    </span>
+                  )}
                 </button>
               </div>
             </form>

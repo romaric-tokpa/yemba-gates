@@ -749,48 +749,57 @@ export default function RecruiterInterviewsPage() {
   const monthName = currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Planification des Entretiens</h1>
-          <p className="text-gray-600 mt-2">Planifiez et gérez vos entretiens avec les candidats</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-1">
-            <button
-              onClick={() => setViewMode('calendar')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'calendar'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <Calendar className="w-4 h-4 inline mr-2" />
-              Calendrier
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              Liste
-            </button>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header moderne avec gradient */}
+        <div className="mb-8">
+          <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 rounded-2xl shadow-xl p-8 text-white">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <h1 className="text-4xl font-bold mb-2">Planification des Entretiens</h1>
+                <p className="text-blue-100 text-lg">Planifiez et gérez vos entretiens avec les candidats</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-xl border border-white/30 p-1">
+                  <button
+                    onClick={() => setViewMode('calendar')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      viewMode === 'calendar'
+                        ? 'bg-white text-blue-600 shadow-lg'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <Calendar className="w-4 h-4 inline mr-2" />
+                    Calendrier
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      viewMode === 'list'
+                        ? 'bg-white text-blue-600 shadow-lg'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    Liste
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    resetForm()
+                    if (currentUserId && !selectedInterviewerId) {
+                      setSelectedInterviewerId(currentUserId)
+                    }
+                    setShowModal(true)
+                  }}
+                  className="flex items-center gap-2 bg-white text-blue-600 px-6 py-3 rounded-xl hover:bg-blue-50 transition-all shadow-lg hover:shadow-xl font-semibold"
+                >
+                  <Plus className="w-5 h-5" />
+                  Planifier un entretien
+                </button>
+              </div>
+            </div>
           </div>
-          <button
-            onClick={() => {
-              resetForm()
-              setShowModal(true)
-            }}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Planifier un entretien
-          </button>
         </div>
-      </div>
 
       {error && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
@@ -798,222 +807,217 @@ export default function RecruiterInterviewsPage() {
         </div>
       )}
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Aujourd'hui</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {interviews.filter(i => {
-                  const date = new Date(i.scheduled_at)
-                  const today = new Date()
-                  return date.toDateString() === today.toDateString()
-                }).length}
-              </p>
+        {/* Statistiques modernes */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-blue-100 rounded-xl group-hover:bg-blue-200 transition-colors">
+                <Calendar className="w-6 h-6 text-blue-600" />
+              </div>
             </div>
-            <Calendar className="w-8 h-8 text-blue-600" />
+            <p className="text-sm font-medium text-gray-600 mb-1">Aujourd'hui</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {interviews.filter(i => {
+                const date = new Date(i.scheduled_at)
+                const today = new Date()
+                return date.toDateString() === today.toDateString()
+              }).length}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-green-100 rounded-xl group-hover:bg-green-200 transition-colors">
+                <Clock className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+            <p className="text-sm font-medium text-gray-600 mb-1">Cette semaine</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {interviews.filter(i => {
+                const date = new Date(i.scheduled_at)
+                const weekStart = new Date()
+                weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+                return date >= weekStart
+              }).length}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-yellow-100 rounded-xl group-hover:bg-yellow-200 transition-colors">
+                <MessageSquare className="w-6 h-6 text-yellow-600" />
+              </div>
+            </div>
+            <p className="text-sm font-medium text-gray-600 mb-1">En attente feedback</p>
+            <p className="text-3xl font-bold text-gray-900">
+              {interviews.filter(i => !i.feedback && new Date(i.scheduled_at) < new Date()).length}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-purple-100 rounded-xl group-hover:bg-purple-200 transition-colors">
+                <Users className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+            <p className="text-sm font-medium text-gray-600 mb-1">Total</p>
+            <p className="text-3xl font-bold text-gray-900">{interviews.length}</p>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-green-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Cette semaine</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {interviews.filter(i => {
-                  const date = new Date(i.scheduled_at)
-                  const weekStart = new Date()
-                  weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-                  return date >= weekStart
-                }).length}
-              </p>
-            </div>
-            <Clock className="w-8 h-8 text-green-600" />
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">En attente feedback</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {interviews.filter(i => !i.feedback && new Date(i.scheduled_at) < new Date()).length}
-              </p>
-            </div>
-            <MessageSquare className="w-8 h-8 text-yellow-600" />
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-purple-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total</p>
-              <p className="text-2xl font-bold text-gray-900">{interviews.length}</p>
-            </div>
-            <Users className="w-8 h-8 text-purple-600" />
-          </div>
-        </div>
-      </div>
 
-      {/* Contenu selon la vue */}
-      {viewMode === 'calendar' ? (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900 capitalize">{monthName}</h2>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => navigateMonth('prev')}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setCurrentDate(new Date())}
-                  className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  Aujourd'hui
-                </button>
-                <button
-                  onClick={() => navigateMonth('next')}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
+        {/* Contenu selon la vue */}
+        {viewMode === 'calendar' ? (
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900 capitalize">{monthName}</h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigateMonth('prev')}
+                    className="p-2 hover:bg-white rounded-xl transition-all shadow-sm hover:shadow-md"
+                  >
+                    <ChevronLeft className="w-5 h-5 text-gray-700" />
+                  </button>
+                  <button
+                    onClick={() => setCurrentDate(new Date())}
+                    className="px-4 py-2 text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 rounded-xl transition-all shadow-sm hover:shadow-md"
+                  >
+                    Aujourd'hui
+                  </button>
+                  <button
+                    onClick={() => navigateMonth('next')}
+                    className="p-2 hover:bg-white rounded-xl transition-all shadow-sm hover:shadow-md"
+                  >
+                    <ChevronRight className="w-5 h-5 text-gray-700" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              {/* En-têtes des jours */}
+              <div className="grid grid-cols-7 gap-3 mb-4">
+                {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
+                  <div key={day} className="text-center text-sm font-semibold text-gray-700 py-3 bg-gray-50 rounded-lg">
+                    {day}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Grille du calendrier */}
+              <div className="grid grid-cols-7 gap-3">
+                {days.map((day, index) => {
+                  if (!day) {
+                    return <div key={`empty-${index}`} className="aspect-square"></div>
+                  }
+                  
+                  const dayInterviews = getInterviewsForDate(day)
+                  const isToday = day.toDateString() === new Date().toDateString()
+                  const isPast = day < new Date() && !isToday
+                  
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      onClick={() => handleDateClick(day)}
+                      className={`aspect-square border-2 rounded-xl p-3 cursor-pointer transition-all hover:shadow-lg ${
+                        isToday
+                          ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-md'
+                          : isPast
+                          ? 'border-gray-200 bg-gray-50 opacity-75'
+                          : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <div className={`text-lg font-bold mb-2 ${isToday ? 'text-blue-700' : 'text-gray-800'}`}>
+                        {day.getDate()}
+                      </div>
+                      <div className="space-y-1.5">
+                        {dayInterviews.slice(0, 3).map(interview => (
+                          <div
+                            key={interview.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditModal(interview)
+                            }}
+                            className={`text-xs px-2 py-1 rounded-lg truncate border ${getInterviewTypeColor(interview.interview_type)} cursor-pointer hover:scale-105 transition-transform font-medium`}
+                            title={`${getInterviewTypeLabel(interview.interview_type)} - ${interview.candidate_name}`}
+                          >
+                            {interview.candidate_name.split(' ')[0]}
+                          </div>
+                        ))}
+                        {dayInterviews.length > 3 && (
+                          <div className="text-xs text-gray-500 font-medium">
+                            +{dayInterviews.length - 3} autre{dayInterviews.length - 3 > 1 ? 's' : ''}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
-          
-          <div className="p-6">
-            {/* En-têtes des jours */}
-            <div className="grid grid-cols-7 gap-2 mb-2">
-              {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
-                <div key={day} className="text-center text-sm font-medium text-gray-600 py-2">
-                  {day}
-                </div>
-              ))}
+        ) : (
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-900">
+                {interviews.length} entretien{interviews.length > 1 ? 's' : ''} planifié{interviews.length > 1 ? 's' : ''}
+              </h2>
             </div>
-            
-            {/* Grille du calendrier */}
-            <div className="grid grid-cols-7 gap-2">
-              {days.map((day, index) => {
-                if (!day) {
-                  return <div key={`empty-${index}`} className="aspect-square"></div>
-                }
-                
-                const dayInterviews = getInterviewsForDate(day)
-                const isToday = day.toDateString() === new Date().toDateString()
-                const isPast = day < new Date() && !isToday
-                
-                return (
-                  <div
-                    key={day.toISOString()}
-                    onClick={() => handleDateClick(day)}
-                    className={`aspect-square border-2 rounded-lg p-2 cursor-pointer transition-all hover:shadow-md ${
-                      isToday
-                        ? 'border-blue-500 bg-blue-50'
-                        : isPast
-                        ? 'border-gray-200 bg-gray-50'
-                        : 'border-gray-200 bg-white hover:border-blue-300'
-                    }`}
-                  >
-                    <div className={`text-sm font-medium mb-1 ${isToday ? 'text-blue-700' : 'text-gray-700'}`}>
-                      {day.getDate()}
-                    </div>
-                    <div className="space-y-1">
-                      {dayInterviews.slice(0, 3).map(interview => (
-                        <div
-                          key={interview.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSelectedInterview(interview)
-                            if (!interview.feedback && new Date(interview.scheduled_at) < new Date()) {
-                              setShowFeedbackModal(interview.id)
-                            }
-                          }}
-                          className={`text-xs p-1 rounded truncate border ${getInterviewTypeColor(interview.interview_type)}`}
-                          title={`${getInterviewTypeLabel(interview.interview_type)} - ${interview.candidate_name}`}
-                        >
-                          {interview.candidate_name.split(' ')[0]}
-                        </div>
-                      ))}
-                      {dayInterviews.length > 3 && (
-                        <div className="text-xs text-gray-500">
-                          +{dayInterviews.length - 3} autre{dayInterviews.length - 3 > 1 ? 's' : ''}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">
-              {interviews.length} entretien{interviews.length > 1 ? 's' : ''}
-            </h2>
-          </div>
-          <div className="p-6">
-            {interviews.length > 0 ? (
-              <div className="space-y-4">
-                {interviews
-                  .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-                  .map((interview) => (
-                    <div
-                      key={interview.id}
-                      className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className={`px-3 py-1 text-xs font-medium rounded-full border ${getInterviewTypeColor(interview.interview_type)}`}>
+            <div className="p-6">
+              {interviews.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {interviews
+                    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+                    .map((interview) => (
+                      <div
+                        key={interview.id}
+                        className="group p-6 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-xl transition-all bg-white"
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${getInterviewTypeColor(interview.interview_type)}`}>
                               {getInterviewTypeLabel(interview.interview_type)}
                             </span>
                             {getDecisionBadge(interview.decision || 'en_attente')}
                           </div>
-                          <h3 className="font-medium text-gray-900 mb-1">
-                            {interview.candidate_name}
-                          </h3>
-                          <p className="text-sm text-gray-600 mb-2">{interview.job_title}</p>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />
-                              {formatDateTime(interview.scheduled_at)}
-                            </span>
-                            {interview.location && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-4 h-4" />
-                                {interview.location}
-                              </span>
-                            )}
-                            {interview.interviewer_name && (
-                              <span className="flex items-center gap-1">
-                                <User className="w-4 h-4" />
-                                {interview.interviewer_name}
-                              </span>
-                            )}
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                          {interview.candidate_name}
+                        </h3>
+                        <p className="text-sm font-medium text-gray-600 mb-4">{interview.job_title}</p>
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Calendar className="w-4 h-4 text-blue-600" />
+                            <span className="font-medium">{formatDateTime(interview.scheduled_at)}</span>
                           </div>
-                          {interview.feedback && (
-                            <p className="text-sm text-gray-600 mt-2">{interview.feedback}</p>
+                          {interview.location && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <MapPin className="w-4 h-4 text-blue-600" />
+                              <span>{interview.location}</span>
+                            </div>
+                          )}
+                          {interview.interviewer_name && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <User className="w-4 h-4 text-blue-600" />
+                              <span>{interview.interviewer_name}</span>
+                            </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        {interview.feedback && (
+                          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                            <p className="text-sm text-gray-700">{interview.feedback}</p>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
                           <button
                             onClick={() => openEditModal(interview)}
-                            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                            title="Modifier l'entretien"
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium"
                           >
                             <Edit className="w-4 h-4" />
                             Modifier
                           </button>
                           <button
                             onClick={() => openDeleteConfirmationModal(interview)}
-                            className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                            title="Supprimer l'entretien"
+                            className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
                           >
                             <Trash2 className="w-4 h-4" />
-                            Supprimer
                           </button>
                           {!interview.feedback && new Date(interview.scheduled_at) < new Date() && (
                             <button
@@ -1021,8 +1025,7 @@ export default function RecruiterInterviewsPage() {
                                 setSelectedInterview(interview)
                                 setShowFeedbackModal(interview.id)
                               }}
-                              className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                              title="Ajouter un feedback"
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
                             >
                               <MessageSquare className="w-4 h-4" />
                               Feedback
@@ -1030,26 +1033,34 @@ export default function RecruiterInterviewsPage() {
                           )}
                         </div>
                       </div>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-gray-500">
-                <p>Aucun entretien planifié</p>
-                <button
-                  onClick={() => {
-                    resetForm()
-                    setShowModal(true)
-                  }}
-                  className="mt-4 inline-block text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  Planifier votre premier entretien
-                </button>
-              </div>
-            )}
+                    ))}
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-4">
+                    <Calendar className="w-10 h-10 text-blue-600" />
+                  </div>
+                  <p className="text-xl font-semibold text-gray-900 mb-2">Aucun entretien planifié</p>
+                  <p className="text-gray-600 mb-6">Commencez par planifier votre premier entretien</p>
+                  <button
+                    onClick={() => {
+                      resetForm()
+                      if (currentUserId && !selectedInterviewerId) {
+                        setSelectedInterviewerId(currentUserId)
+                      }
+                      setShowModal(true)
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl font-semibold"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Planifier votre premier entretien
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Modal de planification */}
       {showModal && (

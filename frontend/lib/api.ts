@@ -1631,3 +1631,134 @@ export async function getSecurityLogs(params?: {
 
   return response.json()
 }
+
+// ===== TEAMS API =====
+
+export interface TeamMemberResponse {
+  id: string
+  user_id: string
+  team_id: string
+  role?: string | null
+  joined_at: string
+  user_first_name: string
+  user_last_name: string
+  user_email: string
+  user_role: string
+}
+
+export interface TeamResponse {
+  id: string
+  name: string
+  description?: string | null
+  department?: string | null
+  manager_id?: string | null
+  manager_name?: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  members?: TeamMemberResponse[]
+  members_count: number
+}
+
+export interface TeamCreate {
+  name: string
+  description?: string
+  department?: string
+  manager_id?: string
+  member_ids?: string[]
+}
+
+export interface TeamUpdate {
+  name?: string
+  description?: string
+  department?: string
+  manager_id?: string
+  is_active?: boolean
+}
+
+export async function getTeams(): Promise<TeamResponse[]> {
+  const response = await authenticatedFetch(`${API_URL}/teams/`)
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération des équipes' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération des équipes')
+  }
+
+  return response.json()
+}
+
+export async function getTeam(teamId: string): Promise<TeamResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}`)
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération de l\'équipe' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération de l\'équipe')
+  }
+
+  return response.json()
+}
+
+export async function createTeam(teamData: TeamCreate): Promise<TeamResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/`, {
+    method: 'POST',
+    body: JSON.stringify(teamData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la création de l\'équipe' }))
+    throw new Error(error.detail || 'Erreur lors de la création de l\'équipe')
+  }
+
+  return response.json()
+}
+
+export async function updateTeam(teamId: string, teamData: TeamUpdate): Promise<TeamResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}`, {
+    method: 'PUT',
+    body: JSON.stringify(teamData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour de l\'équipe' }))
+    throw new Error(error.detail || 'Erreur lors de la mise à jour de l\'équipe')
+  }
+
+  return response.json()
+}
+
+export async function deleteTeam(teamId: string): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression de l\'équipe' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression de l\'équipe')
+  }
+}
+
+export async function addTeamMember(teamId: string, userId: string, role: string = 'membre'): Promise<TeamResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}/members?user_id=${userId}&role=${role}`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'ajout du membre' }))
+    throw new Error(error.detail || 'Erreur lors de l\'ajout du membre')
+  }
+
+  return response.json()
+}
+
+export async function removeTeamMember(teamId: string, userId: string): Promise<TeamResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}/members/${userId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors du retrait du membre' }))
+    throw new Error(error.detail || 'Erreur lors du retrait du membre')
+  }
+
+  return response.json()
+}

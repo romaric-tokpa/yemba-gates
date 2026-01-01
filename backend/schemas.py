@@ -259,3 +259,51 @@ class CandidateResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
+# ========== SCHÉMAS ÉQUIPES ==========
+
+class TeamCreate(BaseModel):
+    """Schéma pour créer une équipe"""
+    name: str = Field(..., min_length=1, max_length=255, description="Nom de l'équipe")
+    description: Optional[str] = Field(None, description="Description de l'équipe")
+    department: Optional[str] = Field(None, max_length=100, description="Département")
+    manager_id: Optional[UUID] = Field(None, description="ID du manager de l'équipe")
+    member_ids: Optional[list[UUID]] = Field(default=[], description="Liste des IDs des membres à ajouter")
+
+
+class TeamUpdate(BaseModel):
+    """Schéma pour mettre à jour une équipe"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    department: Optional[str] = Field(None, max_length=100)
+    manager_id: Optional[UUID] = None
+    is_active: Optional[bool] = None
+
+
+class TeamMemberResponse(BaseModel):
+    """Schéma pour un membre d'équipe"""
+    id: UUID
+    user_id: UUID
+    team_id: UUID
+    role: Optional[str]
+    joined_at: datetime
+    user_first_name: str
+    user_last_name: str
+    user_email: str
+    user_role: str
+
+
+class TeamResponse(BaseModel):
+    """Schéma pour une équipe"""
+    id: UUID
+    name: str
+    description: Optional[str]
+    department: Optional[str]
+    manager_id: Optional[UUID]
+    manager_name: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    members: Optional[list[TeamMemberResponse]] = []
+    members_count: int = 0
+
