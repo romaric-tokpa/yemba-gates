@@ -197,6 +197,29 @@ export default function ManagerCandidatsPage() {
         notes: parsedData.notes || '',
       })
       
+      // Si une image a été extraite du CV, l'utiliser comme preview
+      if (parsedData.profile_picture_base64) {
+        setPhotoPreview(parsedData.profile_picture_base64)
+        // Convertir le base64 (data URI) en File pour l'upload
+        try {
+          // Le base64 est déjà au format data URI (data:image/...;base64,...)
+          const base64Data = parsedData.profile_picture_base64.split(',')[1]
+          const mimeType = parsedData.profile_picture_base64.split(',')[0].split(':')[1].split(';')[0]
+          const byteCharacters = atob(base64Data)
+          const byteNumbers = new Array(byteCharacters.length)
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i)
+          }
+          const byteArray = new Uint8Array(byteNumbers)
+          const blob = new Blob([byteArray], { type: mimeType })
+          const imageFile = new File([blob], 'photo-extracted.jpg', { type: mimeType })
+          setPhotoFile(imageFile)
+        } catch (convertError) {
+          console.warn('Erreur lors de la conversion de l\'image extraite:', convertError)
+          // Continuer sans l'image si la conversion échoue
+        }
+      }
+      
       // Sauvegarder le fichier CV pour l'upload final
       setCvFile(file)
       

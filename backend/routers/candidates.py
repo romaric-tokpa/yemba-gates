@@ -5,6 +5,7 @@ import os
 import shutil
 import json
 import tempfile
+import base64
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
@@ -32,7 +33,7 @@ except ImportError:
 
 from database import get_session, engine
 from models import Candidate, User, UserRole, Interview, Application
-from schemas import CandidateCreate, CandidateUpdate, CandidateResponse
+from schemas import CandidateCreate, CandidateUpdate, CandidateResponse, CandidateParseResponse
 from auth import get_current_active_user, require_recruteur, require_client
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
@@ -100,8 +101,84 @@ def extract_text_from_docx(file_path: str) -> str:
         )
 
 
-def extract_text_from_cv(file: UploadFile) -> str:
-    """Extrait le texte brut d'un CV (PDF ou Word)"""
+def extract_image_from_pdf(file_path: str) -> Optional[str]:
+    """Extrait la première image d'un fichier PDF (généralement la photo de profil)"""
+    if fitz is None:
+        return None
+    
+    try:
+        doc = fitz.open(file_path)
+        # Chercher la première image sur la première page (généralement où se trouve la photo)
+        for page_num in range(min(2, len(doc))):  # Vérifier les 2 premières pages
+            page = doc[page_num]
+            image_list = page.get_images(full=True)
+            
+            for img_index, img in enumerate(image_list):
+                try:
+                    xref = img[0]
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    image_ext = base_image["ext"]
+                    
+                    # Convertir en base64
+                    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                    # Retourner avec le préfixe data URI
+                    mime_type = f"image/{image_ext}" if image_ext != "jpg" else "image/jpeg"
+                    doc.close()
+                    return f"data:{mime_type};base64,{image_base64}"
+                except Exception as e:
+                    continue
+        
+        doc.close()
+        return None
+    except Exception as e:
+        return None
+
+
+def extract_image_from_docx(file_path: str) -> Optional[str]:
+    """Extrait la première image d'un document Word"""
+    if Document is None:
+        return None
+    
+    try:
+        doc = Document(file_path)
+        
+        # Parcourir les relations du document pour trouver les images
+        # Les images dans Word sont stockées dans les relations
+        for rel in doc.part.rels.values():
+            if "image" in rel.target_ref:
+                try:
+                    image_part = rel.target_part
+                    image_bytes = image_part.blob
+                    
+                    # Convertir en base64
+                    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                    # Déterminer le type MIME
+                    content_type = image_part.content_type
+                    return f"data:{content_type};base64,{image_base64}"
+                except Exception as e:
+                    continue
+        
+        return None
+    except Exception as e:
+        return None
+
+
+def extract_image_from_cv(file_path: str, file_extension: str) -> Optional[str]:
+    """Extrait la première image d'un CV (PDF ou Word)"""
+    try:
+        if file_extension == ".pdf":
+            return extract_image_from_pdf(file_path)
+        elif file_extension in {".doc", ".docx"}:
+            return extract_image_from_docx(file_path)
+        else:
+            return None
+    except Exception as e:
+        return None
+
+
+def extract_text_from_cv(file: UploadFile) -> tuple[str, str]:
+    """Extrait le texte brut d'un CV (PDF ou Word) et retourne aussi le chemin temporaire"""
     file_extension = Path(file.filename).suffix.lower()
     
     # Créer un fichier temporaire
@@ -123,11 +200,12 @@ def extract_text_from_cv(file: UploadFile) -> str:
                     detail=f"Format de fichier non supporté: {file_extension}"
                 )
             
-            return text
-        finally:
-            # Nettoyer le fichier temporaire
+            return text, tmp_path
+        except HTTPException:
+            # Nettoyer le fichier temporaire en cas d'erreur
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+            raise
 
 
 def parse_cv_with_llm(cv_text: str) -> dict:
@@ -259,17 +337,18 @@ async def upload_candidate_photo(
     return {"photo_url": photo_url, "filename": unique_filename}
 
 
-@router.post("/parse-cv", response_model=CandidateCreate)
+@router.post("/parse-cv", response_model=CandidateParseResponse)
 async def parse_cv(
     cv_file: UploadFile = File(..., description="Fichier CV (PDF ou Word)"),
     current_user: User = Depends(require_recruteur),
 ):
     """
-    Parse un CV et extrait automatiquement les informations du candidat
+    Parse un CV et extrait automatiquement les informations du candidat, y compris la photo
     
-    Accepte un fichier PDF ou Word, extrait le texte, et utilise un LLM
+    Accepte un fichier PDF ou Word, extrait le texte et les images, et utilise un LLM
     pour structurer les données selon le modèle CandidateCreate.
     """
+    tmp_path = None
     try:
         # Vérifier que le fichier est autorisé
         if not is_allowed_file(cv_file.filename):
@@ -278,14 +357,33 @@ async def parse_cv(
                 detail=f"Format de fichier non supporté. Formats acceptés: {', '.join(ALLOWED_EXTENSIONS)}"
             )
         
-        # Extraire le texte du CV
-        cv_text = extract_text_from_cv(cv_file)
+        file_extension = Path(cv_file.filename).suffix.lower()
+        
+        # Réinitialiser le pointeur du fichier pour pouvoir le lire plusieurs fois
+        await cv_file.seek(0)
+        
+        # Extraire le texte du CV (retourne aussi le chemin temporaire)
+        cv_text, tmp_path = extract_text_from_cv(cv_file)
         
         if not cv_text or len(cv_text.strip()) < 50:
+            # Nettoyer le fichier temporaire
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Le CV semble vide ou le texte n'a pas pu être extrait correctement"
             )
+        
+        # Extraire l'image du CV
+        profile_picture_base64 = None
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                profile_picture_base64 = extract_image_from_cv(tmp_path, file_extension)
+            except Exception as e:
+                # Si l'extraction d'image échoue, continuer sans image
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Erreur lors de l'extraction de l'image du CV: {str(e)}")
         
         # Parser le texte avec le LLM
         parsed_data = parse_cv_with_llm(cv_text)
@@ -308,14 +406,32 @@ async def parse_cv(
         if "tags" not in parsed_data:
             parsed_data["tags"] = []
         
-        # Valider avec le schéma Pydantic
-        candidate_data = CandidateCreate.model_validate(parsed_data)
+        # Créer la réponse avec le schéma CandidateParseResponse
+        response_data = CandidateParseResponse(
+            first_name=parsed_data.get("first_name", ""),
+            last_name=parsed_data.get("last_name", ""),
+            profile_title=parsed_data.get("profile_title"),
+            years_of_experience=parsed_data.get("years_of_experience"),
+            email=parsed_data.get("email"),
+            phone=parsed_data.get("phone"),
+            tags=parsed_data.get("tags", []),
+            skills=parsed_data.get("skills", []),
+            source=parsed_data.get("source"),
+            notes=parsed_data.get("notes"),
+            profile_picture_base64=profile_picture_base64
+        )
         
-        return candidate_data
+        return response_data
         
     except HTTPException:
+        # Nettoyer le fichier temporaire en cas d'erreur HTTP
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
         raise
     except Exception as e:
+        # Nettoyer le fichier temporaire en cas d'erreur
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Erreur lors du parsing du CV: {str(e)}", exc_info=True)
@@ -323,6 +439,13 @@ async def parse_cv(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors du parsing du CV: {str(e)}"
         )
+    finally:
+        # S'assurer que le fichier temporaire est toujours nettoyé
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
 
 @router.post("/", response_model=CandidateResponse, status_code=status.HTTP_201_CREATED)

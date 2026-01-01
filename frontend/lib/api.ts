@@ -127,7 +127,11 @@ export async function validateJob(jobId: string, validation: JobValidation): Pro
 
 // ===== CANDIDATES API =====
 
-export async function parseCv(cvFile: File): Promise<CandidateCreate> {
+export interface CandidateParseResponse extends CandidateCreate {
+  profile_picture_base64?: string // Photo de profil extraite en base64 (format data URI)
+}
+
+export async function parseCv(cvFile: File): Promise<CandidateParseResponse> {
   const formData = new FormData()
   formData.append('cv_file', cvFile)
 

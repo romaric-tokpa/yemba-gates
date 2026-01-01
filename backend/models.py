@@ -115,7 +115,7 @@ class Candidate(SQLModel, table=True):
     profile_title: str | None = Field(default=None, max_length=255)  # Titre du profil (ex: Développeur Fullstack)
     years_of_experience: int | None = Field(default=None)  # Nombre d'années d'expérience
     email: str | None = Field(default=None, max_length=255)
-    phone: str | None = Field(default=None, max_length=20)
+    phone: str | None = Field(default=None, max_length=30)
     cv_file_path: str | None = Field(default=None, max_length=500)
     profile_picture_url: str | None = Field(default=None, max_length=500)  # URL de la photo de profil
     # photo_url n'est pas mappé à la base de données, on utilise seulement profile_picture_url

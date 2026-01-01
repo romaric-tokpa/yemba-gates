@@ -81,7 +81,7 @@ class CandidateCreate(BaseModel):
     profile_title: Optional[str] = Field(None, max_length=255, description="Titre du profil (ex: Développeur Fullstack)")
     years_of_experience: Optional[int] = Field(None, ge=0, description="Nombre d'années d'expérience")
     email: Optional[str] = Field(None, max_length=255, description="Email")
-    phone: Optional[str] = Field(None, max_length=20, description="Téléphone")
+    phone: Optional[str] = Field(None, max_length=30, description="Téléphone")
     tags: Optional[list[str]] = Field(default=None, description="Tags et mots-clés")
     skills: Optional[list[str]] = Field(default=None, description="Compétences (liste de chaînes)")
     profile_picture_url: Optional[str] = Field(None, max_length=500, description="URL de la photo de profil")
@@ -97,6 +97,21 @@ class CandidateCreate(BaseModel):
         return v.strip()
 
 
+class CandidateParseResponse(BaseModel):
+    """Schéma de réponse pour le parsing de CV - inclut les données + l'image extraite"""
+    first_name: str
+    last_name: str
+    profile_title: Optional[str] = None
+    years_of_experience: Optional[int] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    tags: Optional[list[str]] = None
+    skills: Optional[list[str]] = None
+    source: Optional[str] = None
+    notes: Optional[str] = None
+    profile_picture_base64: Optional[str] = Field(None, description="Photo de profil extraite en base64 (format data URI)")
+
+
 class CandidateUpdate(BaseModel):
     """Schéma pour mettre à jour un candidat"""
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -104,7 +119,7 @@ class CandidateUpdate(BaseModel):
     profile_title: Optional[str] = Field(None, max_length=255, description="Titre du profil")
     years_of_experience: Optional[int] = Field(None, ge=0, description="Nombre d'années d'expérience")
     email: Optional[str] = Field(None, max_length=255)
-    phone: Optional[str] = Field(None, max_length=20)
+    phone: Optional[str] = Field(None, max_length=30)
     tags: Optional[list[str]] = None
     skills: Optional[list[str]] = None  # Compétences
     source: Optional[str] = Field(None, max_length=50)
