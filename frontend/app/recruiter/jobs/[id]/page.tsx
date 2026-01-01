@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, History, Clock, User, Briefcase, MapPin, DollarSign, Calendar, FileText, Tag, Award, Languages, Building2, UserCheck, Edit, X, Save, Plus, Filter, Search, TrendingUp, Users, ListChecks, Trash2, Mail, Phone, ExternalLink } from 'lucide-react'
+import { ArrowLeft, History, Clock, User, Briefcase, MapPin, DollarSign, Calendar, FileText, Tag, Award, Languages, Building2, UserCheck, Edit, X, Save, Plus, Filter, Search, TrendingUp, Users, ListChecks, Trash2, Mail, Phone, ExternalLink, CheckCircle, XCircle } from 'lucide-react'
+import { formatDateTime } from '@/lib/utils'
 import { getJob, getJobHistory, updateJob, JobResponse, JobHistoryItem, JobUpdate, getJobApplications, getJobShortlist, createApplication, toggleShortlist, deleteApplication, ApplicationResponse, getCandidates, CandidateResponse } from '@/lib/api'
 import { getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
@@ -26,6 +27,7 @@ export default function RecruiterJobDetailPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [showAddCandidateModal, setShowAddCandidateModal] = useState(false)
   const [selectedCandidateId, setSelectedCandidateId] = useState<string>('')
+  const [candidateSearchQuery, setCandidateSearchQuery] = useState<string>('')
   const { success, error: showError } = useToastContext()
 
   // États pour l'édition
@@ -203,6 +205,7 @@ export default function RecruiterJobDetailPage() {
       success('Candidat attribué au besoin avec succès')
       setShowAddCandidateModal(false)
       setSelectedCandidateId('')
+      setCandidateSearchQuery('')
       // Recharger les applications
       const applicationsData = await getJobApplications(jobId)
       setApplications(applicationsData)
@@ -329,11 +332,7 @@ export default function RecruiterJobDetailPage() {
               <>
                 <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">{job.title}</h1>
                 <p className="text-sm lg:text-base text-gray-600 mt-2">
-                  Créé le {new Date(job.created_at).toLocaleDateString('fr-FR', { 
-                    day: 'numeric', 
-                    month: 'long', 
-                    year: 'numeric' 
-                  })}
+                  Créé le {formatDateTime(job.created_at)}
                 </p>
               </>
             )}
@@ -887,13 +886,7 @@ export default function RecruiterJobDetailPage() {
                     Validé le
                   </label>
                   <p className="text-sm text-gray-900">
-                    {new Date(job.validated_at).toLocaleDateString('fr-FR', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {formatDateTime(job.validated_at)}
                   </p>
                 </div>
               )}
@@ -904,13 +897,7 @@ export default function RecruiterJobDetailPage() {
                   Dernière mise à jour
                 </label>
                 <p className="text-sm text-gray-900">
-                  {new Date(job.updated_at).toLocaleDateString('fr-FR', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
+                  {formatDateTime(job.updated_at)}
                 </p>
               </div>
             </div>
@@ -1175,6 +1162,83 @@ export default function RecruiterJobDetailPage() {
                             <span className="truncate">{application.candidate_email}</span>
                           </div>
                         )}
+                        
+                        {/* Dates */}
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="flex flex-col gap-1 text-xs text-gray-500">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              <span>Ajouté le {formatDateTime(application.created_at)}</span>
+                            </div>
+                            {application.updated_at && application.updated_at !== application.created_at && (
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                <span>Modifié le {formatDateTime(application.updated_at)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Validation client */}
+                        {application.client_validated !== null && application.client_validated !== undefined && (
+                          <div className="mt-3 pt-3 border-t border-purple-200">
+                            {application.client_validated === true ? (
+                              <div className="flex items-start gap-2">
+                                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <p className="text-xs font-medium text-green-800">Validé par le client</p>
+                                  {application.client_validated_at && (
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      {formatDateTime(application.client_validated_at)}
+                                    </p>
+                                  )}
+                                  {application.client_feedback && (
+                                    <p className="text-xs text-gray-700 mt-1 italic">"{application.client_feedback}"</p>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-start gap-2">
+                                <XCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <p className="text-xs font-medium text-red-800">Refusé par le client</p>
+                                  {application.client_validated_at && (
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      {formatDateTime(application.client_validated_at)}
+                                    </p>
+                                  )}
+                                  {application.client_feedback && (
+                                    <p className="text-xs text-gray-700 mt-1 italic">"{application.client_feedback}"</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {application.client_validated === null && (
+                          <div className="mt-3 pt-3 border-t border-purple-200">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-yellow-600" />
+                              <p className="text-xs text-yellow-800">En attente de validation client</p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Dates */}
+                        <div className="mt-3 pt-3 border-t border-purple-200">
+                          <div className="flex flex-col gap-1 text-xs text-gray-500">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              <span>Ajouté le {formatDateTime(application.created_at)}</span>
+                            </div>
+                            {application.updated_at && application.updated_at !== application.created_at && (
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                <span>Modifié le {formatDateTime(application.updated_at)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </Link>
                     
@@ -1346,10 +1410,7 @@ export default function RecruiterJobDetailPage() {
                                         {item.modified_by_name}
                                       </div>
                                       <div className="text-xs text-gray-500">
-                                        {new Date(item.created_at).toLocaleTimeString('fr-FR', {
-                                          hour: '2-digit',
-                                          minute: '2-digit'
-                                        })}
+                                        {formatDateTime(item.created_at)}
                                       </div>
                                     </div>
                                   </div>
@@ -1427,6 +1488,7 @@ export default function RecruiterJobDetailPage() {
                   onClick={() => {
                     setShowAddCandidateModal(false)
                     setSelectedCandidateId('')
+                    setCandidateSearchQuery('')
                   }}
                   className="text-gray-400 hover:text-gray-600"
                 >
@@ -1437,28 +1499,102 @@ export default function RecruiterJobDetailPage() {
             <div className="p-6">
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sélectionner un candidat
+                  Rechercher un candidat
                 </label>
-                <select
-                  value={selectedCandidateId}
-                  onChange={(e) => setSelectedCandidateId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">-- Sélectionner un candidat --</option>
-                  {allCandidates
-                    .filter(candidate => !applications.some(app => app.candidate_id === candidate.id))
-                    .map((candidate) => (
-                      <option key={candidate.id} value={candidate.id}>
-                        {candidate.first_name} {candidate.last_name}
-                        {candidate.profile_title && ` - ${candidate.profile_title}`}
-                        {candidate.years_of_experience !== undefined && candidate.years_of_experience !== null && ` (${candidate.years_of_experience} ans)`}
-                      </option>
-                    ))}
-                </select>
-                {allCandidates.filter(candidate => !applications.some(app => app.candidate_id === candidate.id)).length === 0 && (
-                  <p className="text-sm text-gray-500 mt-2">
-                    Tous les candidats sont déjà attribués à ce besoin
-                  </p>
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={candidateSearchQuery}
+                    onChange={(e) => setCandidateSearchQuery(e.target.value)}
+                    placeholder="Rechercher par nom ou prénom..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                {/* Liste des candidats filtrés */}
+                <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+                  {(() => {
+                    const availableCandidates = allCandidates.filter(candidate => 
+                      !applications.some(app => app.candidate_id === candidate.id)
+                    )
+                    
+                    const filteredCandidates = candidateSearchQuery.trim() === ''
+                      ? availableCandidates
+                      : availableCandidates.filter(candidate => {
+                          const searchLower = candidateSearchQuery.toLowerCase()
+                          const fullName = `${candidate.first_name} ${candidate.last_name}`.toLowerCase()
+                          return fullName.includes(searchLower) ||
+                                 candidate.first_name?.toLowerCase().includes(searchLower) ||
+                                 candidate.last_name?.toLowerCase().includes(searchLower) ||
+                                 candidate.profile_title?.toLowerCase().includes(searchLower) ||
+                                 candidate.email?.toLowerCase().includes(searchLower)
+                        })
+                    
+                    if (filteredCandidates.length === 0) {
+                      return (
+                        <div className="p-4 text-center text-gray-500 text-sm">
+                          {candidateSearchQuery.trim() === ''
+                            ? 'Aucun candidat disponible'
+                            : 'Aucun candidat trouvé pour cette recherche'}
+                        </div>
+                      )
+                    }
+                    
+                    return (
+                      <div className="divide-y divide-gray-200">
+                        {filteredCandidates.map((candidate) => (
+                          <button
+                            key={candidate.id}
+                            onClick={() => setSelectedCandidateId(candidate.id)}
+                            className={`w-full text-left p-3 hover:bg-blue-50 transition-colors ${
+                              selectedCandidateId === candidate.id ? 'bg-blue-100 border-l-4 border-blue-600' : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900">
+                                  {candidate.first_name} {candidate.last_name}
+                                </div>
+                                <div className="text-sm text-gray-600 mt-1">
+                                  {candidate.profile_title && (
+                                    <span className="flex items-center gap-1">
+                                      <Briefcase className="w-3 h-3" />
+                                      {candidate.profile_title}
+                                    </span>
+                                  )}
+                                  {candidate.years_of_experience !== undefined && candidate.years_of_experience !== null && (
+                                    <span className="ml-2">
+                                      • {candidate.years_of_experience} ans d'expérience
+                                    </span>
+                                  )}
+                                </div>
+                                {candidate.email && (
+                                  <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                                    <Mail className="w-3 h-3" />
+                                    {candidate.email}
+                                  </div>
+                                )}
+                              </div>
+                              {selectedCandidateId === candidate.id && (
+                                <CheckCircle className="w-5 h-5 text-blue-600 ml-2" />
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
+                
+                {selectedCandidateId && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-900">
+                      <span className="font-medium">Candidat sélectionné :</span>{' '}
+                      {allCandidates.find(c => c.id === selectedCandidateId)?.first_name}{' '}
+                      {allCandidates.find(c => c.id === selectedCandidateId)?.last_name}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

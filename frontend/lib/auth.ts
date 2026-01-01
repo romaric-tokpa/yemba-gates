@@ -189,7 +189,13 @@ export async function authenticatedFetch(
     return response
   } catch (error) {
     // Gérer les erreurs réseau (serveur non accessible, CORS, etc.)
-    console.error('❌ [AUTH] Erreur réseau lors de la requête:', url, error)
+    // Les erreurs réseau (Failed to fetch) sont souvent attendues (backend non démarré)
+    // On les log comme des avertissements plutôt que des erreurs critiques
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      console.warn('⚠️ [AUTH] Serveur backend non accessible:', url, '(Le backend est peut-être non démarré)')
+    } else {
+      console.error('❌ [AUTH] Erreur réseau lors de la requête:', url, error)
+    }
     // Relancer l'erreur pour que l'appelant puisse la gérer
     throw error
   }

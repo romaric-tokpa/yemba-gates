@@ -18,8 +18,9 @@ router = APIRouter(prefix="/interviews", tags=["interviews"])
 class InterviewCreate(BaseModel):
     """Schéma pour créer un entretien"""
     application_id: UUID
-    interview_type: str  # 'rh', 'technique', 'client'
+    interview_type: str  # 'rh', 'technique', 'client', 'prequalification', 'qualification', 'autre'
     scheduled_at: datetime
+    scheduled_end_at: Optional[datetime] = None
     location: Optional[str] = None
     interviewer_id: Optional[UUID] = None
     preparation_notes: Optional[str] = None
@@ -27,7 +28,9 @@ class InterviewCreate(BaseModel):
 
 class InterviewUpdate(BaseModel):
     """Schéma pour mettre à jour un entretien"""
+    interview_type: Optional[str] = None
     scheduled_at: Optional[datetime] = None
+    scheduled_end_at: Optional[datetime] = None
     location: Optional[str] = None
     interviewer_id: Optional[UUID] = None
     preparation_notes: Optional[str] = None
@@ -63,6 +66,7 @@ class InterviewResponse(BaseModel):
     application_id: str
     interview_type: str
     scheduled_at: datetime
+    scheduled_end_at: Optional[datetime]
     location: Optional[str]
     interviewer_id: Optional[str]
     interviewer_name: Optional[str]
@@ -103,7 +107,7 @@ def create_interview(
         )
     
     # Vérifier que le type d'entretien est valide
-    valid_types = ['rh', 'technique', 'client']
+    valid_types = ['rh', 'technique', 'client', 'prequalification', 'qualification', 'autre']
     if interview_data.interview_type not in valid_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -119,47 +123,59 @@ def create_interview(
                 detail="Interviewer non trouvé"
             )
     
-    # Créer l'entretien
-    new_interview = Interview(
-        application_id=interview_data.application_id,
-        interview_type=interview_data.interview_type,
-        scheduled_at=interview_data.scheduled_at,
-        location=interview_data.location,
-        interviewer_id=interview_data.interviewer_id,
-        preparation_notes=interview_data.preparation_notes,
-        created_by=current_user.id
-    )
-    
-    session.add(new_interview)
-    session.commit()
-    session.refresh(new_interview)
-    
-    # Récupérer les informations complètes pour la réponse
-    candidate = session.get(Candidate, application.candidate_id)
-    job = session.get(Job, application.job_id)
-    interviewer = session.get(User, new_interview.interviewer_id) if new_interview.interviewer_id else None
-    creator = session.get(User, new_interview.created_by)
-    
-    return {
-        "id": str(new_interview.id),
-        "application_id": str(new_interview.application_id),
-        "interview_type": new_interview.interview_type,
-        "scheduled_at": new_interview.scheduled_at,
-        "location": new_interview.location,
-        "interviewer_id": str(new_interview.interviewer_id) if new_interview.interviewer_id else None,
-        "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
-        "preparation_notes": new_interview.preparation_notes,
-        "feedback": new_interview.feedback,
-        "feedback_provided_at": new_interview.feedback_provided_at,
-        "decision": new_interview.decision,
-        "score": new_interview.score,
-        "created_by": str(new_interview.created_by),
-        "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
-        "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
-        "job_title": job.title if job else "",
-        "created_at": new_interview.created_at,
-        "updated_at": new_interview.updated_at
-    }
+    try:
+        # Créer l'entretien
+        new_interview = Interview(
+            application_id=interview_data.application_id,
+            interview_type=interview_data.interview_type,
+            scheduled_at=interview_data.scheduled_at,
+            scheduled_end_at=interview_data.scheduled_end_at,
+            location=interview_data.location,
+            interviewer_id=interview_data.interviewer_id,
+            preparation_notes=interview_data.preparation_notes,
+            created_by=current_user.id
+        )
+        
+        session.add(new_interview)
+        session.commit()
+        session.refresh(new_interview)
+        
+        # Récupérer les informations complètes pour la réponse
+        candidate = session.get(Candidate, application.candidate_id)
+        job = session.get(Job, application.job_id)
+        interviewer = session.get(User, new_interview.interviewer_id) if new_interview.interviewer_id else None
+        creator = session.get(User, new_interview.created_by)
+        
+        return {
+            "id": str(new_interview.id),
+            "application_id": str(new_interview.application_id),
+            "interview_type": new_interview.interview_type,
+            "scheduled_at": new_interview.scheduled_at,
+            "scheduled_end_at": new_interview.scheduled_end_at,
+            "location": new_interview.location,
+            "interviewer_id": str(new_interview.interviewer_id) if new_interview.interviewer_id else None,
+            "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
+            "preparation_notes": new_interview.preparation_notes,
+            "feedback": new_interview.feedback,
+            "feedback_provided_at": new_interview.feedback_provided_at,
+            "decision": new_interview.decision,
+            "score": new_interview.score,
+            "created_by": str(new_interview.created_by),
+            "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
+            "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
+            "job_title": job.title if job else "",
+            "created_at": new_interview.created_at,
+            "updated_at": new_interview.updated_at
+        }
+    except Exception as e:
+        session.rollback()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"❌ Erreur lors de la création de l'entretien: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la création de l'entretien: {str(e)}"
+        )
 
 
 @router.get("/", response_model=List[InterviewResponse])
@@ -187,20 +203,12 @@ def list_interviews(
     Les recruteurs et managers voient tous les entretiens.
     Les autres utilisateurs voient uniquement les entretiens liés à leurs candidatures/jobs.
     """
-    # Construire la requête avec jointures
-    statement = select(Interview).join(Application, Interview.application_id == Application.id)
+    # Construire la requête de base
+    statement = select(Interview)
     
     # Appliquer les filtres
     if application_id:
         statement = statement.where(Interview.application_id == application_id)
-    
-    if job_id:
-        # Filtrer par job via la candidature
-        statement = statement.where(Application.job_id == job_id)
-    
-    if candidate_id:
-        # Filtrer par candidat via la candidature
-        statement = statement.where(Application.candidate_id == candidate_id)
     
     if interview_type:
         statement = statement.where(Interview.interview_type == interview_type)
@@ -214,41 +222,57 @@ def list_interviews(
         # Cette logique peut être affinée selon les besoins
         pass
     
+    # Appliquer les filtres qui nécessitent une jointure avec Application
+    if job_id or candidate_id:
+        statement = statement.join(Application, Interview.application_id == Application.id)
+        if job_id:
+            statement = statement.where(Application.job_id == job_id)
+        if candidate_id:
+            statement = statement.where(Application.candidate_id == candidate_id)
+    
     statement = statement.offset(skip).limit(limit).order_by(Interview.scheduled_at.desc())
     interviews = session.exec(statement).all()
     
     # Construire les réponses avec les informations complètes
     results = []
     for interview in interviews:
-        application = session.get(Application, interview.application_id)
-        if not application:
+        try:
+            application = session.get(Application, interview.application_id)
+            if not application:
+                continue
+            
+            candidate = session.get(Candidate, application.candidate_id) if application.candidate_id else None
+            job = session.get(Job, application.job_id) if application.job_id else None
+            interviewer = session.get(User, interview.interviewer_id) if interview.interviewer_id else None
+            creator = session.get(User, interview.created_by) if interview.created_by else None
+            
+            results.append({
+                "id": str(interview.id),
+                "application_id": str(interview.application_id),
+                "interview_type": interview.interview_type,
+                "scheduled_at": interview.scheduled_at,
+                "scheduled_end_at": interview.scheduled_end_at,
+                "location": interview.location,
+                "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
+                "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
+                "preparation_notes": interview.preparation_notes,
+                "feedback": interview.feedback,
+                "feedback_provided_at": interview.feedback_provided_at,
+                "decision": interview.decision,
+                "score": interview.score,
+                "created_by": str(interview.created_by) if interview.created_by else None,
+                "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
+                "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
+                "job_title": job.title if job else "",
+                "created_at": interview.created_at,
+                "updated_at": interview.updated_at
+            })
+        except Exception as e:
+            # Logger l'erreur et continuer avec les autres entretiens
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erreur lors du traitement de l'entretien {interview.id}: {str(e)}")
             continue
-        
-        candidate = session.get(Candidate, application.candidate_id)
-        job = session.get(Job, application.job_id)
-        interviewer = session.get(User, interview.interviewer_id) if interview.interviewer_id else None
-        creator = session.get(User, interview.created_by)
-        
-        results.append({
-            "id": str(interview.id),
-            "application_id": str(interview.application_id),
-            "interview_type": interview.interview_type,
-            "scheduled_at": interview.scheduled_at,
-            "location": interview.location,
-            "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
-            "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
-            "preparation_notes": interview.preparation_notes,
-            "feedback": interview.feedback,
-            "feedback_provided_at": interview.feedback_provided_at,
-            "decision": interview.decision,
-            "score": interview.score,
-            "created_by": str(interview.created_by),
-            "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
-            "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
-            "job_title": job.title if job else "",
-            "created_at": interview.created_at,
-            "updated_at": interview.updated_at
-        })
     
     return results
 
@@ -280,6 +304,7 @@ def get_interview(
         "application_id": str(interview.application_id),
         "interview_type": interview.interview_type,
         "scheduled_at": interview.scheduled_at,
+        "scheduled_end_at": interview.scheduled_end_at,
         "location": interview.location,
         "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
         "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
@@ -353,6 +378,7 @@ def add_interview_feedback(
         "application_id": str(interview.application_id),
         "interview_type": interview.interview_type,
         "scheduled_at": interview.scheduled_at,
+        "scheduled_end_at": interview.scheduled_end_at,
         "location": interview.location,
         "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
         "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
@@ -397,8 +423,19 @@ def update_interview(
             )
     
     # Mettre à jour les champs fournis
+    if interview_data.interview_type is not None:
+        # Vérifier que le type d'entretien est valide
+        valid_types = ['rh', 'technique', 'client', 'prequalification', 'qualification', 'autre']
+        if interview_data.interview_type not in valid_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Type d'entretien invalide. Types valides: {', '.join(valid_types)}"
+            )
+        interview.interview_type = interview_data.interview_type
     if interview_data.scheduled_at is not None:
         interview.scheduled_at = interview_data.scheduled_at
+    if interview_data.scheduled_end_at is not None:
+        interview.scheduled_end_at = interview_data.scheduled_end_at
     if interview_data.location is not None:
         interview.location = interview_data.location
     if interview_data.interviewer_id is not None:
@@ -424,6 +461,7 @@ def update_interview(
         "application_id": str(interview.application_id),
         "interview_type": interview.interview_type,
         "scheduled_at": interview.scheduled_at,
+        "scheduled_end_at": interview.scheduled_end_at,
         "location": interview.location,
         "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
         "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
@@ -441,5 +479,25 @@ def update_interview(
     }
 
 
+@router.delete("/{interview_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_interview(
+    interview_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Supprimer un entretien
+    """
+    interview = session.get(Interview, interview_id)
+    if not interview:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Entretien non trouvé"
+        )
+    
+    session.delete(interview)
+    session.commit()
+    
+    return None
 
 

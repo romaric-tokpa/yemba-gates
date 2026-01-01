@@ -45,6 +45,12 @@ export interface JobCreate {
   job_description_file_path?: string
 }
 
+export interface JobResponseWithCreator extends JobResponse {
+  created_by_name?: string | null
+  created_by_role?: string | null
+  created_by_email?: string | null
+}
+
 export interface JobResponse {
   id: string | null
   // INFORMATIONS GÉNÉRALES
@@ -86,7 +92,7 @@ export interface JobResponse {
   
   // Champs existants
   budget: number | null
-  status: 'brouillon' | 'validé' | 'en_cours' | 'clôturé'
+  status: 'brouillon' | 'validé' | 'en_cours' | 'clôturé' | 'en_attente' | 'en_attente_validation'
   job_description_file_path: string | null
   created_by: string
   validated_by: string | null
@@ -205,7 +211,7 @@ export interface JobUpdate {
   // Champs existants conservés pour compatibilité
   budget?: number
   job_description_file_path?: string
-  status?: 'brouillon' | 'validé' | 'en_cours' | 'clôturé'
+  status?: 'brouillon' | 'validé' | 'en_cours' | 'clôturé' | 'en_attente' | 'en_attente_validation'
 }
 
 export async function updateJob(jobId: string, jobData: JobUpdate): Promise<JobResponse> {
@@ -275,6 +281,23 @@ export async function getPendingValidationJobs(): Promise<JobResponse[]> {
   return response.json()
 }
 
+export async function getClientJobRequests(): Promise<JobResponse[]> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/client-requests`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    // Si erreur 401 (non authentifié) ou 422 (validation), retourner une liste vide
+    if (response.status === 401 || response.status === 422) {
+      console.warn('Erreur lors de la récupération des besoins clients:', response.status)
+      return []
+    }
+    throw new Error('Erreur lors de la récupération des besoins clients')
+  }
+
+  return response.json()
+}
+
 export interface JobValidation {
   validated: boolean
   feedback?: string
@@ -292,6 +315,33 @@ export async function validateJob(jobId: string, validation: JobValidation): Pro
   }
 
   return response.json()
+}
+
+export async function getPendingApprovalJobs(): Promise<JobResponseWithCreator[]> {
+  try {
+    const response = await authenticatedFetch(`${API_URL}/jobs/pending-approval`, {
+      method: 'GET',
+    })
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 422) {
+        console.warn('Erreur lors de la récupération des besoins en attente d\'approbation:', response.status)
+        return []
+      }
+      throw new Error(`Erreur HTTP ${response.status} lors de la récupération des besoins en attente d'approbation`)
+    }
+
+    return response.json()
+  } catch (error) {
+    // Gérer les erreurs réseau (serveur non accessible, CORS, etc.)
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('❌ [API] Erreur réseau: Le serveur backend n\'est peut-être pas démarré ou inaccessible')
+      console.error('💡 Vérifiez que le serveur backend est démarré sur http://localhost:8000')
+      return []
+    }
+    // Relancer les autres erreurs
+    throw error
+  }
 }
 
 // ===== APPLICATIONS API =====
@@ -316,6 +366,9 @@ export interface ApplicationResponse {
   is_in_shortlist: boolean
   created_by: string
   created_by_name: string
+  client_validated?: boolean | null
+  client_feedback?: string | null
+  client_validated_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -356,6 +409,18 @@ export async function getJobShortlist(jobId: string): Promise<ApplicationRespons
 
   if (!response.ok) {
     throw new Error('Erreur lors de la récupération de la shortlist')
+  }
+
+  return response.json()
+}
+
+export async function getCandidateApplications(candidateId: string): Promise<ApplicationResponse[]> {
+  const response = await authenticatedFetch(`${API_URL}/applications/candidate/${candidateId}`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    throw new Error('Erreur lors de la récupération des applications du candidat')
   }
 
   return response.json()
@@ -834,17 +899,31 @@ export async function validateCandidate(
   applicationId: string,
   validation: ShortlistValidation
 ): Promise<ShortlistItem> {
-  const response = await authenticatedFetch(`${API_URL}/shortlists/${applicationId}/validate`, {
-    method: 'POST',
-    body: JSON.stringify(validation),
-  })
+  try {
+    const response = await authenticatedFetch(`${API_URL}/shortlists/${applicationId}/validate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(validation),
+    })
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la validation' }))
-    throw new Error(error.detail || 'Erreur lors de la validation')
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Erreur lors de la validation' }))
+      throw new Error(error.detail || `Erreur HTTP ${response.status} lors de la validation`)
+    }
+
+    return response.json()
+  } catch (error) {
+    // Gérer les erreurs réseau
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('❌ [API] Erreur réseau: Le serveur backend n\'est peut-être pas démarré ou inaccessible')
+      console.error('💡 Vérifiez que le serveur backend est démarré sur http://localhost:8000')
+      throw new Error('Erreur de connexion au serveur. Vérifiez que le serveur backend est démarré.')
+    }
+    // Relancer les autres erreurs
+    throw error
   }
-
-  return response.json()
 }
 
 export async function getRecruiterNotifications(): Promise<ShortlistItem[]> {
@@ -1027,11 +1106,23 @@ export async function markAllAsRead(): Promise<void> {
 
 export interface InterviewCreate {
   application_id: string
-  interview_type: 'rh' | 'technique' | 'client'
+  interview_type: 'rh' | 'technique' | 'client' | 'prequalification' | 'qualification' | 'autre'
   scheduled_at: string
+  scheduled_end_at?: string
   location?: string
   interviewer_id?: string
   preparation_notes?: string
+  participants?: string[] // IDs des participants (utilisateurs)
+}
+
+export interface InterviewUpdate {
+  interview_type?: 'rh' | 'technique' | 'client' | 'prequalification' | 'qualification' | 'autre'
+  scheduled_at?: string
+  scheduled_end_at?: string
+  location?: string
+  interviewer_id?: string
+  preparation_notes?: string
+  participants?: string[]
 }
 
 export interface InterviewResponse {
@@ -1039,6 +1130,7 @@ export interface InterviewResponse {
   application_id: string
   interview_type: string
   scheduled_at: string
+  scheduled_end_at?: string | null
   location?: string | null
   interviewer_id?: string | null
   interviewer_name?: string | null
@@ -1062,17 +1154,24 @@ export interface InterviewFeedback {
 }
 
 export async function createInterview(data: InterviewCreate): Promise<InterviewResponse> {
+  console.log('📡 API createInterview - Données envoyées:', data)
   const response = await authenticatedFetch(`${API_URL}/interviews/`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify(data),
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la planification' }))
-    throw new Error(error.detail || 'Erreur lors de la planification')
+    const errorData = await response.json().catch(() => ({ detail: 'Erreur lors de la planification' }))
+    console.error('❌ Erreur API createInterview:', errorData)
+    throw new Error(errorData.detail || errorData.message || 'Erreur lors de la planification')
   }
 
-  return response.json()
+  const result = await response.json()
+  console.log('✅ API createInterview - Réponse:', result)
+  return result
 }
 
 export async function getInterviews(params?: {
@@ -1083,7 +1182,12 @@ export async function getInterviews(params?: {
   if (params?.application_id) queryParams.append('application_id', params.application_id)
   if (params?.interview_type) queryParams.append('interview_type', params.interview_type)
 
-  const response = await authenticatedFetch(`${API_URL}/interviews/?${queryParams.toString()}`, {
+  const queryString = queryParams.toString()
+  const url = queryString 
+    ? `${API_URL}/interviews/?${queryString}`
+    : `${API_URL}/interviews/`
+
+  const response = await authenticatedFetch(url, {
     method: 'GET',
   })
 
@@ -1109,6 +1213,34 @@ export async function addInterviewFeedback(
   }
 
   return response.json()
+}
+
+export async function updateInterview(
+  interviewId: string,
+  data: InterviewUpdate
+): Promise<InterviewResponse> {
+  const response = await authenticatedFetch(`${API_URL}/interviews/${interviewId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la modification' }))
+    throw new Error(error.detail || 'Erreur lors de la modification')
+  }
+
+  return response.json()
+}
+
+export async function deleteInterview(interviewId: string): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/interviews/${interviewId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression')
+  }
 }
 
 // ===== OFFERS API =====
@@ -1324,11 +1456,21 @@ export interface UserUpdate {
 }
 
 export async function getUsers(): Promise<UserResponse[]> {
-  const response = await authenticatedFetch(`${API_URL}/admin/users`, {
+  // Utiliser l'endpoint /auth/users qui est accessible aux recruteurs et managers
+  const response = await authenticatedFetch(`${API_URL}/auth/users`, {
     method: 'GET',
   })
 
   if (!response.ok) {
+    // Si l'endpoint /auth/users échoue, essayer /admin/users en fallback (pour les admins)
+    if (response.status === 403) {
+      const adminResponse = await authenticatedFetch(`${API_URL}/admin/users`, {
+        method: 'GET',
+      })
+      if (adminResponse.ok) {
+        return adminResponse.json()
+      }
+    }
     throw new Error('Erreur lors de la récupération des utilisateurs')
   }
 

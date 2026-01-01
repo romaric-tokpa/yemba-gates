@@ -37,6 +37,9 @@ class ApplicationResponse(BaseModel):
     is_in_shortlist: bool
     created_by: UUID
     created_by_name: str
+    client_validated: Optional[bool] = None
+    client_feedback: Optional[str] = None
+    client_validated_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -111,6 +114,9 @@ def create_application(
         is_in_shortlist=new_application.is_in_shortlist,
         created_by=new_application.created_by,
         created_by_name=f"{creator.first_name} {creator.last_name}" if creator else "",
+        client_validated=new_application.client_validated,
+        client_feedback=new_application.client_feedback,
+        client_validated_at=new_application.client_validated_at,
         created_at=new_application.created_at,
         updated_at=new_application.updated_at
     )
@@ -156,6 +162,9 @@ def get_job_applications(
             is_in_shortlist=application.is_in_shortlist,
             created_by=application.created_by,
             created_by_name=f"{creator.first_name} {creator.last_name}" if creator else "",
+            client_validated=application.client_validated,
+            client_feedback=application.client_feedback,
+            client_validated_at=application.client_validated_at,
             created_at=application.created_at,
             updated_at=application.updated_at
         ))
@@ -206,6 +215,59 @@ def get_job_shortlist(
             is_in_shortlist=application.is_in_shortlist,
             created_by=application.created_by,
             created_by_name=f"{creator.first_name} {creator.last_name}" if creator else "",
+            client_validated=application.client_validated,
+            client_feedback=application.client_feedback,
+            client_validated_at=application.client_validated_at,
+            created_at=application.created_at,
+            updated_at=application.updated_at
+        ))
+    
+    return result
+
+
+@router.get("/candidate/{candidate_id}", response_model=List[ApplicationResponse])
+def get_candidate_applications(
+    candidate_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Récupérer toutes les applications (candidatures) pour un candidat donné
+    """
+    # Vérifier que le candidat existe
+    candidate = session.get(Candidate, candidate_id)
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidat non trouvé"
+        )
+    
+    # Récupérer toutes les applications pour ce candidat
+    statement = select(Application).where(Application.candidate_id == candidate_id)
+    applications = session.exec(statement).all()
+    
+    result = []
+    for application in applications:
+        job = session.get(Job, application.job_id)
+        creator = session.get(User, application.created_by)
+        
+        result.append(ApplicationResponse(
+            id=application.id,
+            candidate_id=application.candidate_id,
+            candidate_name=f"{candidate.first_name} {candidate.last_name}",
+            candidate_email=candidate.email,
+            candidate_profile_title=candidate.profile_title,
+            candidate_years_of_experience=candidate.years_of_experience,
+            candidate_photo_url=candidate.profile_picture_url,
+            job_id=application.job_id,
+            job_title=job.title if job else "",
+            status=application.status,
+            is_in_shortlist=application.is_in_shortlist,
+            created_by=application.created_by,
+            created_by_name=f"{creator.first_name} {creator.last_name}" if creator else "",
+            client_validated=application.client_validated,
+            client_feedback=application.client_feedback,
+            client_validated_at=application.client_validated_at,
             created_at=application.created_at,
             updated_at=application.updated_at
         ))
@@ -264,6 +326,9 @@ def toggle_shortlist(
         is_in_shortlist=application.is_in_shortlist,
         created_by=application.created_by,
         created_by_name=f"{creator.first_name} {creator.last_name}" if creator else "",
+        client_validated=application.client_validated,
+        client_feedback=application.client_feedback,
+        client_validated_at=application.client_validated_at,
         created_at=application.created_at,
         updated_at=application.updated_at
     )

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from database import get_session, engine
 from models import Job, JobStatus, UrgencyLevel, User, UserRole, JobHistory
-from schemas import JobCreate, JobUpdate, JobResponse, JobSubmitForValidation
+from schemas import JobCreate, JobUpdate, JobResponse, JobResponseWithCreator, JobSubmitForValidation
 from auth import get_current_active_user, require_recruteur, require_manager
 from datetime import datetime, date
 from sqlalchemy import text, inspect
@@ -236,18 +236,26 @@ Règles importantes:
 @router.post("/", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 def create_job(
     job_data: JobCreate,
-    current_user: User = Depends(require_recruteur),
+    current_user: User = Depends(get_current_active_user),
     session: Session = Depends(get_session)
 ):
     """
     Créer un nouveau besoin de recrutement (US01)
     
     Permet de créer un besoin avec tous les champs obligatoires.
-    Le besoin est créé en statut "brouillon" par défaut.
+    - Si créé par un recruteur ou manager: statut "brouillon"
+    - Si créé par un client: statut "en_attente_validation"
     """
     try:
         # Utiliser l'utilisateur connecté
         created_by = current_user.id
+        
+        # Déterminer le statut initial selon le rôle
+        # Note: Utiliser un statut plus court temporairement si la migration n'est pas appliquée
+        if current_user.role == UserRole.CLIENT:
+            initial_status = "en_attente"  # Statut plus court (11 caractères) compatible avec VARCHAR(20)
+        else:
+            initial_status = "brouillon"
         
         # Création du job
         # Convertir les données
@@ -294,7 +302,7 @@ def create_job(
             avantages=job_data_dict.get('avantages'),
             evolution_poste=job_data_dict.get('evolution_poste'),
             budget=job_data_dict.get('budget'),  # Conservé pour compatibilité
-            status="brouillon",
+            status=initial_status,
             job_description_file_path=job_data_dict.get('job_description_file_path'),
             created_by=created_by
         )
@@ -435,13 +443,29 @@ def list_jobs(
     skip: int = 0,
     limit: int = 100,
     status_filter: Optional[JobStatus] = None,
+    current_user: User = Depends(get_current_active_user),
     session: Session = Depends(get_session)
 ):
     """
     Lister tous les besoins de recrutement
+    
+    - Les recruteurs voient uniquement les besoins validés (statut "validé" ou "en_cours")
+    - Les managers et admins voient tous les besoins
+    - Les clients voient uniquement leurs propres besoins
     """
     try:
         statement = select(Job)
+        
+        # Filtrer selon le rôle de l'utilisateur
+        if current_user.role == UserRole.RECRUTEUR:
+            # Les recruteurs ne voient que les besoins validés (exclure "en_attente")
+            statement = statement.where(
+                (Job.status == "validé") | (Job.status == "en_cours") | (Job.status == "clôturé")
+            ).where(Job.status != "en_attente")  # Exclure les besoins en attente de validation
+        elif current_user.role == UserRole.CLIENT:
+            # Les clients voient uniquement leurs propres besoins
+            statement = statement.where(Job.created_by == current_user.id)
+        # Les managers et admins voient tous les besoins (pas de filtre supplémentaire)
         
         if status_filter:
             status_value = status_filter.value if hasattr(status_filter, 'value') else str(status_filter)
@@ -541,6 +565,128 @@ def list_jobs(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Erreur lors de la récupération des jobs: {error_message}"
             )
+
+
+@router.get("/pending-validation", response_model=List[JobResponse])
+def get_pending_validation_jobs(
+    current_user: User = Depends(require_manager),
+    session: Session = Depends(get_session)
+):
+    """
+    Récupérer la liste des besoins en attente de validation (US02)
+    
+    Retourne les besoins qui ont été soumis mais pas encore validés/rejetés.
+    """
+    # Les besoins en brouillon qui ont été soumis (on peut ajouter un champ submitted_at si nécessaire)
+    # Pour l'instant, on retourne les besoins en brouillon qui ne sont pas validés
+    statement = select(Job).where(
+        Job.status == "brouillon",
+        Job.validated_by.is_(None)
+    ).order_by(Job.created_at.desc())
+    
+    jobs = session.exec(statement).all()
+    return jobs
+
+
+@router.get("/client-requests", response_model=List[JobResponse])
+def get_client_job_requests(
+    current_user: User = Depends(require_manager),
+    session: Session = Depends(get_session)
+):
+    """
+    Récupérer la liste des besoins créés par les clients en attente de validation
+    
+    Retourne les besoins créés par les clients avec le statut "en_attente_validation".
+    """
+    # Récupérer les besoins créés par des clients en attente de validation
+    # Utiliser "en_attente" au lieu de "en_attente_validation" pour compatibilité avec VARCHAR(20)
+    statement = select(Job).join(User, Job.created_by == User.id).where(
+        Job.status == "en_attente",
+        User.role == UserRole.CLIENT
+    ).order_by(Job.created_at.desc())
+    
+    jobs = session.exec(statement).all()
+    return jobs
+
+
+@router.get("/pending-approval", response_model=List[JobResponseWithCreator])
+def get_pending_approval_jobs(
+    current_user: User = Depends(require_manager),
+    session: Session = Depends(get_session)
+):
+    """
+    Récupérer tous les besoins pour approbation (créés par client, recruteur ou manager)
+    
+    Retourne TOUS les besoins (sauf clôturés) avec les informations du créateur.
+    Le manager peut ainsi approuver ou changer le statut de n'importe quel besoin.
+    """
+    # Récupérer tous les besoins sauf ceux clôturés
+    statement = select(Job).where(
+        Job.status != "clôturé"
+    ).order_by(Job.created_at.desc())
+    
+    jobs = session.exec(statement).all()
+    
+    # Construire les réponses avec les informations du créateur
+    results = []
+    for job in jobs:
+        creator = session.get(User, job.created_by)
+        
+        # Construire le dictionnaire complet manuellement
+        job_dict = {
+            "id": job.id,
+            "title": job.title or "",
+            "department": job.department,
+            "manager_demandeur": job.manager_demandeur,
+            "entreprise": job.entreprise,
+            "contract_type": job.contract_type,
+            "motif_recrutement": job.motif_recrutement,
+            "urgency": job.urgency,
+            "date_prise_poste": job.date_prise_poste,
+            "missions_principales": job.missions_principales,
+            "missions_secondaires": job.missions_secondaires,
+            "kpi_poste": job.kpi_poste,
+            "niveau_formation": job.niveau_formation,
+            "experience_requise": job.experience_requise,
+            "competences_techniques_obligatoires": job.competences_techniques_obligatoires or [],
+            "competences_techniques_souhaitees": job.competences_techniques_souhaitees or [],
+            "competences_comportementales": job.competences_comportementales or [],
+            "langues_requises": job.langues_requises,
+            "certifications_requises": job.certifications_requises,
+            "localisation": job.localisation,
+            "mobilite_deplacements": job.mobilite_deplacements,
+            "teletravail": job.teletravail,
+            "contraintes_horaires": job.contraintes_horaires,
+            "criteres_eliminatoires": job.criteres_eliminatoires,
+            "salaire_minimum": job.salaire_minimum,
+            "salaire_maximum": job.salaire_maximum,
+            "avantages": job.avantages or [],
+            "evolution_poste": job.evolution_poste,
+            "budget": job.budget,
+            "status": job.status or "brouillon",
+            "job_description_file_path": job.job_description_file_path,
+            "created_by": job.created_by,
+            "validated_by": job.validated_by,
+            "validated_at": job.validated_at,
+            "closed_at": job.closed_at,
+            "created_at": job.created_at,
+            "updated_at": job.updated_at,
+            # Informations du créateur
+            "created_by_name": f"{creator.first_name} {creator.last_name}".strip() if creator else None,
+            "created_by_role": creator.role if creator and creator.role else None,
+            "created_by_email": creator.email if creator else None,
+        }
+        
+        try:
+            result = JobResponseWithCreator(**job_dict)
+            results.append(result)
+        except Exception as e:
+            logger.error(f"Erreur lors de la création de JobResponseWithCreator pour le job {job.id}: {str(e)}", exc_info=True)
+            logger.error(f"Dictionnaire job_dict: {job_dict}")
+            # Ignorer ce job et continuer
+            continue
+    
+    return results
 
 
 @router.get("/{job_id}", response_model=JobResponse)
@@ -946,27 +1092,6 @@ def validate_job(
     session.refresh(job)
     
     return job
-
-
-@router.get("/pending-validation", response_model=List[JobResponse])
-def get_pending_validation_jobs(
-    current_user: User = Depends(require_manager),
-    session: Session = Depends(get_session)
-):
-    """
-    Récupérer la liste des besoins en attente de validation (US02)
-    
-    Retourne les besoins qui ont été soumis mais pas encore validés/rejetés.
-    """
-    # Les besoins en brouillon qui ont été soumis (on peut ajouter un champ submitted_at si nécessaire)
-    # Pour l'instant, on retourne les besoins en brouillon qui ne sont pas validés
-    statement = select(Job).where(
-        Job.status == "brouillon",
-        Job.validated_by.is_(None)
-    ).order_by(Job.created_at.desc())
-    
-    jobs = session.exec(statement).all()
-    return jobs
 
 
 @router.get("/{job_id}/history", response_model=List[dict])

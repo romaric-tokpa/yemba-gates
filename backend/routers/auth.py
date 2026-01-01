@@ -2,7 +2,7 @@
 Routes d'authentification
 """
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlmodel import Session
 from pydantic import BaseModel, EmailStr
@@ -20,6 +20,7 @@ from auth import (
 from fastapi import Request
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+from datetime import datetime
 
 
 class Token(BaseModel):
@@ -275,4 +276,42 @@ def get_current_user_info(
         "department": current_user.department,
         "is_active": current_user.is_active
     }
+
+
+@router.get("/users")
+def list_users_for_interviews(
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Liste les utilisateurs pour la sélection d'interviewers et participants
+    Accessible aux recruteurs, managers et administrateurs
+    """
+    from sqlmodel import select
+    
+    # Vérifier que l'utilisateur a les permissions nécessaires
+    if current_user.role not in [UserRole.RECRUTEUR.value, UserRole.MANAGER.value, UserRole.ADMINISTRATEUR.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vous n'avez pas les permissions nécessaires pour accéder à cette ressource"
+        )
+    
+    statement = select(User).where(User.is_active == True).order_by(User.first_name, User.last_name)
+    users = session.exec(statement).all()
+    
+    return [
+        {
+            "id": str(user.id),
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+            "phone": user.phone,
+            "department": user.department,
+            "is_active": user.is_active,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "updated_at": user.updated_at.isoformat() if user.updated_at else None
+        }
+        for user in users
+    ]
 

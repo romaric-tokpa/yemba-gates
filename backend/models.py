@@ -174,8 +174,9 @@ class Interview(SQLModel, table=True):
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
     application_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE")))
-    interview_type: str = Field(max_length=50)  # 'rh', 'technique', 'client'
+    interview_type: str = Field(max_length=50)  # 'rh', 'technique', 'client', 'prequalification', 'qualification', 'autre'
     scheduled_at: datetime
+    scheduled_end_at: datetime | None = None
     location: str | None = Field(default=None, max_length=255)
     interviewer_id: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id")))
     preparation_notes: str | None = Field(default=None)

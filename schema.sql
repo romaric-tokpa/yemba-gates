@@ -121,8 +121,9 @@ CREATE INDEX idx_applications_shortlist ON applications(is_in_shortlist);
 CREATE TABLE interviews (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
-    interview_type VARCHAR(50) NOT NULL CHECK (interview_type IN ('rh', 'technique', 'client')),
+    interview_type VARCHAR(50) NOT NULL CHECK (interview_type IN ('rh', 'technique', 'client', 'prequalification', 'qualification', 'autre')),
     scheduled_at TIMESTAMP NOT NULL,                -- Date et heure planifiées
+    scheduled_end_at TIMESTAMP,                      -- Date et heure de fin planifiées
     location VARCHAR(255),                          -- Lieu ou lien visioconférence
     interviewer_id UUID REFERENCES users(id),      -- Personne qui mène l'entretien
     preparation_notes TEXT,                         -- Notes de préparation

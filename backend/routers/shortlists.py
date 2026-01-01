@@ -60,21 +60,14 @@ def get_client_shortlists(
     # current_user.role est une string, donc on compare avec la valeur de l'enum
     user_role = current_user.role if isinstance(current_user.role, str) else current_user.role.value
     if user_role == UserRole.CLIENT.value:
-        # Clients : jobs de leur département
-        jobs_statement = select(Job).where(Job.department == current_user.department)
-        client_jobs = session.exec(jobs_statement).all()
-        job_ids = [job.id for job in client_jobs]
-        
-        if not job_ids:
-            return []
-        
+        # Clients : shortlists pour les besoins qu'ils ont créés
+        # Afficher tous les candidats en shortlist, même s'ils ont déjà été validés/rejetés
         applications_statement = (
             select(Application, Candidate, Job)
             .join(Candidate, Application.candidate_id == Candidate.id)
             .join(Job, Application.job_id == Job.id)
-            .where(or_(*[Application.job_id == job_id for job_id in job_ids]))
+            .where(Job.created_by == current_user.id)
             .where(Application.is_in_shortlist == True)
-            .where(Application.status == "shortlist")
         )
     elif user_role == UserRole.RECRUTEUR.value:
         # Recruteurs : jobs qu'ils ont créés
@@ -142,19 +135,28 @@ def validate_candidate(
             detail="Candidature non trouvée"
         )
     
-    # Vérifier que le job appartient au client
+    # Vérifier que le job appartient au client (créé par le client)
     job = session.get(Job, application.job_id)
-    if not job or job.department != current_user.department:
+    if not job or job.created_by != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Vous n'avez pas accès à cette candidature"
         )
     
     # Vérifier que c'est bien en shortlist
-    if not application.is_in_shortlist or application.status != "shortlist":
+    if not application.is_in_shortlist:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ce candidat n'est pas en shortlist"
+        )
+    
+    # Permettre la validation même si le statut n'est pas exactement "shortlist"
+    # (par exemple si le client veut modifier sa décision)
+    # Mais empêcher si le statut est déjà définitif (embauché)
+    if application.status == "embauché":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce candidat a déjà été embauché, la validation ne peut plus être modifiée"
         )
     
     # Mettre à jour la validation
@@ -181,9 +183,17 @@ def validate_candidate(
     session.refresh(application)
     
     # Si l'offre est acceptée (validated=True), notifier les managers
+    # Gérer l'erreur si le service de notification n'existe pas
     if validation.validated:
-        from services.notifications import notify_managers_on_offer_accepted
-        notify_managers_on_offer_accepted(session, application)
+        try:
+            from services.notifications import notify_managers_on_offer_accepted
+            notify_managers_on_offer_accepted(session, application)
+        except ImportError:
+            # Le service de notification n'existe pas, on continue quand même
+            pass
+        except Exception as e:
+            # Logger l'erreur mais ne pas bloquer la validation
+            print(f"⚠️ Erreur lors de la notification des managers: {e}")
     
     # Récupérer les informations complètes pour la réponse
     candidate = session.get(Candidate, application.candidate_id)
@@ -210,7 +220,7 @@ def validate_candidate(
         "client_validated": application.client_validated,
         "client_validated_at": application.client_validated_at,
         "has_new_feedback": True,
-        "created_at": application.created_at.isoformat() if application.created_at else ""
+        "created_at": application.created_at
     }
 
 

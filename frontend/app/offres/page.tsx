@@ -11,6 +11,7 @@ import {
   OfferSend,
   OfferDecision
 } from '@/lib/api'
+import { formatDateTime } from '@/lib/utils'
 
 export default function OffresPage() {
   const [offers, setOffers] = useState<OfferResponse[]>([])
@@ -191,12 +192,12 @@ export default function OffresPage() {
                       )}
                       {offer.offer_sent_at && (
                         <p className="text-xs text-gray-500 mt-1">
-                          Envoyée le: {new Date(offer.offer_sent_at).toLocaleDateString('fr-FR')}
+                          Envoyée le: {formatDateTime(offer.offer_sent_at)}
                         </p>
                       )}
                       {offer.offer_accepted_at && (
                         <p className="text-xs text-gray-500">
-                          {offer.offer_accepted ? 'Acceptée' : 'Refusée'} le: {new Date(offer.offer_accepted_at).toLocaleDateString('fr-FR')}
+                          {offer.offer_accepted ? 'Acceptée' : 'Refusée'} le: {formatDateTime(offer.offer_accepted_at)}
                         </p>
                       )}
                     </div>

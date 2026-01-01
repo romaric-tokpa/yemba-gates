@@ -171,6 +171,13 @@ class JobResponse(BaseModel):
     updated_at: datetime
 
 
+class JobResponseWithCreator(JobResponse):
+    """Schéma de réponse pour un besoin de recrutement avec informations du créateur"""
+    created_by_name: Optional[str] = None
+    created_by_role: Optional[str] = None
+    created_by_email: Optional[str] = None
+
+
 class JobSubmitForValidation(BaseModel):
     """Schéma pour soumettre un besoin pour validation"""
     pass  # Pas de champs supplémentaires, juste une action

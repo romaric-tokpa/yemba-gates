@@ -69,6 +69,7 @@ app.add_middleware(
     max_age=3600,  # Cache les pré-requêtes OPTIONS pendant 1 heure
 )
 
+
 # Inclusion des routers
 app.include_router(auth.router)
 app.include_router(jobs.router)
@@ -134,7 +135,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         logger.error(f"   Message: {error_message}")
         logger.error(f"   Type: {error_type}")
         logger.error(f"   Path: {request.url.path}")
-        return JSONResponse(
+        response = JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "detail": error_message,
@@ -143,6 +144,12 @@ async def global_exception_handler(request: Request, exc: Exception):
                 "hint": "Vérifiez les logs du serveur pour plus de détails. Il s'agit probablement d'une colonne manquante dans la base de données."
             }
         )
+        # S'assurer que les headers CORS sont présents même en cas d'erreur
+        response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
     
     # Détecter les erreurs de validation
     if "validation" in error_message.lower() or "ValidationError" in error_type:
@@ -192,17 +199,21 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Gestionnaire pour les erreurs de validation des requêtes"""
+    errors = exc.errors()
     logger.warning(
         f"⚠️  Erreur de validation de requête",
         extra={
             "path": request.url.path,
             "method": request.method,
-            "errors": exc.errors(),
+            "errors": errors,
         }
     )
+    # Logger les détails des erreurs pour le débogage
+    for error in errors:
+        logger.error(f"Erreur de validation: {error}")
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": exc.errors(), "path": request.url.path}
+        content={"detail": errors, "path": request.url.path}
     )
 
 

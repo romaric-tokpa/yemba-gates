@@ -3,17 +3,21 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getJobs, JobResponse } from '@/lib/api'
+import { getJobs, getClientJobRequests, JobResponse, validateJob, JobValidation } from '@/lib/api'
 import { getToken, isAuthenticated } from '@/lib/auth'
+import { useToastContext } from '@/components/ToastProvider'
 import { 
   Plus, History, Clock, ChevronDown, FileText, UserPlus, 
   Search, Filter, XCircle, Briefcase, MapPin, DollarSign,
-  Calendar, Building2, AlertCircle, CheckCircle2, FileEdit
+  Calendar, Building2, AlertCircle, CheckCircle2, FileEdit, Users, Check, X
 } from 'lucide-react'
 
 export default function ManagerJobsPage() {
   const router = useRouter()
+  const { success, error: showError } = useToastContext()
+  const [activeTab, setActiveTab] = useState<'my-jobs' | 'client-requests'>('my-jobs')
   const [jobs, setJobs] = useState<JobResponse[]>([])
+  const [clientRequests, setClientRequests] = useState<JobResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddMenu, setShowAddMenu] = useState(false)
@@ -30,7 +34,14 @@ export default function ManagerJobsPage() {
       return
     }
     loadJobs()
+    loadClientRequests()
   }, [router])
+
+  useEffect(() => {
+    if (activeTab === 'client-requests') {
+      loadClientRequests()
+    }
+  }, [activeTab])
 
   // Fermer le menu déroulant quand on clique en dehors
   useEffect(() => {
@@ -51,22 +62,46 @@ export default function ManagerJobsPage() {
 
   const loadJobs = async () => {
     try {
-      setIsLoading(true)
       setError(null)
       const data = await getJobs()
-      setJobs(Array.isArray(data) ? data : [])
+      // Filtrer pour exclure les besoins clients (en_attente ou en_attente_validation)
+      const myJobs = Array.isArray(data) ? data.filter(j => j.status !== 'en_attente' && j.status !== 'en_attente_validation') : []
+      setJobs(myJobs)
     } catch (err) {
       console.warn('Erreur lors du chargement des besoins:', err)
       setError('Impossible de charger les besoins. Vérifiez votre connexion.')
       setJobs([])
+    }
+  }
+
+  const loadClientRequests = async () => {
+    try {
+      setIsLoading(true)
+      const data = await getClientJobRequests()
+      setClientRequests(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.warn('Erreur lors du chargement des besoins clients:', err)
+      setClientRequests([])
     } finally {
       setIsLoading(false)
     }
   }
 
+  const handleValidateJob = async (jobId: string, validated: boolean) => {
+    try {
+      await validateJob(jobId, { validated, feedback: validated ? 'Besoin validé par le manager' : 'Besoin rejeté par le manager' })
+      success(validated ? 'Besoin validé avec succès' : 'Besoin rejeté')
+      await loadClientRequests()
+      await loadJobs() // Recharger aussi les besoins normaux au cas où
+    } catch (err) {
+      showError('Erreur lors de la validation du besoin')
+    }
+  }
+
   // Filtrage des jobs
   const filteredJobs = useMemo(() => {
-    return jobs.filter(job => {
+    const jobsToFilter = activeTab === 'my-jobs' ? jobs : clientRequests
+    return jobsToFilter.filter(job => {
       const matchesSearch = !searchQuery || 
         job.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.department?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -78,7 +113,7 @@ export default function ManagerJobsPage() {
       
       return matchesSearch && matchesStatus && matchesUrgency
     })
-  }, [jobs, searchQuery, statusFilter, urgencyFilter])
+  }, [jobs, clientRequests, activeTab, searchQuery, statusFilter, urgencyFilter])
 
   // Statistiques
   const stats = useMemo(() => {
@@ -97,6 +132,8 @@ export default function ManagerJobsPage() {
       'validé': { bg: 'bg-green-100', text: 'text-green-800', label: 'Validé', icon: CheckCircle2 },
       'en_cours': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'En cours', icon: Briefcase },
       'clôturé': { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Clôturé', icon: CheckCircle2 },
+      'en_attente': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'En attente', icon: Clock },
+      'en_attente_validation': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'En attente', icon: Clock }, // Compatibilité
     }
     const config = statusConfig[status] || { bg: 'bg-gray-100', text: 'text-gray-800', label: status, icon: Briefcase }
     const Icon = config.icon
@@ -188,29 +225,64 @@ export default function ManagerJobsPage() {
         </div>
       </div>
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-          <div className="text-xs lg:text-sm text-gray-600 mt-1">Total</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-2xl font-bold text-gray-600">{stats.brouillons}</div>
-          <div className="text-xs lg:text-sm text-gray-600 mt-1">Brouillons</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-2xl font-bold text-green-600">{stats.valides}</div>
-          <div className="text-xs lg:text-sm text-gray-600 mt-1">Validés</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-2xl font-bold text-indigo-600">{stats.enCours}</div>
-          <div className="text-xs lg:text-sm text-gray-600 mt-1">En cours</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-2xl font-bold text-red-600">{stats.critiques}</div>
-          <div className="text-xs lg:text-sm text-gray-600 mt-1">Critiques</div>
+      {/* Onglets */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="border-b border-gray-200">
+          <nav className="flex -mb-px">
+            <button
+              onClick={() => setActiveTab('my-jobs')}
+              className={`flex-1 px-4 py-3 text-center font-medium text-sm transition-colors ${
+                activeTab === 'my-jobs'
+                  ? 'text-indigo-600 border-b-2 border-indigo-600'
+                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Mes besoins ({jobs.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('client-requests')}
+              className={`flex-1 px-4 py-3 text-center font-medium text-sm transition-colors relative ${
+                activeTab === 'client-requests'
+                  ? 'text-indigo-600 border-b-2 border-indigo-600'
+                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Besoins clients ({clientRequests.length})
+              {clientRequests.length > 0 && (
+                <span className="absolute top-2 right-2 bg-yellow-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {clientRequests.length}
+                </span>
+              )}
+            </button>
+          </nav>
         </div>
       </div>
+
+      {/* Statistiques */}
+      {activeTab === 'my-jobs' && (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+            <div className="text-xs lg:text-sm text-gray-600 mt-1">Total</div>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="text-2xl font-bold text-gray-600">{stats.brouillons}</div>
+            <div className="text-xs lg:text-sm text-gray-600 mt-1">Brouillons</div>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="text-2xl font-bold text-green-600">{stats.valides}</div>
+            <div className="text-xs lg:text-sm text-gray-600 mt-1">Validés</div>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="text-2xl font-bold text-indigo-600">{stats.enCours}</div>
+            <div className="text-xs lg:text-sm text-gray-600 mt-1">En cours</div>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="text-2xl font-bold text-red-600">{stats.critiques}</div>
+            <div className="text-xs lg:text-sm text-gray-600 mt-1">Critiques</div>
+          </div>
+        </div>
+      )}
 
       {/* Barre de recherche et filtres */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6">
@@ -308,7 +380,7 @@ export default function ManagerJobsPage() {
         <div className="p-4 lg:p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-lg lg:text-xl font-semibold text-gray-900">
-              Liste des besoins ({filteredJobs.length})
+              {activeTab === 'my-jobs' ? 'Mes besoins' : 'Besoins clients'} ({filteredJobs.length})
             </h2>
           </div>
         </div>
@@ -317,32 +389,56 @@ export default function ManagerJobsPage() {
           {filteredJobs.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {filteredJobs.map((job) => (
-                <Link
+                <div
                   key={job.id}
-                  href={`/manager/jobs/${job.id}`}
-                  className="block p-5 border border-gray-200 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer bg-white"
+                  className="block p-5 border border-gray-200 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all bg-white"
                 >
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 text-base lg:text-lg mb-2 line-clamp-2">
-                        {job.title}
-                      </h3>
+                      <Link
+                        href={`/manager/jobs/${job.id}`}
+                        className="block"
+                      >
+                        <h3 className="font-semibold text-gray-900 text-base lg:text-lg mb-2 line-clamp-2 hover:text-indigo-600">
+                          {job.title}
+                        </h3>
+                      </Link>
                       <div className="flex flex-wrap items-center gap-2 mb-2">
                         {getStatusBadge(job.status)}
                         {getUrgencyBadge(job.urgency)}
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        router.push(`/manager/jobs/${job.id}?tab=history`)
-                      }}
-                      className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex-shrink-0"
-                      title="Voir l'historique"
-                    >
-                      <History className="w-5 h-5" />
-                    </button>
+                    <div className="flex gap-2">
+                      {activeTab === 'client-requests' && (job.status === 'en_attente' || job.status === 'en_attente_validation') && (
+                        <>
+                          <button
+                            onClick={() => handleValidateJob(job.id!, true)}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex-shrink-0"
+                            title="Valider"
+                          >
+                            <Check className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handleValidateJob(job.id!, false)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                            title="Rejeter"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          router.push(`/manager/jobs/${job.id}?tab=history`)
+                        }}
+                        className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex-shrink-0"
+                        title="Voir l'historique"
+                      >
+                        <History className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="space-y-2 text-sm text-gray-600">
@@ -406,19 +502,23 @@ export default function ManagerJobsPage() {
                       </div>
                     </div>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           ) : (
             <div className="text-center py-12 text-gray-500">
               <Briefcase className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg font-medium mb-2">Aucun besoin trouvé</p>
-              <p className="text-sm mb-4">
-                {searchQuery || statusFilter || urgencyFilter 
-                  ? 'Aucun besoin ne correspond à vos critères de recherche.'
-                  : 'Commencez par créer votre premier besoin de recrutement.'}
+              <p className="text-lg font-medium mb-2">
+                {activeTab === 'client-requests' ? 'Aucun besoin client en attente' : 'Aucun besoin trouvé'}
               </p>
-              {!searchQuery && !statusFilter && !urgencyFilter && (
+              <p className="text-sm mb-4">
+                {activeTab === 'client-requests' 
+                  ? 'Aucun besoin créé par un client n\'est en attente de validation.'
+                  : searchQuery || statusFilter || urgencyFilter 
+                    ? 'Aucun besoin ne correspond à vos critères de recherche.'
+                    : 'Commencez par créer votre premier besoin de recrutement.'}
+              </p>
+              {activeTab === 'my-jobs' && !searchQuery && !statusFilter && !urgencyFilter && (
                 <Link
                   href="/manager/jobs/new"
                   className="inline-flex items-center gap-2 mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"

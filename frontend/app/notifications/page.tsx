@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { getRecruiterNotifications, ShortlistItem } from '@/lib/api'
 import Link from 'next/link'
+import { formatDateTime } from '@/lib/utils'
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<ShortlistItem[]>([])
@@ -85,13 +86,7 @@ export default function NotificationsPage() {
                     </p>
                     {item.client_validated_at && (
                       <p className="text-sm text-gray-500">
-                        Décision prise le {new Date(item.client_validated_at).toLocaleDateString('fr-FR', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                        Décision prise le {formatDateTime(item.client_validated_at)}
                       </p>
                     )}
                   </div>
