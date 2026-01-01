@@ -13,7 +13,7 @@ import logging
 import traceback
 
 from database import init_db
-from routers import jobs, candidates, auth, kpi, shortlists, notifications, interviews, offers, onboarding, history, admin
+from routers import jobs, candidates, auth, kpi, shortlists, notifications, interviews, offers, onboarding, history, admin, applications
 
 # Configuration du logging
 logging.basicConfig(
@@ -81,6 +81,7 @@ app.include_router(offers.router)
 app.include_router(onboarding.router)
 app.include_router(history.router)
 app.include_router(admin.router)
+app.include_router(applications.router)
 
 # Servir les fichiers statiques (photos, CVs, etc.)
 static_dir = Path("static")

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createCandidate, getCandidates, CandidateResponse, CandidateCreate, uploadCandidatePhoto, parseCv } from '@/lib/api'
 import { getToken, isAuthenticated } from '@/lib/auth'
-import { Plus, X, Upload, Tag, Mail, Phone, Search, List, LayoutGrid, Image as ImageIcon, FileText, UserPlus, ChevronDown } from 'lucide-react'
+import { Plus, X, Upload, Tag, Mail, Phone, Search, List, LayoutGrid, Image as ImageIcon, FileText, UserPlus, ChevronDown, Filter, XCircle } from 'lucide-react'
 import { useToastContext } from '@/components/ToastProvider'
 
 export default function ManagerCandidatsPage() {
@@ -20,8 +20,9 @@ export default function ManagerCandidatsPage() {
   const [selectedSource, setSelectedSource] = useState<string>('')
   const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState<string>('')
-  const [selectedExperience, setSelectedExperience] = useState<string>('')
-  const [selectedAvailability, setSelectedAvailability] = useState<string>('')
+  const [selectedSkill, setSelectedSkill] = useState<string>('')
+  const [selectedExperienceMin, setSelectedExperienceMin] = useState<string>('')
+  const [selectedExperienceMax, setSelectedExperienceMax] = useState<string>('')
   
   // Formulaire
   const [formData, setFormData] = useState<CandidateCreate>({
@@ -126,14 +127,15 @@ export default function ManagerCandidatsPage() {
     }
   }, [selectedTag, selectedSource, selectedStatus, showError])
 
-  // Récupérer tous les tags uniques
+  // Récupérer tous les tags, sources et compétences uniques
   const allTags = Array.from(
     new Set(candidates.flatMap((c) => c.tags || []))
   )
-
-  // Récupérer toutes les sources uniques
   const allSources = Array.from(
     new Set(candidates.map((c) => c.source).filter(Boolean))
+  )
+  const allSkills = Array.from(
+    new Set(candidates.flatMap((c) => c.skills || []))
   )
 
   const handleAddTag = () => {
@@ -334,34 +336,54 @@ export default function ManagerCandidatsPage() {
   }
 
   const filteredCandidates = candidates.filter((candidate) => {
-    // Recherche par nom
+    // Recherche par nom et prénom
     if (searchQuery) {
       const fullName = `${candidate.first_name} ${candidate.last_name}`.toLowerCase()
       const searchLower = searchQuery.toLowerCase()
       if (!fullName.includes(searchLower)) return false
     }
     
-    // Filtres existants
+    // Filtre par tag
     if (selectedTag && !candidate.tags?.includes(selectedTag)) return false
+    
+    // Filtre par source
     if (selectedSource && candidate.source !== selectedSource) return false
+    
+    // Filtre par statut
     if (selectedStatus && candidate.status !== selectedStatus) return false
     
-    // Filtre par expérience (basé sur les tags - recherche de "junior", "senior", etc.)
-    if (selectedExperience) {
-      const tagsLower = candidate.tags?.map(t => t.toLowerCase()) || []
-      if (selectedExperience === 'junior' && !tagsLower.some(t => t.includes('junior'))) return false
-      if (selectedExperience === 'senior' && !tagsLower.some(t => t.includes('senior'))) return false
-      if (selectedExperience === 'intermediate' && !tagsLower.some(t => t.includes('intermediate') || t.includes('intermédiaire'))) return false
-    }
+    // Filtre par compétence
+    if (selectedSkill && !candidate.skills?.some(skill => skill.toLowerCase().includes(selectedSkill.toLowerCase()))) return false
     
-    // Filtre par disponibilité (basé sur le statut - si "embauché" alors non disponible)
-    if (selectedAvailability) {
-      if (selectedAvailability === 'available' && candidate.status === 'embauché') return false
-      if (selectedAvailability === 'unavailable' && candidate.status !== 'embauché') return false
-    }
+    // Filtre par années d'expérience
+    const yearsExp = candidate.years_of_experience ?? 0
+    if (selectedExperienceMin && yearsExp < parseInt(selectedExperienceMin)) return false
+    if (selectedExperienceMax && yearsExp > parseInt(selectedExperienceMax)) return false
     
     return true
   })
+
+  // Compter les filtres actifs
+  const activeFiltersCount = [
+    searchQuery,
+    selectedTag,
+    selectedSource,
+    selectedStatus,
+    selectedSkill,
+    selectedExperienceMin,
+    selectedExperienceMax,
+  ].filter(Boolean).length
+
+  // Fonction pour réinitialiser tous les filtres
+  const resetFilters = () => {
+    setSearchQuery('')
+    setSelectedTag('')
+    setSelectedSource('')
+    setSelectedStatus('')
+    setSelectedSkill('')
+    setSelectedExperienceMin('')
+    setSelectedExperienceMax('')
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -443,99 +465,176 @@ export default function ManagerCandidatsPage() {
         </div>
       </div>
 
-      {/* Barre de recherche */}
-      <div className="mb-6 bg-white rounded-lg shadow p-4">
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher par nom</label>
-          <input
-            type="text"
-            placeholder="Rechercher un candidat par nom ou prénom..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          />
+      {/* Barre de recherche et filtres */}
+      <div className="mb-6 space-y-4">
+        {/* Barre de recherche */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Rechercher par nom ou prénom..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Filtres */}
-      <div className="mb-6 bg-white rounded-lg shadow p-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tag</label>
-            <select
-              value={selectedTag}
-              onChange={(e) => setSelectedTag(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="">Tous les tags</option>
-              {allTags.map((tag) => (
-                <option key={tag} value={tag}>
-                  {tag}
-                </option>
-              ))}
-            </select>
+        {/* Filtres */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6">
+          {/* En-tête des filtres */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Filtres</h3>
+              {activeFiltersCount > 0 && (
+                <span className="px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
+                  {activeFiltersCount} actif{activeFiltersCount > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            {activeFiltersCount > 0 && (
+              <button
+                onClick={resetFilters}
+                className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <XCircle className="w-4 h-4" />
+                Réinitialiser
+              </button>
+            )}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
-            <select
-              value={selectedSource}
-              onChange={(e) => setSelectedSource(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="">Toutes les sources</option>
-              {allSources.map((source) => (
-                <option key={source} value={source}>
-                  {source}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="">Tous les statuts</option>
-              <option value="sourcé">Sourcé</option>
-              <option value="Entretien">Entretien</option>
-              <option value="Offre">Offre</option>
-              <option value="Refusé">Refusé</option>
-              {/* Anciens statuts pour compatibilité */}
-              <option value="sourcé">Sourcé</option>
-              <option value="qualifié">Qualifié</option>
-              <option value="entretien_rh">Entretien RH</option>
-              <option value="entretien_client">Entretien Client</option>
-              <option value="shortlist">Shortlist</option>
-              <option value="embauché">Embauché</option>
-              <option value="rejeté">Rejeté</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Expérience</label>
-            <select
-              value={selectedExperience}
-              onChange={(e) => setSelectedExperience(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="">Tous les niveaux</option>
-              <option value="junior">Junior</option>
-              <option value="intermediate">Intermédiaire</option>
-              <option value="senior">Senior</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Disponibilité</label>
-            <select
-              value={selectedAvailability}
-              onChange={(e) => setSelectedAvailability(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="">Tous</option>
-              <option value="available">Disponible</option>
-              <option value="unavailable">Non disponible</option>
-            </select>
+
+          {/* Grille de filtres */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {/* Filtre Tag */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <Tag className="inline-block w-4 h-4 mr-1.5 text-gray-500" />
+                Tag
+              </label>
+              <select
+                value={selectedTag}
+                onChange={(e) => setSelectedTag(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              >
+                <option value="">Tous les tags</option>
+                {allTags.map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filtre Source */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Source
+              </label>
+              <select
+                value={selectedSource}
+                onChange={(e) => setSelectedSource(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              >
+                <option value="">Toutes les sources</option>
+                {allSources.map((source) => (
+                  <option key={source} value={source}>
+                    {source}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filtre Statut */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Statut
+              </label>
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              >
+                <option value="">Tous les statuts</option>
+                <option value="sourcé">Sourcé</option>
+                <option value="qualifié">Qualifié</option>
+                <option value="entretien_rh">Entretien RH</option>
+                <option value="entretien_client">Entretien Client</option>
+                <option value="shortlist">Shortlist</option>
+                <option value="offre">Offre</option>
+                <option value="embauché">Embauché</option>
+                <option value="rejeté">Rejeté</option>
+              </select>
+            </div>
+
+            {/* Filtre Compétence */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Compétence
+              </label>
+              <select
+                value={selectedSkill}
+                onChange={(e) => setSelectedSkill(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              >
+                <option value="">Toutes les compétences</option>
+                {allSkills.map((skill) => (
+                  <option key={skill} value={skill}>
+                    {skill}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filtre Années d'expérience - Minimum */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Expérience (min)
+              </label>
+              <select
+                value={selectedExperienceMin}
+                onChange={(e) => setSelectedExperienceMin(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              >
+                <option value="">Aucun minimum</option>
+                <option value="0">0 ans</option>
+                <option value="1">1 an</option>
+                <option value="2">2 ans</option>
+                <option value="3">3 ans</option>
+                <option value="5">5 ans</option>
+                <option value="7">7 ans</option>
+                <option value="10">10 ans</option>
+              </select>
+            </div>
+
+            {/* Filtre Années d'expérience - Maximum */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Expérience (max)
+              </label>
+              <select
+                value={selectedExperienceMax}
+                onChange={(e) => setSelectedExperienceMax(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              >
+                <option value="">Aucun maximum</option>
+                <option value="2">2 ans</option>
+                <option value="5">5 ans</option>
+                <option value="7">7 ans</option>
+                <option value="10">10 ans</option>
+                <option value="15">15 ans</option>
+                <option value="20">20 ans</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -656,78 +755,130 @@ export default function ManagerCandidatsPage() {
         </div>
       ) : (
         /* Vue Kanban */
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-transparent">
           {isLoading ? (
-            <div className="text-center py-12 text-gray-500">Chargement...</div>
+            <div className="bg-white rounded-lg shadow p-12">
+              <div className="text-center py-12 text-gray-500">Chargement...</div>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {/* Colonnes par statut - Utiliser les valeurs autorisées */}
-              {[
-                { value: 'sourcé', label: 'Sourcé' },
-                { value: 'qualifié', label: 'Qualifié' },
-                { value: 'entretien_rh', label: 'Entretien RH' },
-                { value: 'entretien_client', label: 'Entretien Client' },
-                { value: 'offre', label: 'Offre' },
-                { value: 'rejeté', label: 'Rejeté' }
-              ].map(({ value, label }) => {
-                const statusCandidates = filteredCandidates.filter(
-                  (c) => c.status === value
-                )
-                return (
-                  <div key={value} className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center justify-between">
-                      <span>{label}</span>
-                      <span className="text-sm text-gray-500 bg-white px-2 py-1 rounded-full">
-                        {statusCandidates.length}
-                      </span>
-                    </h3>
-                    <div className="space-y-3">
-                      {statusCandidates.map((candidate) => (
-                        <Link
-                          key={candidate.id}
-                          href={`/manager/candidats/${candidate.id}`}
-                          className="block bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3 mb-2">
-                            {/* Photo avec icône par défaut */}
-                            {candidate.profile_picture_url || candidate.photo_url ? (
-                              <img
-                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${candidate.profile_picture_url || candidate.photo_url}`}
-                                alt={`${candidate.first_name} ${candidate.last_name}`}
-                                className="w-10 h-10 rounded-full object-cover border-2 border-indigo-200"
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement
-                                  target.style.display = 'none'
-                                  const parent = target.parentElement
-                                  if (parent) {
-                                    const fallback = parent.querySelector('.photo-fallback') as HTMLElement
-                                    if (fallback) fallback.style.display = 'flex'
-                                  }
-                                }}
-                              />
-                            ) : null}
-                            <div className={`w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center border-2 border-indigo-200 ${candidate.profile_picture_url || candidate.photo_url ? 'hidden photo-fallback' : ''}`}>
-                              <span className="text-indigo-600 font-medium text-xs">
-                                {candidate.first_name[0]}{candidate.last_name[0]}
-                              </span>
+            <div className="overflow-x-auto pb-4">
+              <div className="flex gap-4 min-w-max lg:min-w-0">
+                {/* Colonnes par statut */}
+                {[
+                  { value: 'sourcé', label: 'Sourcé', color: 'bg-gray-100', textColor: 'text-gray-700', borderColor: 'border-gray-300' },
+                  { value: 'qualifié', label: 'Qualifié', color: 'bg-indigo-50', textColor: 'text-indigo-700', borderColor: 'border-indigo-300' },
+                  { value: 'entretien_rh', label: 'Entretien RH', color: 'bg-purple-50', textColor: 'text-purple-700', borderColor: 'border-purple-300' },
+                  { value: 'entretien_client', label: 'Entretien Client', color: 'bg-indigo-50', textColor: 'text-indigo-700', borderColor: 'border-indigo-300' },
+                  { value: 'shortlist', label: 'Shortlist', color: 'bg-yellow-50', textColor: 'text-yellow-700', borderColor: 'border-yellow-300' },
+                  { value: 'offre', label: 'Offre', color: 'bg-orange-50', textColor: 'text-orange-700', borderColor: 'border-orange-300' },
+                  { value: 'rejeté', label: 'Rejeté', color: 'bg-red-50', textColor: 'text-red-700', borderColor: 'border-red-300' },
+                  { value: 'embauché', label: 'Embauché', color: 'bg-green-50', textColor: 'text-green-700', borderColor: 'border-green-300' },
+                ].map((statusConfig) => {
+                  const statusCandidates = filteredCandidates.filter(
+                    (c) => c.status === statusConfig.value
+                  )
+                  return (
+                    <div 
+                      key={statusConfig.value} 
+                      className={`flex-shrink-0 w-[280px] lg:flex-1 lg:min-w-[280px] ${statusConfig.color} rounded-lg border-2 ${statusConfig.borderColor} p-4 transition-all hover:shadow-lg`}
+                    >
+                      {/* En-tête de colonne */}
+                      <div className="mb-4 flex items-center justify-between">
+                        <div>
+                          <h3 className={`font-semibold text-sm lg:text-base ${statusConfig.textColor} mb-1`}>
+                            {statusConfig.label}
+                          </h3>
+                          <span className="text-xs text-gray-500">
+                            {statusCandidates.length} candidat{statusCandidates.length > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className={`${statusConfig.textColor} bg-white/60 px-2 py-1 rounded-full text-xs font-medium`}>
+                          {statusCandidates.length}
+                        </div>
+                      </div>
+                      
+                      {/* Liste des candidats */}
+                      <div className="space-y-3 min-h-[200px]">
+                        {statusCandidates.map((candidate) => (
+                          <Link
+                            key={candidate.id}
+                            href={`/manager/candidats/${candidate.id}`}
+                            className="block bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-200 hover:border-gray-300"
+                          >
+                            {/* En-tête avec photo et nom */}
+                            <div className="flex items-start gap-3 mb-3">
+                              {candidate.profile_picture_url || candidate.photo_url ? (
+                                <img
+                                  src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${candidate.profile_picture_url || candidate.photo_url}`}
+                                  alt={`${candidate.first_name} ${candidate.last_name}`}
+                                  className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-gray-200"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center flex-shrink-0 border-2 border-gray-200">
+                                  <span className="text-white font-semibold text-sm">
+                                    {candidate.first_name[0]}{candidate.last_name[0]}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm text-gray-900 truncate">
+                                  {candidate.first_name} {candidate.last_name}
+                                </p>
+                                {candidate.profile_title && (
+                                  <p className="text-xs text-gray-600 mt-0.5 truncate">
+                                    {candidate.profile_title}
+                                  </p>
+                                )}
+                                {candidate.years_of_experience !== null && candidate.years_of_experience !== undefined && (
+                                  <p className="text-xs text-gray-500 mt-0.5">
+                                    {candidate.years_of_experience} ans d&apos;expérience
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm text-gray-900 truncate">
-                                {candidate.first_name} {candidate.last_name}
-                              </p>
-                            </div>
+                            
+                            {/* Tags */}
+                            {candidate.tags && candidate.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-3">
+                                {candidate.tags.slice(0, 2).map((tag, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="px-2 py-0.5 text-xs bg-gray-100 text-gray-700 rounded-full font-medium"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                                {candidate.tags.length > 2 && (
+                                  <span className="px-2 py-0.5 text-xs text-gray-500 font-medium">
+                                    +{candidate.tags.length - 2}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Compétences (première compétence si disponible) */}
+                            {candidate.skills && candidate.skills.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-gray-100">
+                                <p className="text-xs text-gray-500 truncate">
+                                  <span className="font-medium">Skills:</span> {candidate.skills.slice(0, 3).join(', ')}
+                                  {candidate.skills.length > 3 && '...'}
+                                </p>
+                              </div>
+                            )}
+                          </Link>
+                        ))}
+                        {statusCandidates.length === 0 && (
+                          <div className="bg-white/50 rounded-lg border-2 border-dashed border-gray-300 p-8 text-center">
+                            <p className="text-sm text-gray-400">
+                              Aucun candidat
+                            </p>
                           </div>
-                        </Link>
-                      ))}
-                      {statusCandidates.length === 0 && (
-                        <p className="text-sm text-gray-400 text-center py-4">
-                          Aucun candidat
-                        </p>
-                      )}
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>

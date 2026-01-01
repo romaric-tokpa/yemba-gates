@@ -3,21 +3,89 @@ import { authenticatedFetch } from './auth'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export interface JobCreate {
+  // INFORMATIONS GÉNÉRALES
   title: string
   department?: string
+  manager_demandeur?: string
+  entreprise?: string
   contract_type?: string
+  motif_recrutement?: string
+  urgency?: 'faible' | 'moyenne' | 'haute' | 'critique' | 'normale'
+  date_prise_poste?: string  // Format ISO date string (YYYY-MM-DD)
+  
+  // MISSIONS ET RESPONSABILITÉS
+  missions_principales?: string
+  missions_secondaires?: string
+  kpi_poste?: string
+  
+  // PROFIL RECHERCHÉ
+  niveau_formation?: string
+  experience_requise?: number
+  competences_techniques_obligatoires?: string[]
+  competences_techniques_souhaitees?: string[]
+  competences_comportementales?: string[]
+  langues_requises?: string
+  certifications_requises?: string
+  
+  // CONTRAINTES ET CRITÈRES ÉLIMINATOIRES
+  localisation?: string
+  mobilite_deplacements?: string
+  teletravail?: string
+  contraintes_horaires?: string
+  criteres_eliminatoires?: string
+  
+  // RÉMUNÉRATION ET CONDITIONS
+  salaire_minimum?: number  // En F CFA
+  salaire_maximum?: number  // En F CFA
+  avantages?: string[]
+  evolution_poste?: string
+  
+  // Champs existants conservés pour compatibilité
   budget?: number
-  urgency?: 'faible' | 'moyenne' | 'haute' | 'critique'
   job_description_file_path?: string
 }
 
 export interface JobResponse {
   id: string | null
+  // INFORMATIONS GÉNÉRALES
   title: string
   department: string | null
+  manager_demandeur: string | null
+  entreprise: string | null
   contract_type: string | null
+  motif_recrutement: string | null
+  urgency: 'faible' | 'moyenne' | 'haute' | 'critique' | 'normale' | null
+  date_prise_poste: string | null  // Format ISO date string (YYYY-MM-DD)
+  
+  // MISSIONS ET RESPONSABILITÉS
+  missions_principales: string | null
+  missions_secondaires: string | null
+  kpi_poste: string | null
+  
+  // PROFIL RECHERCHÉ
+  niveau_formation: string | null
+  experience_requise: number | null
+  competences_techniques_obligatoires: string[] | null
+  competences_techniques_souhaitees: string[] | null
+  competences_comportementales: string[] | null
+  langues_requises: string | null
+  certifications_requises: string | null
+  
+  // CONTRAINTES ET CRITÈRES ÉLIMINATOIRES
+  localisation: string | null
+  mobilite_deplacements: string | null
+  teletravail: string | null
+  contraintes_horaires: string | null
+  criteres_eliminatoires: string | null
+  
+  // RÉMUNÉRATION ET CONDITIONS
+  salaire_minimum: number | null  // En F CFA
+  salaire_maximum: number | null  // En F CFA
+  avantages: string[] | null
+  evolution_poste: string | null
+  
+  // Champs existants
   budget: number | null
-  urgency: 'faible' | 'moyenne' | 'haute' | 'critique' | null
   status: 'brouillon' | 'validé' | 'en_cours' | 'clôturé'
   job_description_file_path: string | null
   created_by: string
@@ -29,17 +97,30 @@ export interface JobResponse {
 }
 
 export async function createJob(jobData: JobCreate): Promise<JobResponse> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/`, {
-    method: 'POST',
-    body: JSON.stringify(jobData),
-  })
+  try {
+    const response = await authenticatedFetch(`${API_URL}/jobs/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(jobData),
+    })
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la création du besoin' }))
-    throw new Error(error.detail || 'Erreur lors de la création du besoin')
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Erreur lors de la création du besoin' }))
+      throw new Error(error.detail || 'Erreur lors de la création du besoin')
+    }
+
+    return response.json()
+  } catch (error) {
+    // Gérer les erreurs de réseau
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      console.error('Erreur de connexion au backend. Vérifiez que le serveur est démarré.')
+      throw new Error('Impossible de se connecter au serveur. Vérifiez que le backend est démarré sur http://localhost:8000')
+    }
+    // Répercuter les autres erreurs
+    throw error
   }
-
-  return response.json()
 }
 
 export async function getJobs(): Promise<JobResponse[]> {
@@ -49,6 +130,23 @@ export async function getJobs(): Promise<JobResponse[]> {
 
   if (!response.ok) {
     throw new Error('Erreur lors de la récupération des besoins')
+  }
+
+  return response.json()
+}
+
+export async function parseJobDescription(jobDescriptionFile: File): Promise<JobCreate> {
+  const formData = new FormData()
+  formData.append('job_description_file', jobDescriptionFile)
+
+  const response = await authenticatedFetch(`${API_URL}/jobs/parse-job-description`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors du parsing de la fiche de poste' }))
+    throw new Error(error.detail || 'Erreur lors du parsing de la fiche de poste')
   }
 
   return response.json()
@@ -64,6 +162,77 @@ export async function getJob(jobId: string): Promise<JobResponse> {
   }
 
   return response.json()
+}
+
+export interface JobUpdate {
+  // INFORMATIONS GÉNÉRALES
+  title?: string
+  department?: string
+  manager_demandeur?: string
+  entreprise?: string
+  contract_type?: string
+  motif_recrutement?: string
+  urgency?: 'faible' | 'moyenne' | 'haute' | 'critique' | 'normale'
+  date_prise_poste?: string // Format YYYY-MM-DD
+
+  // MISSIONS ET RESPONSABILITÉS
+  missions_principales?: string
+  missions_secondaires?: string
+  kpi_poste?: string
+
+  // PROFIL RECHERCHÉ
+  niveau_formation?: string
+  experience_requise?: number
+  competences_techniques_obligatoires?: string[]
+  competences_techniques_souhaitees?: string[]
+  competences_comportementales?: string[]
+  langues_requises?: string
+  certifications_requises?: string
+
+  // CONTRAINTES ET CRITÈRES ÉLIMINATOIRES
+  localisation?: string
+  mobilite_deplacements?: string
+  teletravail?: string
+  contraintes_horaires?: string
+  criteres_eliminatoires?: string
+
+  // RÉMUNÉRATION ET CONDITIONS
+  salaire_minimum?: number
+  salaire_maximum?: number
+  avantages?: string[]
+  evolution_poste?: string
+
+  // Champs existants conservés pour compatibilité
+  budget?: number
+  job_description_file_path?: string
+  status?: 'brouillon' | 'validé' | 'en_cours' | 'clôturé'
+}
+
+export async function updateJob(jobId: string, jobData: JobUpdate): Promise<JobResponse> {
+  try {
+    const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(jobData),
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour du besoin' }))
+      throw new Error(error.detail || 'Erreur lors de la mise à jour du besoin')
+    }
+
+    return response.json()
+  } catch (error) {
+    // Gérer les erreurs de réseau
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      console.error('Erreur de connexion au backend. Vérifiez que le serveur est démarré.')
+      throw new Error('Impossible de se connecter au serveur. Vérifiez que le backend est démarré sur http://localhost:8000')
+    }
+    // Répercuter les autres erreurs
+    throw error
+  }
 }
 
 export interface JobHistoryItem {
@@ -123,6 +292,97 @@ export async function validateJob(jobId: string, validation: JobValidation): Pro
   }
 
   return response.json()
+}
+
+// ===== APPLICATIONS API =====
+
+export interface ApplicationCreate {
+  candidate_id: string
+  job_id: string
+  status?: string
+}
+
+export interface ApplicationResponse {
+  id: string
+  candidate_id: string
+  candidate_name: string
+  candidate_email?: string
+  candidate_profile_title?: string
+  candidate_years_of_experience?: number
+  candidate_photo_url?: string
+  job_id: string
+  job_title: string
+  status: string
+  is_in_shortlist: boolean
+  created_by: string
+  created_by_name: string
+  created_at: string
+  updated_at: string
+}
+
+export async function createApplication(applicationData: ApplicationCreate): Promise<ApplicationResponse> {
+  const response = await authenticatedFetch(`${API_URL}/applications/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(applicationData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la création de l\'application' }))
+    throw new Error(error.detail || 'Erreur lors de la création de l\'application')
+  }
+
+  return response.json()
+}
+
+export async function getJobApplications(jobId: string): Promise<ApplicationResponse[]> {
+  const response = await authenticatedFetch(`${API_URL}/applications/job/${jobId}`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    throw new Error('Erreur lors de la récupération des applications')
+  }
+
+  return response.json()
+}
+
+export async function getJobShortlist(jobId: string): Promise<ApplicationResponse[]> {
+  const response = await authenticatedFetch(`${API_URL}/applications/job/${jobId}/shortlist`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    throw new Error('Erreur lors de la récupération de la shortlist')
+  }
+
+  return response.json()
+}
+
+export async function toggleShortlist(applicationId: string, isInShortlist: boolean): Promise<ApplicationResponse> {
+  const response = await authenticatedFetch(`${API_URL}/applications/${applicationId}/shortlist?is_in_shortlist=${isInShortlist}`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour de la shortlist' }))
+    throw new Error(error.detail || 'Erreur lors de la mise à jour de la shortlist')
+  }
+
+  return response.json()
+}
+
+export async function deleteApplication(applicationId: string): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/applications/${applicationId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression de l\'application' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression de l\'application')
+  }
 }
 
 // ===== CANDIDATES API =====
@@ -339,24 +599,45 @@ export async function updateCandidateStatus(
   candidateId: string,
   newStatus: string
 ): Promise<CandidateResponse> {
-  const response = await authenticatedFetch(`${API_URL}/candidates/${candidateId}/status?new_status=${encodeURIComponent(newStatus)}`, {
-    method: 'PATCH',
-  })
+  try {
+    const response = await authenticatedFetch(`${API_URL}/candidates/${candidateId}/status?new_status=${encodeURIComponent(newStatus)}`, {
+      method: 'PATCH',
+    })
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour du statut' }))
-    const errorMessage = error.detail || 'Erreur lors de la mise à jour du statut'
-    
-    // Créer une erreur personnalisée pour pouvoir distinguer les erreurs de feedback
-    const customError = new Error(errorMessage)
-    if (response.status === 400 && errorMessage.includes('feedback')) {
-      // Marquer cette erreur comme une erreur de feedback manquant
-      ;(customError as any).isFeedbackError = true
+    if (!response.ok) {
+      // Si erreur 401 (token expiré), rediriger vers login
+      if (response.status === 401) {
+        console.warn('⚠️ [AUTH] Token expiré ou invalide, redirection vers login')
+        const { removeToken } = await import('@/lib/auth')
+        removeToken()
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/choice'
+        }
+        throw new Error('Session expirée. Veuillez vous reconnecter.')
+      }
+
+      const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour du statut' }))
+      const errorMessage = error.detail || 'Erreur lors de la mise à jour du statut'
+      
+      // Créer une erreur personnalisée pour pouvoir distinguer les erreurs de feedback
+      const customError = new Error(errorMessage)
+      if (response.status === 400 && errorMessage.includes('feedback')) {
+        // Marquer cette erreur comme une erreur de feedback manquant
+        ;(customError as any).isFeedbackError = true
+      }
+      throw customError
     }
-    throw customError
-  }
 
-  return response.json()
+    return response.json()
+  } catch (error) {
+    // Gérer les erreurs réseau (Failed to fetch)
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      console.error('Erreur de connexion au backend. Vérifiez que le serveur est démarré.')
+      throw new Error('Impossible de se connecter au serveur. Vérifiez que le backend est démarré sur http://localhost:8000')
+    }
+    // Répercuter les autres erreurs
+    throw error
+  }
 }
 
 // ===== KPI API =====

@@ -3,18 +3,52 @@ Schémas Pydantic pour la validation des données d'entrée/sortie
 """
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 from uuid import UUID
 from models import JobStatus, UrgencyLevel
 
 
 class JobCreate(BaseModel):
     """Schéma pour créer un besoin de recrutement"""
+    # INFORMATIONS GÉNÉRALES
     title: str = Field(..., min_length=1, max_length=255, description="Intitulé du poste")
-    department: Optional[str] = Field(None, max_length=100, description="Département / Client")
-    contract_type: Optional[str] = Field(None, max_length=50, description="Type de contrat (CDI, CDD, etc.)")
+    department: Optional[str] = Field(None, max_length=100, description="Département / Direction")
+    manager_demandeur: Optional[str] = Field(None, max_length=255, description="Manager demandeur")
+    entreprise: Optional[str] = Field(None, max_length=255, description="Entreprise")
+    contract_type: Optional[str] = Field(None, max_length=50, description="Type de recrutement (CDI / CDD / Intérim / Stage / Freelance)")
+    motif_recrutement: Optional[str] = Field(None, max_length=50, description="Motif du recrutement (Création de poste / Remplacement / Renfort temporaire)")
+    urgency: Optional[str] = Field(None, max_length=20, description="Priorité du besoin (Faible/Moyenne/Élevée/Critique/Normale)")
+    date_prise_poste: Optional[date] = Field(None, description="Date souhaitée de prise de poste")
+    
+    # MISSIONS ET RESPONSABILITÉS
+    missions_principales: Optional[str] = Field(None, description="Missions principales")
+    missions_secondaires: Optional[str] = Field(None, description="Missions secondaires")
+    kpi_poste: Optional[str] = Field(None, description="Indicateurs de performance attendus (KPI du poste)")
+    
+    # PROFIL RECHERCHÉ
+    niveau_formation: Optional[str] = Field(None, max_length=20, description="Niveau de formation requis (Bac / Bac+2 / Bac+3 / Bac+4 / Bac+5 / Autre)")
+    experience_requise: Optional[int] = Field(None, ge=0, description="Expérience requise (en années)")
+    competences_techniques_obligatoires: Optional[list[str]] = Field(None, description="Compétences techniques obligatoires")
+    competences_techniques_souhaitees: Optional[list[str]] = Field(None, description="Compétences techniques souhaitées")
+    competences_comportementales: Optional[list[str]] = Field(None, description="Compétences comportementales (soft skills)")
+    langues_requises: Optional[str] = Field(None, description="Langues requises (Langue + niveau attendu)")
+    certifications_requises: Optional[str] = Field(None, description="Certifications / habilitations requises")
+    
+    # CONTRAINTES ET CRITÈRES ÉLIMINATOIRES
+    localisation: Optional[str] = Field(None, max_length=255, description="Localisation du poste")
+    mobilite_deplacements: Optional[str] = Field(None, max_length=20, description="Mobilité / déplacements (Aucun / Occasionnels / Fréquents)")
+    teletravail: Optional[str] = Field(None, max_length=20, description="Télétravail (Aucun / Partiel / Total)")
+    contraintes_horaires: Optional[str] = Field(None, description="Contraintes horaires")
+    criteres_eliminatoires: Optional[str] = Field(None, description="Critères éliminatoires")
+    
+    # RÉMUNÉRATION ET CONDITIONS
+    salaire_minimum: Optional[float] = Field(None, ge=0, description="Fourchette salariale minimum (en F CFA)")
+    salaire_maximum: Optional[float] = Field(None, ge=0, description="Fourchette salariale maximum (en F CFA)")
+    avantages: Optional[list[str]] = Field(None, description="Avantages (Prime / Assurance / Véhicule / Logement / Autres)")
+    evolution_poste: Optional[str] = Field(None, description="Évolution possible du poste")
+    
+    # Champs existants conservés pour compatibilité
     budget: Optional[float] = Field(None, ge=0, description="Budget")
-    urgency: Optional[str] = Field(None, description="Niveau d'urgence")
     job_description_file_path: Optional[str] = Field(None, max_length=500, description="Chemin vers la fiche de poste")
     
     @field_validator('urgency')
@@ -40,11 +74,45 @@ class JobCreate(BaseModel):
 
 class JobUpdate(BaseModel):
     """Schéma pour mettre à jour un besoin de recrutement"""
+    # INFORMATIONS GÉNÉRALES
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     department: Optional[str] = Field(None, max_length=100)
+    manager_demandeur: Optional[str] = Field(None, max_length=255)
+    entreprise: Optional[str] = Field(None, max_length=255)
     contract_type: Optional[str] = Field(None, max_length=50)
+    motif_recrutement: Optional[str] = Field(None, max_length=50)
+    urgency: Optional[str] = Field(None, max_length=20)
+    date_prise_poste: Optional[date] = None
+    
+    # MISSIONS ET RESPONSABILITÉS
+    missions_principales: Optional[str] = None
+    missions_secondaires: Optional[str] = None
+    kpi_poste: Optional[str] = None
+    
+    # PROFIL RECHERCHÉ
+    niveau_formation: Optional[str] = Field(None, max_length=20)
+    experience_requise: Optional[int] = Field(None, ge=0)
+    competences_techniques_obligatoires: Optional[list[str]] = None
+    competences_techniques_souhaitees: Optional[list[str]] = None
+    competences_comportementales: Optional[list[str]] = None
+    langues_requises: Optional[str] = None
+    certifications_requises: Optional[str] = None
+    
+    # CONTRAINTES ET CRITÈRES ÉLIMINATOIRES
+    localisation: Optional[str] = Field(None, max_length=255)
+    mobilite_deplacements: Optional[str] = Field(None, max_length=20)
+    teletravail: Optional[str] = Field(None, max_length=20)
+    contraintes_horaires: Optional[str] = None
+    criteres_eliminatoires: Optional[str] = None
+    
+    # RÉMUNÉRATION ET CONDITIONS
+    salaire_minimum: Optional[float] = Field(None, ge=0)
+    salaire_maximum: Optional[float] = Field(None, ge=0)
+    avantages: Optional[list[str]] = None
+    evolution_poste: Optional[str] = None
+    
+    # Champs existants conservés pour compatibilité
     budget: Optional[float] = Field(None, ge=0)
-    urgency: Optional[str] = None  # String au lieu d'enum
     job_description_file_path: Optional[str] = Field(None, max_length=500)
     status: Optional[str] = None  # String au lieu d'enum
 
@@ -54,11 +122,45 @@ class JobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: Optional[UUID]
+    # INFORMATIONS GÉNÉRALES
     title: str
     department: Optional[str]
+    manager_demandeur: Optional[str]
+    entreprise: Optional[str]
     contract_type: Optional[str]
-    budget: Optional[float]
+    motif_recrutement: Optional[str]
     urgency: Optional[str]  # String au lieu d'enum pour correspondre au modèle
+    date_prise_poste: Optional[date]
+    
+    # MISSIONS ET RESPONSABILITÉS
+    missions_principales: Optional[str]
+    missions_secondaires: Optional[str]
+    kpi_poste: Optional[str]
+    
+    # PROFIL RECHERCHÉ
+    niveau_formation: Optional[str]
+    experience_requise: Optional[int]
+    competences_techniques_obligatoires: Optional[list[str]]
+    competences_techniques_souhaitees: Optional[list[str]]
+    competences_comportementales: Optional[list[str]]
+    langues_requises: Optional[str]
+    certifications_requises: Optional[str]
+    
+    # CONTRAINTES ET CRITÈRES ÉLIMINATOIRES
+    localisation: Optional[str]
+    mobilite_deplacements: Optional[str]
+    teletravail: Optional[str]
+    contraintes_horaires: Optional[str]
+    criteres_eliminatoires: Optional[str]
+    
+    # RÉMUNÉRATION ET CONDITIONS
+    salaire_minimum: Optional[float]
+    salaire_maximum: Optional[float]
+    avantages: Optional[list[str]]
+    evolution_poste: Optional[str]
+    
+    # Champs existants
+    budget: Optional[float]
     status: str  # String au lieu d'enum
     job_description_file_path: Optional[str]
     created_by: UUID

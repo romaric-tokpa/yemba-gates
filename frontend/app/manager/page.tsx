@@ -199,7 +199,7 @@ export default function ManagerDashboard() {
       {/* Actions de création rapide */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Link
-          href="/manager/besoins?action=new"
+          href="/manager/jobs/new"
           className="bg-white border-2 border-indigo-600 text-indigo-600 rounded-lg p-4 hover:bg-indigo-50 transition-colors flex items-center gap-3"
         >
           <CheckCircle className="w-5 h-5" />

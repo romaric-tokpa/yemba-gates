@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getJobs, JobResponse } from '@/lib/api'
 import { getToken, isAuthenticated } from '@/lib/auth'
@@ -11,9 +11,8 @@ import {
   Calendar, Building2, AlertCircle, CheckCircle2, FileEdit
 } from 'lucide-react'
 
-export default function RecruiterJobsPage() {
+export default function ManagerJobsPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [jobs, setJobs] = useState<JobResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -153,7 +152,7 @@ export default function RecruiterJobsPage() {
         <div className="relative">
           <button
             onClick={() => setShowAddMenu(!showAddMenu)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
           >
             <Plus className="w-5 h-5" />
             <span className="hidden sm:inline">Créer un besoin</span>
@@ -163,18 +162,18 @@ export default function RecruiterJobsPage() {
           {showAddMenu && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
               <Link
-                href="/recruiter/jobs/new"
+                href="/manager/jobs/new"
                 onClick={() => setShowAddMenu(false)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors rounded-t-lg"
               >
-                <UserPlus className="w-5 h-5 text-blue-600" />
+                <UserPlus className="w-5 h-5 text-indigo-600" />
                 <div>
                   <div className="font-medium text-gray-900">Créer manuellement</div>
                   <div className="text-xs text-gray-500">Saisie manuelle des informations</div>
                 </div>
               </Link>
               <Link
-                href="/recruiter/jobs/new?mode=upload"
+                href="/manager/jobs/new?mode=upload"
                 onClick={() => setShowAddMenu(false)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors rounded-b-lg"
               >
@@ -204,7 +203,7 @@ export default function RecruiterJobsPage() {
           <div className="text-xs lg:text-sm text-gray-600 mt-1">Validés</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="text-2xl font-bold text-blue-600">{stats.enCours}</div>
+          <div className="text-2xl font-bold text-indigo-600">{stats.enCours}</div>
           <div className="text-xs lg:text-sm text-gray-600 mt-1">En cours</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -224,7 +223,7 @@ export default function RecruiterJobsPage() {
               placeholder="Rechercher par titre, département, manager, entreprise..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm lg:text-base"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm lg:text-base"
             />
           </div>
           
@@ -236,7 +235,7 @@ export default function RecruiterJobsPage() {
             <Filter className="w-4 h-4" />
             Filtres
             {activeFiltersCount > 0 && (
-              <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">
+              <span className="bg-indigo-600 text-white text-xs px-2 py-0.5 rounded-full">
                 {activeFiltersCount}
               </span>
             )}
@@ -252,7 +251,7 @@ export default function RecruiterJobsPage() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                 >
                   <option value="">Tous les statuts</option>
                   <option value="brouillon">Brouillon</option>
@@ -267,7 +266,7 @@ export default function RecruiterJobsPage() {
                 <select
                   value={urgencyFilter}
                   onChange={(e) => setUrgencyFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                 >
                   <option value="">Toutes les urgences</option>
                   <option value="faible">Faible</option>
@@ -320,8 +319,8 @@ export default function RecruiterJobsPage() {
               {filteredJobs.map((job) => (
                 <Link
                   key={job.id}
-                  href={`/recruiter/jobs/${job.id}`}
-                  className="block p-5 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer bg-white"
+                  href={`/manager/jobs/${job.id}`}
+                  className="block p-5 border border-gray-200 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer bg-white"
                 >
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex-1 min-w-0">
@@ -337,9 +336,9 @@ export default function RecruiterJobsPage() {
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        router.push(`/recruiter/jobs/${job.id}?tab=history`)
+                        router.push(`/manager/jobs/${job.id}?tab=history`)
                       }}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex-shrink-0"
+                      className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex-shrink-0"
                       title="Voir l'historique"
                     >
                       <History className="w-5 h-5" />
@@ -421,8 +420,8 @@ export default function RecruiterJobsPage() {
               </p>
               {!searchQuery && !statusFilter && !urgencyFilter && (
                 <Link
-                  href="/recruiter/jobs/new"
-                  className="inline-flex items-center gap-2 mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  href="/manager/jobs/new"
+                  className="inline-flex items-center gap-2 mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                   Créer votre premier besoin
@@ -435,3 +434,4 @@ export default function RecruiterJobsPage() {
     </div>
   )
 }
+

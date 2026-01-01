@@ -8,7 +8,7 @@ import { getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
 import { ArrowLeft, Upload, FileText } from 'lucide-react'
 
-export default function RecruiterNewJobPage() {
+export default function ManagerNewJobPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { success, error: showError } = useToastContext()
@@ -160,10 +160,8 @@ export default function RecruiterNewJobPage() {
     e.preventDefault()
     try {
       setIsLoading(true)
-      // Préparer les données pour l'envoi
       const dataToSend: JobCreate = {
         ...formData,
-        // Convertir les valeurs vides en undefined
         department: formData.department || undefined,
         manager_demandeur: formData.manager_demandeur || undefined,
         entreprise: formData.entreprise || undefined,
@@ -189,7 +187,7 @@ export default function RecruiterNewJobPage() {
       }
       await createJob(dataToSend)
       success('Besoin créé avec succès')
-      router.push('/recruiter/jobs')
+      router.push('/manager/besoins')
     } catch (error) {
       console.error('Erreur lors de la création:', error)
       showError('Erreur lors de la création du besoin')
@@ -213,8 +211,8 @@ export default function RecruiterNewJobPage() {
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
       <div className="mb-6">
         <Link
-          href="/recruiter/jobs"
-          className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700"
+          href="/manager/besoins"
+          className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour à la liste
@@ -240,8 +238,8 @@ export default function RecruiterNewJobPage() {
           onDrop={handleDrop}
           className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors mb-8 ${
             isDragOver
-              ? 'border-blue-500 bg-blue-50'
-              : 'border-gray-300 hover:border-blue-400'
+              ? 'border-indigo-500 bg-indigo-50'
+              : 'border-gray-300 hover:border-indigo-400'
           } ${isParsingJobDescription ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -258,7 +256,7 @@ export default function RecruiterNewJobPage() {
               <div className="text-sm text-gray-500 mb-4">
                 ou cliquez pour sélectionner un fichier (PDF ou Word)
               </div>
-              <label className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 cursor-pointer transition-colors">
+              <label className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 cursor-pointer transition-colors">
                 <Upload className="w-5 h-5" />
                 Sélectionner un fichier
                 <input
@@ -275,7 +273,7 @@ export default function RecruiterNewJobPage() {
               <button
                 type="button"
                 onClick={() => setUploadMode('manual')}
-                className="mt-4 text-sm text-blue-600 hover:text-blue-700 underline"
+                className="mt-4 text-sm text-indigo-600 hover:text-indigo-700 underline"
               >
                 Ou créer manuellement
               </button>
@@ -290,7 +288,7 @@ export default function RecruiterNewJobPage() {
           <button
             type="button"
             onClick={() => setUploadMode('upload')}
-            className="flex items-center gap-2 text-blue-600 hover:text-blue-700 underline"
+            className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 underline"
           >
             <FileText className="w-4 h-4" />
             Créer via une fiche de poste (extraction automatique)
@@ -312,7 +310,7 @@ export default function RecruiterNewJobPage() {
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Ex: Développeur Full Stack"
               />
             </div>
@@ -327,7 +325,7 @@ export default function RecruiterNewJobPage() {
                   required
                   value={formData.department}
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="Ex: IT"
                 />
               </div>
@@ -340,7 +338,7 @@ export default function RecruiterNewJobPage() {
                   required
                   value={formData.manager_demandeur}
                   onChange={(e) => setFormData({ ...formData, manager_demandeur: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="Ex: Jean Dupont"
                 />
               </div>
@@ -354,7 +352,7 @@ export default function RecruiterNewJobPage() {
                 type="text"
                 value={formData.entreprise}
                 onChange={(e) => setFormData({ ...formData, entreprise: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Nom de l'entreprise"
               />
             </div>
@@ -368,7 +366,7 @@ export default function RecruiterNewJobPage() {
                   required
                   value={formData.contract_type}
                   onChange={(e) => setFormData({ ...formData, contract_type: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="">Sélectionner</option>
                   <option value="CDI">CDI</option>
@@ -386,7 +384,7 @@ export default function RecruiterNewJobPage() {
                   required
                   value={formData.motif_recrutement}
                   onChange={(e) => setFormData({ ...formData, motif_recrutement: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="">Sélectionner</option>
                   <option value="Création de poste">Création de poste</option>
@@ -405,7 +403,7 @@ export default function RecruiterNewJobPage() {
                   required
                   value={formData.urgency}
                   onChange={(e) => setFormData({ ...formData, urgency: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="faible">Faible</option>
                   <option value="moyenne">Moyenne</option>
@@ -423,7 +421,7 @@ export default function RecruiterNewJobPage() {
                   required
                   value={formData.date_prise_poste}
                   onChange={(e) => setFormData({ ...formData, date_prise_poste: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
             </div>
@@ -443,7 +441,7 @@ export default function RecruiterNewJobPage() {
                 value={formData.missions_principales}
                 onChange={(e) => setFormData({ ...formData, missions_principales: e.target.value })}
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Décrivez les missions principales du poste"
               />
             </div>
@@ -455,7 +453,7 @@ export default function RecruiterNewJobPage() {
                 value={formData.missions_secondaires}
                 onChange={(e) => setFormData({ ...formData, missions_secondaires: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Missions secondaires optionnelles"
               />
             </div>
@@ -467,7 +465,7 @@ export default function RecruiterNewJobPage() {
                 value={formData.kpi_poste}
                 onChange={(e) => setFormData({ ...formData, kpi_poste: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="KPI attendus pour ce poste"
               />
             </div>
@@ -487,7 +485,7 @@ export default function RecruiterNewJobPage() {
                   required
                   value={formData.niveau_formation}
                   onChange={(e) => setFormData({ ...formData, niveau_formation: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="">Sélectionner</option>
                   <option value="Bac">Bac</option>
@@ -508,7 +506,7 @@ export default function RecruiterNewJobPage() {
                   min="0"
                   value={formData.experience_requise || ''}
                   onChange={(e) => setFormData({ ...formData, experience_requise: e.target.value ? parseInt(e.target.value) : undefined })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="Ex: 5"
                 />
               </div>
@@ -534,7 +532,7 @@ export default function RecruiterNewJobPage() {
                       )
                     }
                   }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="Ajouter une compétence"
                 />
                 <button
@@ -545,7 +543,7 @@ export default function RecruiterNewJobPage() {
                     newCompetenceTechObligatoire,
                     setNewCompetenceTechObligatoire
                   )}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                 >
                   Ajouter
                 </button>
@@ -554,7 +552,7 @@ export default function RecruiterNewJobPage() {
                 {formData.competences_techniques_obligatoires?.map((comp, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm"
                   >
                     {comp}
                     <button
@@ -564,7 +562,7 @@ export default function RecruiterNewJobPage() {
                         (items) => setFormData({ ...formData, competences_techniques_obligatoires: items }),
                         idx
                       )}
-                      className="text-blue-600 hover:text-blue-800"
+                      className="text-indigo-600 hover:text-indigo-800"
                     >
                       ×
                     </button>
@@ -593,7 +591,7 @@ export default function RecruiterNewJobPage() {
                       )
                     }
                   }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="Ajouter une compétence"
                 />
                 <button
@@ -604,7 +602,7 @@ export default function RecruiterNewJobPage() {
                     newCompetenceTechSouhaitee,
                     setNewCompetenceTechSouhaitee
                   )}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                 >
                   Ajouter
                 </button>
@@ -652,7 +650,7 @@ export default function RecruiterNewJobPage() {
                       )
                     }
                   }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="Ajouter une compétence"
                 />
                 <button
@@ -663,7 +661,7 @@ export default function RecruiterNewJobPage() {
                     newCompetenceComportementale,
                     setNewCompetenceComportementale
                   )}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                 >
                   Ajouter
                 </button>
@@ -700,7 +698,7 @@ export default function RecruiterNewJobPage() {
                 value={formData.langues_requises}
                 onChange={(e) => setFormData({ ...formData, langues_requises: e.target.value })}
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Ex: Français (natif), Anglais (niveau C1), Espagnol (niveau B2)"
               />
             </div>
@@ -712,7 +710,7 @@ export default function RecruiterNewJobPage() {
                 value={formData.certifications_requises}
                 onChange={(e) => setFormData({ ...formData, certifications_requises: e.target.value })}
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Certifications ou habilitations nécessaires"
               />
             </div>
@@ -732,7 +730,7 @@ export default function RecruiterNewJobPage() {
                 required
                 value={formData.localisation}
                 onChange={(e) => setFormData({ ...formData, localisation: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Ex: Paris, France"
               />
             </div>
@@ -744,7 +742,7 @@ export default function RecruiterNewJobPage() {
                 <select
                   value={formData.mobilite_deplacements}
                   onChange={(e) => setFormData({ ...formData, mobilite_deplacements: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="">Sélectionner</option>
                   <option value="Aucun">Aucun</option>
@@ -759,7 +757,7 @@ export default function RecruiterNewJobPage() {
                 <select
                   value={formData.teletravail}
                   onChange={(e) => setFormData({ ...formData, teletravail: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="">Sélectionner</option>
                   <option value="Aucun">Aucun</option>
@@ -776,7 +774,7 @@ export default function RecruiterNewJobPage() {
                 value={formData.contraintes_horaires}
                 onChange={(e) => setFormData({ ...formData, contraintes_horaires: e.target.value })}
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Ex: Disponibilité en soirée ou week-end"
               />
             </div>
@@ -789,7 +787,7 @@ export default function RecruiterNewJobPage() {
                 value={formData.criteres_eliminatoires}
                 onChange={(e) => setFormData({ ...formData, criteres_eliminatoires: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Critères qui excluent automatiquement un candidat"
               />
             </div>
@@ -811,7 +809,7 @@ export default function RecruiterNewJobPage() {
                   min="0"
                   value={formData.salaire_minimum || ''}
                   onChange={(e) => setFormData({ ...formData, salaire_minimum: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="Ex: 2000000"
                 />
               </div>
@@ -825,7 +823,7 @@ export default function RecruiterNewJobPage() {
                   min="0"
                   value={formData.salaire_maximum || ''}
                   onChange={(e) => setFormData({ ...formData, salaire_maximum: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="Ex: 3500000"
                 />
               </div>
@@ -838,7 +836,7 @@ export default function RecruiterNewJobPage() {
                 <select
                   value={newAvantage}
                   onChange={(e) => setNewAvantage(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="">Sélectionner un avantage</option>
                   <option value="Prime">Prime</option>
@@ -855,7 +853,7 @@ export default function RecruiterNewJobPage() {
                     newAvantage,
                     setNewAvantage
                   )}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                 >
                   Ajouter
                 </button>
@@ -890,7 +888,7 @@ export default function RecruiterNewJobPage() {
                 value={formData.evolution_poste}
                 onChange={(e) => setFormData({ ...formData, evolution_poste: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Perspectives d'évolution et de carrière"
               />
             </div>
@@ -900,7 +898,7 @@ export default function RecruiterNewJobPage() {
         {/* BOUTONS D'ACTION */}
         <div className="flex justify-end gap-3 pt-4">
           <Link
-            href="/recruiter/jobs"
+            href="/manager/besoins"
             className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
           >
             Annuler
@@ -908,7 +906,7 @@ export default function RecruiterNewJobPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
           >
             {isLoading ? 'Création...' : 'Créer le besoin'}
           </button>
@@ -917,3 +915,4 @@ export default function RecruiterNewJobPage() {
     </div>
   )
 }
+

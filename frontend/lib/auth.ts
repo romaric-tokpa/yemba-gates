@@ -170,22 +170,29 @@ export async function authenticatedFetch(
     // Ne pas bloquer la requête, mais elle échouera probablement avec 401
   }
   
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include', // Inclure les cookies dans les requêtes cross-origin
-  })
-  
-  // Si erreur 401 (token expiré), rediriger vers login
-  if (response.status === 401) {
-    console.warn('⚠️ [AUTH] Token expiré ou invalide (401), redirection vers login')
-    removeToken()
-    if (typeof window !== 'undefined') {
-      window.location.href = '/auth/choice'
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include', // Inclure les cookies dans les requêtes cross-origin
+    })
+    
+    // Si erreur 401 (token expiré), rediriger vers login
+    if (response.status === 401) {
+      console.warn('⚠️ [AUTH] Token expiré ou invalide (401), redirection vers login')
+      removeToken()
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/choice'
+      }
     }
+    
+    return response
+  } catch (error) {
+    // Gérer les erreurs réseau (serveur non accessible, CORS, etc.)
+    console.error('❌ [AUTH] Erreur réseau lors de la requête:', url, error)
+    // Relancer l'erreur pour que l'appelant puisse la gérer
+    throw error
   }
-  
-  return response
 }
 
 // API d'authentification

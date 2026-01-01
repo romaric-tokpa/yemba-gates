@@ -7,7 +7,7 @@ from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY
 from sqlalchemy import Column, ForeignKey, String, Text
 from typing import TYPE_CHECKING, List
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 from uuid import UUID, uuid4
 
@@ -73,13 +73,48 @@ class Job(SQLModel, table=True):
     __tablename__ = "jobs"
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
-    title: str = Field(max_length=255)
-    department: str | None = Field(default=None, max_length=100)
-    contract_type: str | None = Field(default=None, max_length=50)
-    budget: float | None = Field(default=None)
-    urgency: str | None = Field(default=None)  # Stocker directement la string pour éviter les problèmes de sérialisation
-    status: str = Field(default="brouillon")  # Stocker directement la string
-    job_description_file_path: str | None = Field(default=None, max_length=500)
+    
+    # INFORMATIONS GÉNÉRALES
+    title: str = Field(max_length=255)  # Intitulé du poste
+    department: str | None = Field(default=None, max_length=100)  # Département / Direction (optionnel pour compatibilité)
+    manager_demandeur: str | None = Field(default=None, max_length=255)  # Manager demandeur
+    entreprise: str | None = Field(default=None, max_length=255)  # Entreprise
+    contract_type: str | None = Field(default=None, max_length=50)  # Type de recrutement (CDI / CDD / Intérim / Stage / Freelance)
+    motif_recrutement: str | None = Field(default=None, max_length=50)  # Motif du recrutement (Création de poste / Remplacement / Renfort temporaire)
+    urgency: str | None = Field(default=None, max_length=20)  # Priorité du besoin (Faible/Moyenne/Élevée/Critique/Normale)
+    date_prise_poste: date | None = Field(default=None)  # Date souhaitée de prise de poste
+    
+    # MISSIONS ET RESPONSABILITÉS
+    missions_principales: str | None = Field(default=None, sa_column=Column(Text))  # Missions principales (TEXT pour long texte)
+    missions_secondaires: str | None = Field(default=None, sa_column=Column(Text))  # Missions secondaires
+    kpi_poste: str | None = Field(default=None, sa_column=Column(Text))  # Indicateurs de performance attendus (KPI du poste)
+    
+    # PROFIL RECHERCHÉ
+    niveau_formation: str | None = Field(default=None, max_length=20)  # Niveau de formation requis (Bac / Bac+2 / Bac+3 / Bac+4 / Bac+5 / Autre)
+    experience_requise: int | None = Field(default=None)  # Expérience requise (en années)
+    competences_techniques_obligatoires: list[str] | None = Field(default=None, sa_column=Column(ARRAY(Text)))  # Compétences techniques obligatoires
+    competences_techniques_souhaitees: list[str] | None = Field(default=None, sa_column=Column(ARRAY(Text)))  # Compétences techniques souhaitées
+    competences_comportementales: list[str] | None = Field(default=None, sa_column=Column(ARRAY(Text)))  # Compétences comportementales (soft skills)
+    langues_requises: str | None = Field(default=None, sa_column=Column(Text))  # Langues requises (Langue + niveau attendu)
+    certifications_requises: str | None = Field(default=None, sa_column=Column(Text))  # Certifications / habilitations requises
+    
+    # CONTRAINTES ET CRITÈRES ÉLIMINATOIRES
+    localisation: str | None = Field(default=None, max_length=255)  # Localisation du poste
+    mobilite_deplacements: str | None = Field(default=None, max_length=20)  # Mobilité / déplacements (Aucun / Occasionnels / Fréquents)
+    teletravail: str | None = Field(default=None, max_length=20)  # Télétravail (Aucun / Partiel / Total)
+    contraintes_horaires: str | None = Field(default=None, sa_column=Column(Text))  # Contraintes horaires
+    criteres_eliminatoires: str | None = Field(default=None, sa_column=Column(Text))  # Critères éliminatoires
+    
+    # RÉMUNÉRATION ET CONDITIONS
+    salaire_minimum: float | None = Field(default=None)  # Fourchette salariale minimum (en F CFA)
+    salaire_maximum: float | None = Field(default=None)  # Fourchette salariale maximum (en F CFA)
+    avantages: list[str] | None = Field(default=None, sa_column=Column(ARRAY(Text)))  # Avantages (Prime / Assurance / Véhicule / Logement / Autres)
+    evolution_poste: str | None = Field(default=None, sa_column=Column(Text))  # Évolution possible du poste
+    
+    # Champs existants conservés pour compatibilité
+    budget: float | None = Field(default=None)  # Budget (conservé pour compatibilité)
+    status: str = Field(default="brouillon")  # Statut du besoin
+    job_description_file_path: str | None = Field(default=None, max_length=500)  # Fiche de poste
     
     created_by: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id"))) 
     validated_by: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id")))

@@ -26,7 +26,7 @@ const menuItems = [
   },
   {
     title: 'Mes Postes',
-    href: '/manager/besoins',
+    href: '/manager/jobs',
     icon: Briefcase,
   },
   {
