@@ -1762,3 +1762,91 @@ export async function removeTeamMember(teamId: string, userId: string): Promise<
 
   return response.json()
 }
+
+// ===== GESTION DES UTILISATEURS PAR LE MANAGER =====
+
+export interface UserCreateByManager {
+  email: string
+  first_name: string
+  last_name: string
+  role: 'recruteur' | 'client'
+  phone?: string
+  department?: string
+  generate_password?: boolean
+  password?: string
+}
+
+export interface UserCreateResponse {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  role: string
+  phone?: string | null
+  department?: string | null
+  is_active: boolean
+  created_at: string
+  generated_password?: string | null
+}
+
+export async function createUserByManager(userData: UserCreateByManager): Promise<UserCreateResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/users`, {
+    method: 'POST',
+    body: JSON.stringify(userData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la création de l\'utilisateur' }))
+    throw new Error(error.detail || 'Erreur lors de la création de l\'utilisateur')
+  }
+
+  return response.json()
+}
+
+export async function getUsersByManager(role?: 'recruteur' | 'client'): Promise<UserCreateResponse[]> {
+  const url = role ? `${API_URL}/teams/users?role=${role}` : `${API_URL}/teams/users`
+  const response = await authenticatedFetch(url)
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération des utilisateurs' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération des utilisateurs')
+  }
+
+  return response.json()
+}
+
+export async function getUserByManager(userId: string): Promise<UserCreateResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/users/${userId}`)
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération de l\'utilisateur' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération de l\'utilisateur')
+  }
+
+  return response.json()
+}
+
+export async function updateUserByManager(userId: string, userData: UserCreateByManager): Promise<UserCreateResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(userData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour de l\'utilisateur' }))
+    throw new Error(error.detail || 'Erreur lors de la mise à jour de l\'utilisateur')
+  }
+
+  return response.json()
+}
+
+export async function deleteUserByManager(userId: string): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/teams/users/${userId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression de l\'utilisateur' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression de l\'utilisateur')
+  }
+}

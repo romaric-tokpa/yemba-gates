@@ -23,6 +23,7 @@ export default function RecruiterCandidatesPage() {
   const [selectedSkill, setSelectedSkill] = useState<string>('')
   const [selectedExperienceMin, setSelectedExperienceMin] = useState<string>('')
   const [selectedExperienceMax, setSelectedExperienceMax] = useState<string>('')
+  const [showFilters, setShowFilters] = useState(false)
   
   // Formulaire
   const [formData, setFormData] = useState<CandidateCreate>({
@@ -388,12 +389,22 @@ export default function RecruiterCandidatesPage() {
     setSelectedExperienceMax('')
   }
 
+  // Statistiques
+  const stats = {
+    total: candidates.length,
+    sourcé: candidates.filter(c => c.status === 'sourcé').length,
+    qualifié: candidates.filter(c => c.status === 'qualifié').length,
+    shortlist: candidates.filter(c => c.status === 'shortlist').length,
+    embauché: candidates.filter(c => c.status === 'embauché').length,
+  }
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="p-4 lg:p-8 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="mb-8 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Mes Candidats</h1>
-          <p className="text-gray-600 mt-2">Gestion de la base de candidats</p>
+          <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Mes Candidats</h1>
+          <p className="text-gray-600">Gestion de la base de candidats</p>
         </div>
         <div className="flex items-center gap-3">
           {/* Switch Liste/Kanban */}
@@ -468,53 +479,117 @@ export default function RecruiterCandidatesPage() {
         </div>
       </div>
 
+      {/* Statistiques */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="bg-blue-100 rounded-lg p-2">
+              <UserPlus className="w-5 h-5 text-blue-600" />
+            </div>
+          </div>
+          <div className="text-2xl lg:text-3xl font-bold text-gray-900">{stats.total}</div>
+          <div className="text-xs lg:text-sm text-gray-600 mt-1">Total</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="bg-gray-100 rounded-lg p-2">
+              <Tag className="w-5 h-5 text-gray-600" />
+            </div>
+          </div>
+          <div className="text-2xl lg:text-3xl font-bold text-gray-600">{stats.sourcé}</div>
+          <div className="text-xs lg:text-sm text-gray-600 mt-1">Sourcés</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="bg-blue-100 rounded-lg p-2">
+              <Briefcase className="w-5 h-5 text-blue-600" />
+            </div>
+          </div>
+          <div className="text-2xl lg:text-3xl font-bold text-blue-600">{stats.qualifié}</div>
+          <div className="text-xs lg:text-sm text-gray-600 mt-1">Qualifiés</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="bg-yellow-100 rounded-lg p-2">
+              <Tag className="w-5 h-5 text-yellow-600" />
+            </div>
+          </div>
+          <div className="text-2xl lg:text-3xl font-bold text-yellow-600">{stats.shortlist}</div>
+          <div className="text-xs lg:text-sm text-gray-600 mt-1">Shortlist</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="bg-green-100 rounded-lg p-2">
+              <UserPlus className="w-5 h-5 text-green-600" />
+            </div>
+          </div>
+          <div className="text-2xl lg:text-3xl font-bold text-green-600">{stats.embauché}</div>
+          <div className="text-xs lg:text-sm text-gray-600 mt-1">Embauchés</div>
+        </div>
+      </div>
+
       {/* Barre de recherche et filtres */}
       <div className="mb-6 space-y-4">
         {/* Barre de recherche */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Rechercher par nom ou prénom..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
-            )}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Rechercher par nom, prénom, compétences..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm lg:text-base"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm lg:text-base"
+            >
+              <Filter className="w-4 h-4" />
+              Filtres
+              {activeFiltersCount > 0 && (
+                <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
         {/* Filtres */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6">
-          {/* En-tête des filtres */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Filter className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Filtres</h3>
+        {showFilters && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+            {/* En-tête des filtres */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Filter className="w-5 h-5 text-gray-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Filtres</h3>
+                {activeFiltersCount > 0 && (
+                  <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                    {activeFiltersCount} actif{activeFiltersCount > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
               {activeFiltersCount > 0 && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                  {activeFiltersCount} actif{activeFiltersCount > 1 ? 's' : ''}
-                </span>
+                <button
+                  onClick={resetFilters}
+                  className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Réinitialiser
+                </button>
               )}
             </div>
-            {activeFiltersCount > 0 && (
-              <button
-                onClick={resetFilters}
-                className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <XCircle className="w-4 h-4" />
-                Réinitialiser
-              </button>
-            )}
-          </div>
 
           {/* Grille de filtres */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -639,12 +714,13 @@ export default function RecruiterCandidatesPage() {
               </select>
             </div>
           </div>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Vue Liste ou Kanban */}
       {viewMode === 'list' ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           {/* En-tête */}
           <div className="p-4 lg:p-6 border-b border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between">
@@ -702,7 +778,7 @@ export default function RecruiterCandidatesPage() {
                   <Link
                     key={candidate.id}
                     href={`/recruiter/candidates/${candidate.id}`}
-                    className="block p-4 lg:p-6 hover:bg-blue-50 transition-all cursor-pointer group"
+                    className="block p-4 lg:p-6 hover:bg-blue-50 transition-all cursor-pointer group border-l-4 border-transparent hover:border-blue-500"
                   >
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                       {/* Section principale */}

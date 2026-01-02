@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createCandidate, getCandidates, CandidateResponse, CandidateCreate, uploadCandidatePhoto, parseCv } from '@/lib/api'
 import { getToken, isAuthenticated } from '@/lib/auth'
-import { Plus, X, Upload, Tag, Mail, Phone, Search, List, LayoutGrid, Image as ImageIcon, FileText, UserPlus, ChevronDown, Filter, XCircle } from 'lucide-react'
+import { Plus, X, Upload, Tag, Mail, Phone, Search, List, LayoutGrid, Image as ImageIcon, FileText, UserPlus, ChevronDown, Filter, XCircle, Briefcase } from 'lucide-react'
 import { useToastContext } from '@/components/ToastProvider'
 
 export default function ManagerCandidatsPage() {
@@ -23,6 +23,7 @@ export default function ManagerCandidatsPage() {
   const [selectedSkill, setSelectedSkill] = useState<string>('')
   const [selectedExperienceMin, setSelectedExperienceMin] = useState<string>('')
   const [selectedExperienceMax, setSelectedExperienceMax] = useState<string>('')
+  const [showFilters, setShowFilters] = useState(false)
   
   // Formulaire
   const [formData, setFormData] = useState<CandidateCreate>({
@@ -385,12 +386,22 @@ export default function ManagerCandidatsPage() {
     setSelectedExperienceMax('')
   }
 
+  // Statistiques
+  const stats = {
+    total: candidates.length,
+    sourcé: candidates.filter(c => c.status === 'sourcé').length,
+    qualifié: candidates.filter(c => c.status === 'qualifié').length,
+    shortlist: candidates.filter(c => c.status === 'shortlist').length,
+    embauché: candidates.filter(c => c.status === 'embauché').length,
+  }
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="p-4 lg:p-8 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="mb-8 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Mes Candidats</h1>
-          <p className="text-gray-600 mt-2">Gestion de la base de candidats</p>
+          <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Mes Candidats</h1>
+          <p className="text-gray-600">Gestion de la base de candidats</p>
         </div>
         <div className="flex items-center gap-3">
           {/* Switch Liste/Kanban */}
@@ -465,53 +476,117 @@ export default function ManagerCandidatsPage() {
         </div>
       </div>
 
+      {/* Statistiques */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="bg-indigo-100 rounded-lg p-2">
+              <UserPlus className="w-5 h-5 text-indigo-600" />
+            </div>
+          </div>
+          <div className="text-2xl lg:text-3xl font-bold text-gray-900">{stats.total}</div>
+          <div className="text-xs lg:text-sm text-gray-600 mt-1">Total</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="bg-gray-100 rounded-lg p-2">
+              <Tag className="w-5 h-5 text-gray-600" />
+            </div>
+          </div>
+          <div className="text-2xl lg:text-3xl font-bold text-gray-600">{stats.sourcé}</div>
+          <div className="text-xs lg:text-sm text-gray-600 mt-1">Sourcés</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="bg-indigo-100 rounded-lg p-2">
+              <Briefcase className="w-5 h-5 text-indigo-600" />
+            </div>
+          </div>
+          <div className="text-2xl lg:text-3xl font-bold text-indigo-600">{stats.qualifié}</div>
+          <div className="text-xs lg:text-sm text-gray-600 mt-1">Qualifiés</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="bg-yellow-100 rounded-lg p-2">
+              <Tag className="w-5 h-5 text-yellow-600" />
+            </div>
+          </div>
+          <div className="text-2xl lg:text-3xl font-bold text-yellow-600">{stats.shortlist}</div>
+          <div className="text-xs lg:text-sm text-gray-600 mt-1">Shortlist</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="bg-green-100 rounded-lg p-2">
+              <UserPlus className="w-5 h-5 text-green-600" />
+            </div>
+          </div>
+          <div className="text-2xl lg:text-3xl font-bold text-green-600">{stats.embauché}</div>
+          <div className="text-xs lg:text-sm text-gray-600 mt-1">Embauchés</div>
+        </div>
+      </div>
+
       {/* Barre de recherche et filtres */}
       <div className="mb-6 space-y-4">
         {/* Barre de recherche */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Rechercher par nom ou prénom..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
-            )}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Rechercher par nom, prénom, compétences..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm lg:text-base"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm lg:text-base"
+            >
+              <Filter className="w-4 h-4" />
+              Filtres
+              {activeFiltersCount > 0 && (
+                <span className="bg-indigo-600 text-white text-xs px-2 py-0.5 rounded-full">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
         {/* Filtres */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6">
-          {/* En-tête des filtres */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Filter className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Filtres</h3>
+        {showFilters && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+            {/* En-tête des filtres */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Filter className="w-5 h-5 text-gray-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Filtres</h3>
+                {activeFiltersCount > 0 && (
+                  <span className="px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
+                    {activeFiltersCount} actif{activeFiltersCount > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
               {activeFiltersCount > 0 && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
-                  {activeFiltersCount} actif{activeFiltersCount > 1 ? 's' : ''}
-                </span>
+                <button
+                  onClick={resetFilters}
+                  className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Réinitialiser
+                </button>
               )}
             </div>
-            {activeFiltersCount > 0 && (
-              <button
-                onClick={resetFilters}
-                className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <XCircle className="w-4 h-4" />
-                Réinitialiser
-              </button>
-            )}
-          </div>
 
           {/* Grille de filtres */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -636,38 +711,79 @@ export default function ManagerCandidatsPage() {
               </select>
             </div>
           </div>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Vue Liste ou Kanban */}
       {viewMode === 'list' ? (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">
-              {filteredCandidates.length} candidat{filteredCandidates.length > 1 ? 's' : ''}
-            </h2>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-4 lg:p-6 border-b border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg lg:text-xl font-semibold text-gray-900">
+                  {filteredCandidates.length} candidat{filteredCandidates.length > 1 ? 's' : ''}
+                </h2>
+                {filteredCandidates.length > 0 && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    {activeFiltersCount > 0
+                      ? 'Résultats filtrés' 
+                      : 'Tous les candidats'}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="p-6">
+          <div className="divide-y divide-gray-200">
             {isLoading ? (
-              <div className="text-center py-12 text-gray-500">Chargement...</div>
+              <div className="text-center py-12 text-gray-500">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                <p className="mt-4">Chargement des candidats...</p>
+              </div>
             ) : filteredCandidates.length > 0 ? (
-              <div className="space-y-4">
-                {filteredCandidates.map((candidate) => (
+              filteredCandidates.map((candidate) => {
+                // Couleur du badge selon le statut
+                const getStatusBadgeColor = (status: string) => {
+                  const statusColors: Record<string, { bg: string; text: string }> = {
+                    'sourcé': { bg: 'bg-gray-100', text: 'text-gray-700' },
+                    'qualifié': { bg: 'bg-indigo-100', text: 'text-indigo-700' },
+                    'entretien_rh': { bg: 'bg-purple-100', text: 'text-purple-700' },
+                    'entretien_client': { bg: 'bg-indigo-100', text: 'text-indigo-700' },
+                    'shortlist': { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+                    'offre': { bg: 'bg-orange-100', text: 'text-orange-700' },
+                    'rejeté': { bg: 'bg-red-100', text: 'text-red-700' },
+                    'embauché': { bg: 'bg-green-100', text: 'text-green-700' },
+                  }
+                  return statusColors[status] || { bg: 'bg-gray-100', text: 'text-gray-700' }
+                }
+                const statusColor = getStatusBadgeColor(candidate.status)
+                const statusLabels: Record<string, string> = {
+                  'sourcé': 'Sourcé',
+                  'qualifié': 'Qualifié',
+                  'entretien_rh': 'Entretien RH',
+                  'entretien_client': 'Entretien Client',
+                  'shortlist': 'Shortlist',
+                  'offre': 'Offre',
+                  'rejeté': 'Rejeté',
+                  'embauché': 'Embauché',
+                }
+                
+                return (
                   <Link
                     key={candidate.id}
                     href={`/manager/candidats/${candidate.id}`}
-                    className="block p-4 border border-gray-200 rounded-lg hover:bg-indigo-50 hover:border-indigo-300 transition-all cursor-pointer"
+                    className="block p-4 lg:p-6 hover:bg-indigo-50 transition-all cursor-pointer group border-l-4 border-transparent hover:border-indigo-500"
                   >
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-start gap-3 flex-1">
-                        {/* Photo avec icône par défaut */}
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                      {/* Section principale */}
+                      <div className="flex items-start gap-4 flex-1 min-w-0">
+                        {/* Photo de profil */}
                         {candidate.profile_picture_url || candidate.photo_url ? (
                           <img
                             src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${candidate.profile_picture_url || candidate.photo_url}`}
                             alt={`${candidate.first_name} ${candidate.last_name}`}
-                            className="w-12 h-12 rounded-full object-cover border-2 border-indigo-200"
+                            className="w-16 h-16 lg:w-20 lg:h-20 rounded-full object-cover border-2 border-gray-200 group-hover:border-indigo-300 transition-colors flex-shrink-0"
                             onError={(e) => {
-                              // Si l'image ne charge pas, afficher l'icône par défaut
                               const target = e.target as HTMLImageElement
                               target.style.display = 'none'
                               const parent = target.parentElement
@@ -678,76 +794,119 @@ export default function ManagerCandidatsPage() {
                             }}
                           />
                         ) : null}
-                        <div className={`w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center border-2 border-indigo-200 ${candidate.profile_picture_url || candidate.photo_url ? 'hidden photo-fallback' : ''}`}>
-                          <span className="text-indigo-600 font-medium text-sm">
+                        <div className={`w-16 h-16 lg:w-20 lg:h-20 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center border-2 border-gray-200 group-hover:border-indigo-300 transition-colors flex-shrink-0 ${candidate.profile_picture_url || candidate.photo_url ? 'hidden photo-fallback' : ''}`}>
+                          <span className="text-white font-semibold text-lg lg:text-xl">
                             {candidate.first_name[0]}{candidate.last_name[0]}
                           </span>
                         </div>
                         
-                        <div className="flex-1">
-                          {/* Nom */}
-                          <h3 className="font-semibold text-gray-900 text-lg hover:text-indigo-600 transition-colors">
-                            {candidate.first_name} {candidate.last_name}
-                          </h3>
-                          {candidate.profile_title && (
-                            <p className="text-sm text-gray-600 mt-1">{candidate.profile_title}</p>
-                          )}
-                          {candidate.years_of_experience !== null && candidate.years_of_experience !== undefined && (
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {candidate.years_of_experience} ans d&apos;expérience
-                            </p>
-                          )}
-                          <div className="mt-2 space-y-1">
-                            {candidate.email && (
-                              <p className="text-sm text-gray-600 flex items-center">
-                                <Mail className="w-3 h-3 mr-1" />
-                                {candidate.email}
+                        {/* Informations du candidat */}
+                        <div className="flex-1 min-w-0">
+                          {/* Nom et titre */}
+                          <div className="mb-2">
+                            <h3 className="font-semibold text-gray-900 text-lg lg:text-xl group-hover:text-indigo-600 transition-colors">
+                              {candidate.first_name} {candidate.last_name}
+                            </h3>
+                            {candidate.profile_title && (
+                              <p className="text-sm lg:text-base text-gray-600 mt-1 flex items-center gap-1">
+                                <Briefcase className="w-4 h-4 text-gray-400" />
+                                {candidate.profile_title}
                               </p>
                             )}
-                            {candidate.phone && (
-                              <p className="text-sm text-gray-600 flex items-center">
-                                <Phone className="w-3 h-3 mr-1" />
-                                {candidate.phone}
+                            {candidate.years_of_experience !== null && candidate.years_of_experience !== undefined && (
+                              <p className="text-xs lg:text-sm text-gray-500 mt-1">
+                                {candidate.years_of_experience} ans d&apos;expérience
                               </p>
                             )}
                           </div>
+                          
+                          {/* Contact */}
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-3">
+                            {candidate.email && (
+                              <p className="text-sm text-gray-600 flex items-center gap-2">
+                                <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <span className="truncate">{candidate.email}</span>
+                              </p>
+                            )}
+                            {candidate.phone && (
+                              <p className="text-sm text-gray-600 flex items-center gap-2">
+                                <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <span>{candidate.phone}</span>
+                              </p>
+                            )}
+                          </div>
+                          
+                          {/* Tags */}
                           {candidate.tags && candidate.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-3">
+                            <div className="flex flex-wrap gap-1.5 mt-3">
                               {candidate.tags.slice(0, 5).map((tag, idx) => (
                                 <span
                                   key={idx}
-                                  className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 rounded-full"
+                                  className="px-2.5 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full"
                                 >
                                   {tag}
                                 </span>
                               ))}
                               {candidate.tags.length > 5 && (
-                                <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
+                                <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
                                   +{candidate.tags.length - 5}
                                 </span>
                               )}
                             </div>
                           )}
+                          
+                          {/* Compétences */}
+                          {candidate.skills && candidate.skills.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-100">
+                              <p className="text-xs text-gray-500 mb-1 font-medium">Compétences:</p>
+                              <p className="text-sm text-gray-600 line-clamp-2">
+                                {candidate.skills.slice(0, 5).join(' • ')}
+                                {candidate.skills.length > 5 && ` +${candidate.skills.length - 5} autres`}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {/* Source */}
+                          {candidate.source && (
+                            <div className="mt-2">
+                              <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full">
+                                {candidate.source}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <span className="ml-4 px-3 py-1 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800 whitespace-nowrap">
-                        {candidate.status}
-                      </span>
+                      
+                      {/* Badge de statut */}
+                      <div className="flex-shrink-0 lg:ml-4">
+                        <span className={`inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full ${statusColor.bg} ${statusColor.text} whitespace-nowrap`}>
+                          {statusLabels[candidate.status] || candidate.status}
+                        </span>
+                      </div>
                     </div>
                   </Link>
-                ))}
-              </div>
+                )
+              })
             ) : (
-              <div className="text-center py-12 text-gray-500">
-                <p>Aucun candidat trouvé</p>
+              <div className="text-center py-12 lg:py-16 px-4">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                  <Tag className="w-8 h-8 text-gray-400" />
+                </div>
+                <p className="text-lg font-medium text-gray-900 mb-2">Aucun candidat trouvé</p>
+                <p className="text-sm text-gray-500 mb-6">
+                  {selectedStatus || selectedTag || selectedSource
+                    ? 'Essayez de modifier vos filtres de recherche'
+                    : 'Commencez par ajouter votre premier candidat'}
+                </p>
                 <button
                   onClick={() => {
                     setAddMode('manual')
                     setIsModalOpen(true)
                   }}
-                  className="mt-4 inline-block text-indigo-600 hover:text-indigo-700 font-medium"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
                 >
-                  Ajouter votre premier candidat
+                  <Plus className="w-5 h-5" />
+                  Ajouter un candidat
                 </button>
               </div>
             )}

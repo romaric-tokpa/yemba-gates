@@ -1,18 +1,317 @@
 """
 Router pour la gestion des équipes
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select
-from typing import List
+from sqlalchemy import or_
+from typing import List, Optional
 from uuid import UUID
+import secrets
+import string
 
 from models import Team, TeamMember, User
 from schemas import TeamCreate, TeamUpdate, TeamResponse, TeamMemberResponse
 from database import get_session
-from auth import get_current_active_user
+from auth import get_current_active_user, get_password_hash
+from pydantic import BaseModel, EmailStr
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 
+
+def generate_password(length: int = 12) -> str:
+    """Génère un mot de passe sécurisé"""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    password = ''.join(secrets.choice(alphabet) for i in range(length))
+    return password
+
+
+class UserCreateByManager(BaseModel):
+    """Schéma pour créer un utilisateur par un manager"""
+    email: EmailStr
+    first_name: str
+    last_name: str
+    role: str  # 'recruteur' ou 'client'
+    phone: Optional[str] = None
+    department: Optional[str] = None
+    generate_password: bool = True  # Si True, génère un mot de passe, sinon attend un password
+    password: Optional[str] = None  # Utilisé si generate_password est False
+
+
+class UserCreateResponse(BaseModel):
+    """Réponse après création d'un utilisateur"""
+    id: str
+    email: str
+    first_name: str
+    last_name: str
+    role: str
+    phone: Optional[str] = None
+    department: Optional[str] = None
+    is_active: bool
+    created_at: str
+    generated_password: Optional[str] = None  # Le mot de passe généré (à afficher une seule fois)
+
+
+# ===== GESTION DES UTILISATEURS PAR LE MANAGER (doit être avant les routes avec {team_id}) =====
+
+@router.post("/users", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
+def create_user_by_manager(
+    user_data: UserCreateByManager,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Créer un utilisateur (recruteur ou client) - Accessible aux managers"""
+    # Vérifier que l'utilisateur est manager ou admin
+    if current_user.role not in ["manager", "administrateur", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seuls les managers et administrateurs peuvent créer des utilisateurs"
+        )
+    
+    # Vérifier que le rôle est valide (recruteur ou client)
+    if user_data.role not in ["recruteur", "client"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le rôle doit être 'recruteur' ou 'client'"
+        )
+    
+    # Vérifier si l'utilisateur existe déjà
+    from auth import get_user_by_email
+    existing_user = get_user_by_email(user_data.email, session)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Un utilisateur avec cet email existe déjà"
+        )
+    
+    # Générer ou utiliser le mot de passe fourni
+    if user_data.generate_password:
+        generated_password = generate_password()
+        password_hash = get_password_hash(generated_password)
+    else:
+        if not user_data.password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Un mot de passe doit être fourni si generate_password est False"
+            )
+        generated_password = None
+        password_hash = get_password_hash(user_data.password)
+    
+    # Créer l'utilisateur
+    from datetime import datetime
+    new_user = User(
+        email=user_data.email,
+        password_hash=password_hash,
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
+        role=user_data.role,
+        phone=user_data.phone,
+        department=user_data.department,
+        is_active=True
+    )
+    session.add(new_user)
+    session.commit()
+    session.refresh(new_user)
+    
+    return UserCreateResponse(
+        id=str(new_user.id),
+        email=new_user.email,
+        first_name=new_user.first_name,
+        last_name=new_user.last_name,
+        role=new_user.role,
+        phone=new_user.phone,
+        department=new_user.department,
+        is_active=new_user.is_active,
+        created_at=new_user.created_at.isoformat(),
+        generated_password=generated_password
+    )
+
+
+@router.get("/users", response_model=List[UserCreateResponse])
+def list_users_by_manager(
+    role: Optional[str] = Query(None, description="Filtrer par rôle (recruteur ou client)"),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Lister les utilisateurs (recruteurs et clients) - Accessible aux managers"""
+    # Vérifier que l'utilisateur est manager ou admin
+    if current_user.role not in ["manager", "administrateur", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seuls les managers et administrateurs peuvent lister les utilisateurs"
+        )
+    
+    # Construire la requête
+    statement = select(User)
+    if role:
+        statement = statement.where(User.role == role)
+    else:
+        # Par défaut, ne montrer que les recruteurs et clients
+        statement = statement.where(
+            or_(User.role == "recruteur", User.role == "client")
+        )
+    
+    statement = statement.order_by(User.created_at.desc())
+    users = session.exec(statement).all()
+    
+    return [
+        UserCreateResponse(
+            id=str(user.id),
+            email=user.email,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            role=user.role,
+            phone=user.phone,
+            department=user.department,
+            is_active=user.is_active,
+            created_at=user.created_at.isoformat(),
+            generated_password=None  # Ne jamais renvoyer le mot de passe dans la liste
+        )
+        for user in users
+    ]
+
+
+@router.get("/users/{user_id}", response_model=UserCreateResponse)
+def get_user_by_manager(
+    user_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Récupérer un utilisateur par son ID - Accessible aux managers"""
+    # Vérifier que l'utilisateur est manager ou admin
+    if current_user.role not in ["manager", "administrateur", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seuls les managers et administrateurs peuvent voir les utilisateurs"
+        )
+    
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur non trouvé")
+    
+    # Vérifier que c'est un recruteur ou client
+    if user.role not in ["recruteur", "client"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cet utilisateur n'est pas un recruteur ou un client"
+        )
+    
+    return UserCreateResponse(
+        id=str(user.id),
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=user.role,
+        phone=user.phone,
+        department=user.department,
+        is_active=user.is_active,
+        created_at=user.created_at.isoformat(),
+        generated_password=None
+    )
+
+
+@router.put("/users/{user_id}", response_model=UserCreateResponse)
+def update_user_by_manager(
+    user_id: UUID,
+    user_data: UserCreateByManager,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Mettre à jour un utilisateur - Accessible aux managers"""
+    # Vérifier que l'utilisateur est manager ou admin
+    if current_user.role not in ["manager", "administrateur", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seuls les managers et administrateurs peuvent modifier les utilisateurs"
+        )
+    
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur non trouvé")
+    
+    # Vérifier que c'est un recruteur ou client
+    if user.role not in ["recruteur", "client"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cet utilisateur n'est pas un recruteur ou un client"
+        )
+    
+    # Vérifier l'email unique si modifié
+    if user_data.email != user.email:
+        from auth import get_user_by_email
+        existing_user = get_user_by_email(user_data.email, session)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Un utilisateur avec cet email existe déjà"
+            )
+    
+    # Mettre à jour les champs
+    user.email = user_data.email
+    user.first_name = user_data.first_name
+    user.last_name = user_data.last_name
+    user.role = user_data.role
+    user.phone = user_data.phone
+    user.department = user_data.department
+    
+    # Mettre à jour le mot de passe si fourni
+    generated_password = None
+    if user_data.password:
+        user.password_hash = get_password_hash(user_data.password)
+    elif user_data.generate_password:
+        generated_password = generate_password()
+        user.password_hash = get_password_hash(generated_password)
+    
+    from datetime import datetime
+    user.updated_at = datetime.utcnow()
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    return UserCreateResponse(
+        id=str(user.id),
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=user.role,
+        phone=user.phone,
+        department=user.department,
+        is_active=user.is_active,
+        created_at=user.created_at.isoformat(),
+        generated_password=generated_password
+    )
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user_by_manager(
+    user_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Désactiver un utilisateur - Accessible aux managers"""
+    # Vérifier que l'utilisateur est manager ou admin
+    if current_user.role not in ["manager", "administrateur", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seuls les managers et administrateurs peuvent désactiver les utilisateurs"
+        )
+    
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur non trouvé")
+    
+    # Soft delete
+    user.is_active = False
+    from datetime import datetime
+    user.updated_at = datetime.utcnow()
+    
+    session.add(user)
+    session.commit()
+    
+    return None
+
+
+# ===== GESTION DES ÉQUIPES =====
 
 @router.get("/", response_model=List[TeamResponse])
 def get_teams(
@@ -34,17 +333,15 @@ def get_teams(
             if manager:
                 manager_name = f"{manager.first_name} {manager.last_name}"
         
-        # Récupérer les membres
-        members_statement = select(TeamMember, User).join(User, TeamMember.user_id == User.id).where(TeamMember.team_id == team.id)
-        members_data = session.exec(members_statement).all()
+        # Récupérer les membres avec leurs informations utilisateur
+        # Utiliser une approche plus simple : récupérer les membres puis les utilisateurs
+        members_statement = select(TeamMember).where(TeamMember.team_id == team.id)
+        team_members = session.exec(members_statement).all()
         
         members = []
-        for member_data in members_data:
-            if isinstance(member_data, tuple):
-                member, user = member_data
-            else:
-                member = member_data
-                user = session.get(User, member.user_id)
+        for member in team_members:
+            # Récupérer l'utilisateur associé
+            user = session.get(User, member.user_id) if member.user_id else None
             
             members.append(TeamMemberResponse(
                 id=member.id,

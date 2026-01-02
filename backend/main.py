@@ -81,9 +81,9 @@ app.include_router(interviews.router)
 app.include_router(offers.router)
 app.include_router(onboarding.router)
 app.include_router(history.router)
-app.include_router(admin.router)
 app.include_router(applications.router)
 app.include_router(teams.router)
+app.include_router(admin.router)
 
 # Servir les fichiers statiques (photos, CVs, etc.)
 static_dir = Path("static")
@@ -166,7 +166,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         )
     
     # Pour toutes les autres erreurs, retourner un message générique mais logger les détails
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "detail": f"Erreur interne du serveur: {error_message}",
@@ -175,6 +175,12 @@ async def global_exception_handler(request: Request, exc: Exception):
             "hint": "Consultez les logs du serveur pour plus de détails."
         }
     )
+    # S'assurer que les headers CORS sont présents même en cas d'erreur
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 
 # Gestionnaire pour les erreurs HTTP explicites (404, 401, etc.)
