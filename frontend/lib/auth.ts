@@ -141,22 +141,11 @@ export function hasAnyRole(roles: string[]): boolean {
 /**
  * Retourne le chemin du dashboard par défaut selon le rôle de l'utilisateur
  */
+// Import des routes centralisées
+import { getDashboardPath as getDashboardPathFromRoutes } from './routes'
+
 export function getDashboardPath(role: string | null): string {
-  if (!role) return '/auth/choice'
-  
-  switch (role.toLowerCase()) {
-    case 'recruteur':
-      return '/recruiter'
-    case 'manager':
-      return '/manager'
-    case 'client':
-      return '/client'
-    case 'administrateur':
-    case 'admin':
-      return '/admin'
-    default:
-      return '/auth/choice'
-  }
+  return getDashboardPathFromRoutes(role)
 }
 
 // Fonction pour récupérer le token depuis les cookies (pour le middleware Next.js)

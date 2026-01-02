@@ -45,87 +45,97 @@ const getMenuItems = (userRole: string | null) => {
   const baseItems = [
     {
       title: 'Dashboard',
-      href: prefix || '/',
+      href: prefix || ROUTES.HOME,
       icon: LayoutDashboard,
-      roles: ['recruteur', 'manager', 'client', 'administrateur'],
+      roles: ['recruteur', 'recruiter', 'manager', 'client', 'administrateur', 'admin'],
     },
     {
       title: 'Besoins',
-      href: `${prefix}/besoins`,
+      href: userRole === 'recruiter' || userRole === 'recruteur' 
+        ? ROUTES.RECRUITER.JOBS.LIST 
+        : userRole === 'manager' 
+        ? ROUTES.MANAGER.JOBS.LIST 
+        : `${prefix}/jobs`,
       icon: Briefcase,
-      roles: ['recruteur', 'administrateur'],
+      roles: ['recruteur', 'recruiter', 'administrateur', 'admin'],
     },
     {
       title: 'Candidats',
-      href: `${prefix}/candidats`,
+      href: userRole === 'recruiter' || userRole === 'recruteur'
+        ? ROUTES.RECRUITER.CANDIDATES.LIST
+        : userRole === 'manager'
+        ? ROUTES.MANAGER.CANDIDATES.LIST
+        : `${prefix}/candidats`,
       icon: Users,
-      roles: ['recruteur', 'administrateur'],
+      roles: ['recruteur', 'recruiter', 'manager', 'administrateur', 'admin'],
     },
     {
       title: 'Pipeline',
-      href: `${prefix}/pipeline`,
+      href: userRole === 'recruiter' || userRole === 'recruteur'
+        ? ROUTES.RECRUITER.PIPELINE
+        : userRole === 'manager'
+        ? ROUTES.MANAGER.PIPELINE
+        : `${prefix}/pipeline`,
       icon: Workflow,
-      roles: ['recruteur', 'administrateur'],
+      roles: ['recruteur', 'recruiter', 'manager', 'administrateur', 'admin'],
     },
     {
       title: 'Shortlist',
-      href: `${prefix}/shortlist`,
+      href: ROUTES.CLIENT.SHORTLIST,
       icon: Users,
-      roles: ['client', 'administrateur'],
+      roles: ['client', 'administrateur', 'admin'],
     },
     {
       title: 'Approbations',
-      href: `${prefix}/approbations`,
+      href: ROUTES.MANAGER.APPROBATIONS,
       icon: CheckCircle,
-      roles: ['manager', 'administrateur'],
+      roles: ['manager', 'administrateur', 'admin'],
     },
     {
       title: 'KPI',
-      href: `${prefix}/kpi`,
+      href: ROUTES.MANAGER.KPI,
       icon: BarChart3,
-      roles: ['manager', 'administrateur'],
+      roles: ['manager', 'administrateur', 'admin'],
     },
     {
       title: 'Entretiens',
-      href: `${prefix}/entretiens`,
+      href: userRole === 'recruiter' || userRole === 'recruteur'
+        ? ROUTES.RECRUITER.INTERVIEWS
+        : userRole === 'manager'
+        ? ROUTES.MANAGER.INTERVIEWS
+        : `${prefix}/entretiens`,
       icon: Calendar,
-      roles: ['recruteur', 'administrateur'],
+      roles: ['recruteur', 'recruiter', 'manager', 'administrateur', 'admin'],
     },
     {
-      title: 'Offres',
-      href: `${prefix}/offres`,
-      icon: Briefcase,
-      roles: ['recruteur', 'administrateur'],
-    },
-    {
-      title: 'Onboarding',
-      href: `${prefix}/onboarding`,
+      title: 'Équipes',
+      href: ROUTES.MANAGER.TEAMS,
       icon: Users,
-      roles: ['recruteur', 'manager', 'administrateur'],
+      roles: ['manager', 'administrateur', 'admin'],
     },
     {
       title: 'Notifications',
-      href: `${prefix}/notifications`,
+      href: ROUTES.COMMON.NOTIFICATIONS,
       icon: Bell,
-      roles: ['recruteur', 'manager', 'administrateur'],
+      roles: ['recruteur', 'recruiter', 'manager', 'client', 'administrateur', 'admin'],
     },
     {
       title: 'Utilisateurs',
-      href: '/dashboard/admin/users',
+      href: ROUTES.ADMIN.USERS,
       icon: Users,
-      roles: ['administrateur'],
+      roles: ['administrateur', 'admin'],
     },
     {
       title: 'Paramétrage',
-      href: '/dashboard/admin/settings',
+      href: ROUTES.ADMIN.SETTINGS,
       icon: Settings,
-      roles: ['administrateur'],
+      roles: ['administrateur', 'admin'],
     },
     {
       title: 'Logs de sécurité',
-      href: '/dashboard/admin/logs',
+      href: ROUTES.ADMIN.LOGS,
       icon: Shield,
-      roles: ['administrateur'],
+      roles: ['administrateur', 'admin'],
     },
   ]
 
