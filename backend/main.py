@@ -11,6 +11,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from pathlib import Path
 import logging
 import traceback
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from database import init_db
 from routers import jobs, candidates, auth, kpi, shortlists, notifications, interviews, offers, onboarding, history, admin, applications, teams
@@ -54,14 +56,28 @@ app = FastAPI(
 
 # Configuration CORS (pour permettre les requêtes depuis le frontend)
 # IMPORTANT: Le middleware CORS doit être ajouté AVANT les routes
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+import os
+
+# En développement, accepter toutes les origines pour permettre l'accès depuis n'importe quel réseau
+# (y compris via tunnel ngrok, cloudflare, etc.)
+# En production, utilisez une liste spécifique d'origines autorisées
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+if ENVIRONMENT == "production":
+    # En production, liste spécifique d'origines autorisées
+    allowed_origins = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ],
+        # Ajoutez ici vos domaines de production
+    ]
+else:
+    # En développement, accepter toutes les origines pour faciliter le développement
+    # et permettre l'accès depuis n'importe quel réseau (mobile, tunnel, etc.)
+    allowed_origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -146,7 +162,22 @@ async def global_exception_handler(request: Request, exc: Exception):
             }
         )
         # S'assurer que les headers CORS sont présents même en cas d'erreur
-        response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        origin = request.headers.get("origin", "*")
+        if ENVIRONMENT == "production":
+            # En production, vérifier l'origine
+            allowed_origins = [
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3001",
+            ]
+            if origin in allowed_origins:
+                response.headers["Access-Control-Allow-Origin"] = origin
+            else:
+                response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        else:
+            # En développement, accepter toutes les origines
+            response.headers["Access-Control-Allow-Origin"] = origin if origin != "*" else "*"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
@@ -176,7 +207,22 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
     # S'assurer que les headers CORS sont présents même en cas d'erreur
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    origin = request.headers.get("origin", "*")
+    if ENVIRONMENT == "production":
+        # En production, vérifier l'origine
+        allowed_origins = [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3001",
+        ]
+        if origin in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+        else:
+            response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    else:
+        # En développement, accepter toutes les origines
+        response.headers["Access-Control-Allow-Origin"] = origin if origin != "*" else "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"

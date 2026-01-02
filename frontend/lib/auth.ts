@@ -1,4 +1,29 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Détection automatique de l'URL de l'API en fonction de l'URL actuelle
+function getApiUrl(): string {
+  // Si une variable d'environnement est définie, l'utiliser
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL
+  }
+  
+  // Sinon, détecter automatiquement depuis l'URL actuelle
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    const port = window.location.port || '3000'
+    
+    // Si on est sur localhost ou 127.0.0.1, utiliser localhost:8000
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:8000'
+    }
+    
+    // Sinon, utiliser la même IP avec le port 8000
+    return `http://${hostname}:8000`
+  }
+  
+  // Par défaut pour le SSR
+  return 'http://localhost:8000'
+}
+
+const API_URL = getApiUrl()
 
 export interface LoginResponse {
   access_token: string
