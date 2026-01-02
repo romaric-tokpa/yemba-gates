@@ -8,11 +8,25 @@ function getApiUrl(): string {
   // Sinon, détecter automatiquement depuis l'URL actuelle
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname
+    const protocol = window.location.protocol
     const port = window.location.port || '3000'
     
     // Si on est sur localhost ou 127.0.0.1, utiliser localhost:8000
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8000'
+    }
+    
+    // Si on est sur un tunnel (cloudflare, localtunnel, etc.), utiliser le même hostname avec le port 8000
+    // ou détecter si c'est HTTPS (tunnel) et adapter
+    if (protocol === 'https:' || hostname.includes('cloudflare') || hostname.includes('tunnel') || hostname.includes('loca.lt') || hostname.includes('trycloudflare.com')) {
+      // Pour les tunnels, on peut utiliser le même hostname mais avec le port backend
+      // ou stocker l'URL du tunnel backend dans sessionStorage
+      const tunnelBackendUrl = sessionStorage.getItem('TUNNEL_BACKEND_URL')
+      if (tunnelBackendUrl) {
+        return tunnelBackendUrl
+      }
+      // Pour les autres tunnels, utiliser le même hostname
+      return `${protocol}//${hostname.replace(':3000', ':8000').replace(':3001', ':8000')}`
     }
     
     // Sinon, utiliser la même IP avec le port 8000

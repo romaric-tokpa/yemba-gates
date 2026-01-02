@@ -22,7 +22,7 @@ function getApiUrl(): string {
       return 'http://localhost:8000'
     }
     
-    if (protocol === 'https:' || hostname.includes('ngrok') || hostname.includes('cloudflare') || hostname.includes('tunnel')) {
+    if (protocol === 'https:' || hostname.includes('cloudflare') || hostname.includes('tunnel') || hostname.includes('loca.lt') || hostname.includes('trycloudflare.com')) {
       const tunnelBackendUrl = sessionStorage.getItem('TUNNEL_BACKEND_URL')
       if (tunnelBackendUrl) {
         return tunnelBackendUrl

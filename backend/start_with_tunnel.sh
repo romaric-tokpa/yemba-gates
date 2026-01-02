@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Script pour démarrer le backend avec support pour tunnels (ngrok, cloudflare, etc.)
+# Script pour démarrer le backend avec support pour tunnels (cloudflare, localtunnel)
 # Usage: ./start_with_tunnel.sh [tunnel_type]
-# tunnel_type peut être: ngrok, cloudflare, ou localtunnel
+# tunnel_type peut être: cloudflare ou localtunnel
 
-TUNNEL_TYPE=${1:-ngrok}
+TUNNEL_TYPE=${1:-cloudflare}
 BACKEND_PORT=8000
 
 echo "🚀 Démarrage du serveur backend avec support tunnel..."
@@ -28,18 +28,6 @@ sleep 3
 
 # Démarrer le tunnel selon le type
 case $TUNNEL_TYPE in
-    ngrok)
-        echo "🌐 Démarrage de ngrok..."
-        if ! command -v ngrok &> /dev/null; then
-            echo "❌ ngrok n'est pas installé. Installez-le avec: brew install ngrok/ngrok/ngrok"
-            kill $BACKEND_PID
-            exit 1
-        fi
-        ngrok http $BACKEND_PORT --log=stdout &
-        TUNNEL_PID=$!
-        echo "✅ ngrok démarré. URL publique disponible dans quelques secondes..."
-        echo "💡 Configurez NEXT_PUBLIC_API_URL dans votre frontend avec l'URL ngrok"
-        ;;
     cloudflare)
         echo "🌐 Démarrage de Cloudflare Tunnel..."
         if ! command -v cloudflared &> /dev/null; then
@@ -64,7 +52,7 @@ case $TUNNEL_TYPE in
         ;;
     *)
         echo "❌ Type de tunnel inconnu: $TUNNEL_TYPE"
-        echo "Types supportés: ngrok, cloudflare, localtunnel"
+        echo "Types supportés: cloudflare, localtunnel"
         kill $BACKEND_PID
         exit 1
         ;;

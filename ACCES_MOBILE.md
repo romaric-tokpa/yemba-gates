@@ -6,46 +6,11 @@ Ce guide explique comment accéder à votre application depuis votre mobile, mê
 
 Un tunnel crée une URL publique qui redirige vers votre serveur local. C'est la solution la plus simple pour tester depuis n'importe quel réseau.
 
-### A. Avec ngrok (Recommandé)
-
-1. **Installer ngrok** :
-   ```bash
-   # macOS
-   brew install ngrok/ngrok/ngrok
-   
-   # Ou télécharger depuis https://ngrok.com/download
-   ```
-
-2. **Créer un compte gratuit** sur https://ngrok.com et obtenir votre token
-
-3. **Configurer ngrok** :
-   ```bash
-   ngrok config add-authtoken VOTRE_TOKEN
-   ```
-
-4. **Démarrer le backend avec ngrok** :
-   ```bash
-   cd backend
-   ./start_with_tunnel.sh ngrok
-   ```
-
-5. **Noter l'URL ngrok** affichée (ex: `https://abc123.ngrok.io`)
-
-6. **Configurer le frontend** :
-   - Créez un fichier `.env.local` dans `frontend/` avec :
-     ```env
-     NEXT_PUBLIC_API_URL=https://abc123.ngrok.io
-     ```
-   - Redémarrez le frontend
-
-7. **Accéder depuis votre mobile** :
-   - Ouvrez l'URL ngrok du frontend dans votre navigateur mobile
-   - Exemple: `https://abc123.ngrok.io` (si vous avez aussi exposé le frontend)
-
-### B. Avec Cloudflare Tunnel (Gratuit, illimité)
+### A. Avec Cloudflare Tunnel (Recommandé)
 
 1. **Installer cloudflared** :
    ```bash
+   # macOS
    brew install cloudflare/cloudflare/cloudflared
    ```
 
@@ -55,11 +20,20 @@ Un tunnel crée une URL publique qui redirige vers votre serveur local. C'est la
    ./start_with_tunnel.sh cloudflare
    ```
 
-3. **Noter l'URL Cloudflare** affichée
+3. **Noter l'URL Cloudflare** affichée (ex: `https://abc123.trycloudflare.com`)
 
-4. **Configurer le frontend** comme pour ngrok
+4. **Configurer le frontend** :
+   - Créez un fichier `.env.local` dans `frontend/` avec :
+     ```env
+     NEXT_PUBLIC_API_URL=https://abc123.trycloudflare.com
+     ```
+   - Redémarrez le frontend
 
-### C. Avec localtunnel (Gratuit, simple)
+5. **Accéder depuis votre mobile** :
+   - Ouvrez l'URL Cloudflare du frontend dans votre navigateur mobile
+   - Exemple: `https://abc123.trycloudflare.com` (si vous avez aussi exposé le frontend)
+
+### B. Avec localtunnel (Gratuit, simple)
 
 1. **Installer localtunnel** :
    ```bash
@@ -74,7 +48,7 @@ Un tunnel crée une URL publique qui redirige vers votre serveur local. C'est la
 
 3. **Noter l'URL localtunnel** affichée
 
-4. **Configurer le frontend** comme pour ngrok
+4. **Configurer le frontend** comme pour Cloudflare
 
 ## 🔧 Option 2: Configuration manuelle
 
@@ -101,7 +75,7 @@ Un tunnel crée une URL publique qui redirige vers votre serveur local. C'est la
 2. **Configurer l'URL de l'API** :
    - Créez un fichier `.env.local` dans `frontend/` avec l'URL du backend
    - Exemple pour réseau local : `NEXT_PUBLIC_API_URL=http://192.168.1.3:8000`
-   - Exemple pour tunnel : `NEXT_PUBLIC_API_URL=https://abc123.ngrok.io`
+   - Exemple pour tunnel : `NEXT_PUBLIC_API_URL=https://abc123.trycloudflare.com`
 
 ## ⚙️ Configuration CORS
 
@@ -136,5 +110,4 @@ Pour la production, utilisez :
 ### Le tunnel ne fonctionne pas
 - Vérifiez que le backend est bien démarré
 - Vérifiez que le port 8000 n'est pas bloqué par un firewall
-- Essayez un autre type de tunnel (ngrok, cloudflare, localtunnel)
-
+- Essayez un autre type de tunnel (cloudflare, localtunnel)

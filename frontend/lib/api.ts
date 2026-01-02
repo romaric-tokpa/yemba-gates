@@ -18,16 +18,16 @@ function getApiUrl(): string {
       return 'http://localhost:8000'
     }
     
-    // Si on est sur un tunnel (ngrok, cloudflare, etc.), utiliser le même hostname avec le port 8000
+    // Si on est sur un tunnel (cloudflare, localtunnel, etc.), utiliser le même hostname avec le port 8000
     // ou détecter si c'est HTTPS (tunnel) et adapter
-    if (protocol === 'https:' || hostname.includes('ngrok') || hostname.includes('cloudflare') || hostname.includes('tunnel')) {
+    if (protocol === 'https:' || hostname.includes('cloudflare') || hostname.includes('tunnel') || hostname.includes('loca.lt') || hostname.includes('trycloudflare.com')) {
       // Pour les tunnels, on peut utiliser le même hostname mais avec le port backend
       // ou stocker l'URL du tunnel backend dans sessionStorage
       const tunnelBackendUrl = sessionStorage.getItem('TUNNEL_BACKEND_URL')
       if (tunnelBackendUrl) {
         return tunnelBackendUrl
       }
-      // Sinon, essayer de deviner (pour ngrok, souvent le même domaine)
+      // Pour les autres tunnels, utiliser le même hostname
       return `${protocol}//${hostname.replace(':3000', ':8000').replace(':3001', ':8000')}`
     }
     

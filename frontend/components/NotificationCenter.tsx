@@ -137,47 +137,54 @@ export default function NotificationCenter() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+        className="relative p-2 sm:p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-target"
         aria-label="Notifications"
       >
-        <Bell className="w-6 h-6" />
+        <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
         {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+          <span className="absolute top-0 right-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 text-[10px] sm:text-xs font-bold text-white bg-red-500 rounded-full">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 lg:w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-[600px] flex flex-col">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+        <>
+          {/* Overlay pour mobile */}
+          <div
+            className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setIsOpen(false)}
+          />
+          {/* Dropdown/Panel */}
+          <div className="fixed lg:absolute right-0 lg:right-0 top-0 lg:top-auto lg:mt-2 w-full lg:w-80 xl:w-96 h-full lg:h-auto lg:max-h-[600px] bg-white lg:rounded-lg shadow-lg border border-gray-200 z-50 flex flex-col">
+          <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Notifications</h3>
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAllAsRead}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium px-2 py-1 touch-target"
                 >
                   Tout marquer comme lu
                 </button>
               )}
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                className="p-1.5 sm:p-1 text-gray-400 hover:text-gray-600 rounded touch-target"
                 aria-label="Fermer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5 sm:w-4 sm:h-4" />
               </button>
             </div>
           </div>
 
           <div className="overflow-y-auto flex-1">
             {isLoading ? (
-              <div className="p-8 text-center text-gray-500">Chargement...</div>
+              <div className="p-6 sm:p-8 text-center text-gray-500 text-sm sm:text-base">Chargement...</div>
             ) : notifications.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>Aucune notification</p>
+              <div className="p-6 sm:p-8 text-center text-gray-500">
+                <Bell className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-sm sm:text-base">Aucune notification</p>
               </div>
             ) : (
               <div className="divide-y divide-gray-200">
@@ -185,22 +192,22 @@ export default function NotificationCenter() {
                   <div
                     key={notification.id}
                     className={cn(
-                      "p-4 hover:bg-gray-50 transition-colors cursor-pointer",
+                      "p-3 sm:p-4 hover:bg-gray-50 transition-colors cursor-pointer touch-target",
                       !notification.is_read && "bg-blue-50"
                     )}
                     onClick={() => !notification.is_read && handleMarkAsRead(notification.id)}
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-2 sm:gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start gap-2">
                           {!notification.is_read && (
                             <div className="mt-1.5 w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
                           )}
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm sm:text-base font-medium text-gray-900 break-words">
                               {notification.title}
                             </p>
-                            <p className="text-sm text-gray-600 mt-1">
+                            <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
                               {notification.message}
                             </p>
                             <p className="text-xs text-gray-400 mt-2">
@@ -215,10 +222,10 @@ export default function NotificationCenter() {
                             e.stopPropagation()
                             handleMarkAsRead(notification.id)
                           }}
-                          className="p-1 text-gray-400 hover:text-gray-600 rounded flex-shrink-0"
+                          className="p-1.5 sm:p-1 text-gray-400 hover:text-gray-600 rounded flex-shrink-0 touch-target"
                           aria-label="Marquer comme lu"
                         >
-                          <Check className="w-4 h-4" />
+                          <Check className="w-4 h-4 sm:w-4 sm:h-4" />
                         </button>
                       )}
                     </div>
@@ -227,7 +234,8 @@ export default function NotificationCenter() {
               </div>
             )}
           </div>
-        </div>
+          </div>
+        </>
       )}
     </div>
   )

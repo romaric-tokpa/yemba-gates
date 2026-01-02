@@ -59,7 +59,7 @@ app = FastAPI(
 import os
 
 # En développement, accepter toutes les origines pour permettre l'accès depuis n'importe quel réseau
-# (y compris via tunnel ngrok, cloudflare, etc.)
+# (y compris via tunnel cloudflare, localtunnel, etc.)
 # En production, utilisez une liste spécifique d'origines autorisées
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
