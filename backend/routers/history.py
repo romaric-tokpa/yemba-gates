@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel, ConfigDict
 
 from database import get_session
@@ -116,7 +116,7 @@ def get_application_history(
             "changed_by_name": f"{changer.first_name} {changer.last_name}" if changer else "",
             "old_status": item.old_status,
             "new_status": item.new_status,
-            "notes": item.notes,
+
             "created_at": item.created_at
         })
     
@@ -173,3 +173,155 @@ def get_candidate_history(
     
     return results
 
+
+class DeletedJobItem(BaseModel):
+    """Item d'un besoin supprimé"""
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: str
+    title: str | None
+    deleted_by: str
+    deleted_by_name: str
+    deleted_at: datetime
+    last_status: str | None
+    department: str | None
+    created_at: datetime | None
+
+
+@router.get("/deleted-jobs", response_model=List[DeletedJobItem])
+def get_deleted_jobs(
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Récupérer l'historique des besoins supprimés
+    
+    Retourne la liste des besoins qui ont été supprimés, basée sur l'historique.
+    """
+    # Récupérer toutes les entrées d'historique avec status "supprimé"
+    deletion_history = session.exec(
+        select(JobHistory).where(
+            JobHistory.field_name == "status", 
+            JobHistory.new_value == "supprimé"
+        ).order_by(JobHistory.created_at.desc())
+    ).all()
+    
+    if not deletion_history:
+        return []
+    
+    results = []
+    processed_job_ids = set()  # Pour éviter les doublons
+    
+    for deletion_entry in deletion_history:
+        job_id = deletion_entry.job_id
+        
+        # Si job_id est NULL, c'est qu'il a été supprimé avec SET NULL
+        # On peut quand même récupérer les informations depuis cette entrée
+        if job_id is None:
+            # Pour les entrées avec job_id NULL, on utilise l'ID de l'entrée comme identifiant
+            entry_id = str(deletion_entry.id)
+            if entry_id in processed_job_ids:
+                continue
+            processed_job_ids.add(entry_id)
+            
+            # Récupérer l'utilisateur qui a supprimé
+            deleter = session.get(User, deletion_entry.modified_by)
+            
+            # Chercher d'autres entrées d'historique créées par le même utilisateur
+            # autour de la même date (dans un délai de 10 secondes) pour récupérer titre/département
+            title = None
+            department = None
+            last_status = deletion_entry.old_value
+            
+            # Chercher les entrées d'historique créées dans la même fenêtre de temps
+            # par le même utilisateur (probablement le même job)
+            time_window_start = deletion_entry.created_at - timedelta(seconds=10)
+            time_window_end = deletion_entry.created_at + timedelta(seconds=10)
+            
+            similar_entries = session.exec(
+                select(JobHistory)
+                .where(
+                    JobHistory.modified_by == deletion_entry.modified_by,
+                    JobHistory.created_at >= time_window_start,
+                    JobHistory.created_at <= time_window_end
+                )
+                .order_by(JobHistory.created_at.desc())
+            ).all()
+            
+            for entry in similar_entries:
+                if entry.field_name == "title":
+                    title = entry.new_value or entry.old_value or title
+                if entry.field_name == "department":
+                    department = entry.new_value or entry.old_value or department
+            
+            results.append({
+                "job_id": entry_id,  # Utiliser l'ID de l'entrée comme identifiant
+                "title": title or "Besoin supprimé",
+                "deleted_by": str(deletion_entry.modified_by),
+                "deleted_by_name": f"{deleter.first_name} {deleter.last_name}" if deleter else "Inconnu",
+                "deleted_at": deletion_entry.created_at,
+                "last_status": last_status,
+                "department": department,
+                "created_at": deletion_entry.created_at
+            })
+        else:
+            # Si job_id n'est pas NULL, vérifier si le job existe encore
+            if job_id in processed_job_ids:
+                continue
+            
+            job = session.get(Job, job_id)
+            if job:
+                # Le job existe encore, ce n'est pas un job supprimé
+                continue
+            
+            # Le job n'existe plus, c'est un job supprimé
+            processed_job_ids.add(job_id)
+            
+            # Récupérer toutes les entrées d'historique pour ce job
+            all_history = session.exec(
+                select(JobHistory)
+                .where(JobHistory.job_id == job_id)
+                .order_by(JobHistory.created_at.desc())
+            ).all()
+            
+            # Si aucune entrée trouvée, utiliser uniquement l'entrée de suppression
+            if not all_history:
+                all_history = [deletion_entry]
+            
+            # Trouver la première entrée (création)
+            first_history = all_history[-1] if all_history else deletion_entry
+            
+            # Chercher le titre et le département dans l'historique
+            title = None
+            department = None
+            last_status = None
+            
+            for entry in all_history:
+                if entry.field_name == "title":
+                    title = entry.new_value or entry.old_value or title
+                if entry.field_name == "department":
+                    department = entry.new_value or entry.old_value or department
+                if entry.field_name == "status":
+                    if entry.new_value == "supprimé":
+                        last_status = entry.old_value or last_status
+                    elif not last_status:
+                        last_status = entry.new_value or entry.old_value
+            
+            # Récupérer l'utilisateur qui a supprimé
+            deleter = session.get(User, deletion_entry.modified_by)
+            
+            results.append({
+                "job_id": str(job_id),
+                "title": title or "Besoin supprimé",
+                "deleted_by": str(deletion_entry.modified_by),
+                "deleted_by_name": f"{deleter.first_name} {deleter.last_name}" if deleter else "Inconnu",
+                "deleted_at": deletion_entry.created_at,
+                "last_status": last_status,
+                "department": department,
+                "created_at": first_history.created_at if first_history else deletion_entry.created_at
+            })
+    
+    # Trier par date de suppression (plus récent en premier)
+    results.sort(key=lambda x: x["deleted_at"], reverse=True)
+    
+    return results

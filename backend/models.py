@@ -6,24 +6,24 @@ from __future__ import annotations
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY
 from sqlalchemy import Column, ForeignKey, String, Text
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 from datetime import datetime, date
 from enum import Enum
 from uuid import UUID, uuid4
-
-# Import conditionnel pour le type checking uniquement
-if TYPE_CHECKING:
-    from typing import Optional
-    Optional = Optional
-else:
-    Optional = None
 
 
 class JobStatus(str, Enum):
     """Statut d'un besoin de recrutement"""
     BROUILLON = "brouillon"
+    A_VALIDER = "a_valider"
+    URGENT = "urgent"
+    TRES_URGENT = "tres_urgent"
+    BESOIN_COURANT = "besoin_courant"
     VALIDE = "validé"
     EN_COURS = "en_cours"
+    GAGNE = "gagne"
+    STANDBY = "standby"
+    ARCHIVE = "archive"
     CLOTURE = "clôturé"
 
 
@@ -128,7 +128,8 @@ class Job(SQLModel, table=True):
     creator: User = Relationship(back_populates="jobs_created", sa_relationship_kwargs={"lazy": "select", "foreign_keys": "[Job.created_by]"})
     validator: User = Relationship(back_populates="jobs_validated", sa_relationship_kwargs={"lazy": "select", "foreign_keys": "[Job.validated_by]"})
     applications: Application = Relationship(back_populates="job", sa_relationship_kwargs={"lazy": "select"})
-    history: JobHistory = Relationship(back_populates="job", sa_relationship_kwargs={"lazy": "select"})
+    # Note: La relation history est supprimée pour éviter les problèmes de référence forward
+    # L'historique peut être accédé via JobHistory.job_id directement
     notifications: Notification = Relationship(back_populates="related_job", sa_relationship_kwargs={"lazy": "select"})
 
 
@@ -255,7 +256,7 @@ class JobHistory(SQLModel, table=True):
     __tablename__ = "job_history"
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
-    job_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE")))
+    job_id: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="SET NULL")))
     modified_by: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id")))
     field_name: str | None = Field(default=None, max_length=100)  # Champ modifié
     old_value: str | None = Field(default=None)  # Ancienne valeur
@@ -263,7 +264,9 @@ class JobHistory(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    job: Job = Relationship(back_populates="history", sa_relationship_kwargs={"lazy": "select"})
+    # Note: On ne définit pas la relation vers Job pour éviter les problèmes de référence forward
+    # Le job peut être accédé via job_id si nécessaire
+    # job_id peut être None si le job a été supprimé (ON DELETE SET NULL)
     modifier: User = Relationship(sa_relationship_kwargs={"lazy": "select"})
 
 
@@ -397,3 +400,6 @@ class TeamMember(SQLModel, table=True):
     # Relationships
     team: Team = Relationship(sa_relationship_kwargs={"lazy": "select"})
     user: User = Relationship(sa_relationship_kwargs={"lazy": "select"})
+
+
+

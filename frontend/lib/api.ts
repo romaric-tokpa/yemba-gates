@@ -303,6 +303,29 @@ export async function getJobHistory(jobId: string): Promise<JobHistoryItem[]> {
   return response.json()
 }
 
+export interface DeletedJobItem {
+  job_id: string
+  title: string | null
+  deleted_by: string
+  deleted_by_name: string
+  deleted_at: string
+  last_status: string | null
+  department: string | null
+  created_at: string | null
+}
+
+export async function getDeletedJobs(): Promise<DeletedJobItem[]> {
+  const response = await authenticatedFetch(`${API_URL}/history/deleted-jobs`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    throw new Error('Erreur lors de la récupération des besoins supprimés')
+  }
+
+  return response.json()
+}
+
 export async function getPendingValidationJobs(): Promise<JobResponse[]> {
   const response = await authenticatedFetch(`${API_URL}/jobs/pending-validation`, {
     method: 'GET',
@@ -354,6 +377,56 @@ export async function validateJob(jobId: string, validation: JobValidation): Pro
   }
 
   return response.json()
+}
+
+export async function updateJobStatus(jobId: string, status: string): Promise<JobResponse> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}/status?new_status=${encodeURIComponent(status)}`, {
+    method: 'PATCH',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour du statut' }))
+    throw new Error(error.detail || 'Erreur lors de la mise à jour du statut')
+  }
+
+  return response.json()
+}
+
+export async function archiveJob(jobId: string): Promise<JobResponse> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}/archive`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'archivage du besoin' }))
+    throw new Error(error.detail || 'Erreur lors de l\'archivage du besoin')
+  }
+
+  return response.json()
+}
+
+export async function markJobAsWon(jobId: string): Promise<JobResponse> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}/mark-won`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors du marquage comme gagné' }))
+    throw new Error(error.detail || 'Erreur lors du marquage comme gagné')
+  }
+
+  return response.json()
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression du besoin' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression du besoin')
+  }
 }
 
 export async function getPendingApprovalJobs(): Promise<JobResponseWithCreator[]> {

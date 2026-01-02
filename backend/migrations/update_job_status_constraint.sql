@@ -1,10 +1,11 @@
--- Script SQL pour mettre à jour la contrainte CHECK du champ status dans la table jobs
--- Ce script ajoute tous les nouveaux statuts à la liste des statuts autorisés
+-- Migration pour mettre à jour la contrainte CHECK du champ status dans la table jobs
+-- Date: 2026-01-02
+-- Description: Ajoute tous les nouveaux statuts (a_valider, urgent, tres_urgent, besoin_courant, gagne, standby, archive)
 
 -- Supprimer l'ancienne contrainte si elle existe
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_status_check;
 
--- Augmenter la taille du champ status si nécessaire (pour supporter les nouveaux statuts)
+-- Augmenter la taille du champ status si nécessaire
 ALTER TABLE jobs ALTER COLUMN status TYPE VARCHAR(50);
 
 -- Ajouter la nouvelle contrainte avec tous les statuts
@@ -24,3 +25,4 @@ CHECK (status IN (
     'en_attente',
     'en_attente_validation'
 ));
+

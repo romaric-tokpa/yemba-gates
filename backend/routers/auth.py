@@ -51,23 +51,73 @@ class UserRegister(BaseModel):
 
 
 @router.post("/login", response_model=Token)
-def login(
+async def login(
     request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
     session: Session = Depends(get_session)
 ):
     """
     Connexion d'un utilisateur
     
-    Utilise un formulaire standard (username = email, password)
+    Accepte à la fois JSON et Form data pour plus de flexibilité
     """
     import logging
     logger = logging.getLogger(__name__)
     
     try:
+        # Détecter le type de contenu
+        content_type = request.headers.get("content-type", "")
+        
+        # Extraire username et password selon le type de contenu
+        username = None
+        password = None
+        
+        if "application/json" in content_type:
+            # JSON body
+            body = await request.json()
+            username = body.get("email") or body.get("username")
+            password = body.get("password")
+        elif "application/x-www-form-urlencoded" in content_type:
+            # Form data
+            form_data = await request.form()
+            username_val = form_data.get("username") or form_data.get("email")
+            password_val = form_data.get("password")
+            
+            # Extraire la valeur si c'est un UploadFile ou autre objet
+            if username_val:
+                username = username_val if isinstance(username_val, str) else str(username_val)
+            if password_val:
+                password = password_val if isinstance(password_val, str) else str(password_val)
+        else:
+            # Essayer Form() en fallback
+            try:
+                form_data = await request.form()
+                username_val = form_data.get("username") or form_data.get("email")
+                password_val = form_data.get("password")
+                
+                if username_val:
+                    username = username_val if isinstance(username_val, str) else str(username_val)
+                if password_val:
+                    password = password_val if isinstance(password_val, str) else str(password_val)
+            except Exception as e:
+                logger.warning(f"⚠️ [LOGIN] Erreur lors de l'extraction du formulaire: {str(e)}")
+                # Dernier recours: essayer JSON
+                try:
+                    body = await request.json()
+                    username = body.get("email") or body.get("username")
+                    password = body.get("password")
+                except Exception as e2:
+                    logger.error(f"❌ [LOGIN] Impossible d'extraire les données: {str(e2)}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid request format. Use JSON or form data."
+                    )
+        
+        # Logger les paramètres reçus (sans le mot de passe complet pour la sécurité)
+        logger.info(f"🔐 [LOGIN] Tentative de connexion - Email: {username}, Password length: {len(password) if password else 0}, Content-Type: {content_type}")
+        
         # Valider les paramètres d'entrée
         if not username or not password:
+            logger.warning(f"❌ [LOGIN] Paramètres manquants - Username: {bool(username)}, Password: {bool(password)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email and password are required"
@@ -76,29 +126,51 @@ def login(
         # Récupérer l'IP et le user agent
         ip_address = request.client.host if request.client else None
         user_agent = request.headers.get("user-agent", None)
+        logger.info(f"🔐 [LOGIN] IP: {ip_address}, User-Agent: {user_agent}")
         
         # Authentifier l'utilisateur
+        logger.info(f"🔐 [LOGIN] Appel de authenticate_user pour: {username}")
         user = authenticate_user(username, password, session)
         if not user:
-            # Enregistrer la tentative de connexion échouée
+            # Vérifier pourquoi l'authentification a échoué pour donner un message plus précis
+            failed_user = get_user_by_email(username, session)
+            
+            error_detail = "Incorrect email or password"
+            if not failed_user:
+                error_detail = "User not found"
+                logger.warning(f"❌ [LOGIN] Utilisateur non trouvé: {username}")
+            elif not failed_user.is_active:
+                error_detail = "User account is inactive"
+                logger.warning(f"❌ [LOGIN] Compte inactif: {username}")
+            elif not failed_user.password_hash:
+                error_detail = "User account has no password set"
+                logger.warning(f"❌ [LOGIN] Aucun mot de passe défini pour: {username}")
+            else:
+                logger.warning(f"❌ [LOGIN] Mot de passe incorrect pour: {username}")
+            
+            # Enregistrer la tentative de connexion échouée (non bloquant)
             try:
-                failed_user = get_user_by_email(username, session)
                 log = SecurityLog(
                     user_id=failed_user.id if failed_user else None,
                     action="failed_login",
                     ip_address=ip_address,
                     user_agent=user_agent,
                     success=False,
-                    details="Incorrect email or password"
+                    details=error_detail
                 )
                 session.add(log)
                 session.commit()
-            except Exception:
-                session.rollback()
+            except Exception as e:
+                # Ne pas faire échouer la connexion si l'enregistrement du log échoue
+                logger.warning(f"⚠️ [LOGIN] Impossible d'enregistrer le log de sécurité (non bloquant): {str(e)}")
+                try:
+                    session.rollback()
+                except:
+                    pass
             
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password",
+                detail=error_detail,
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
@@ -140,7 +212,7 @@ def login(
         last_name = user.last_name or ""
         user_name = f"{first_name} {last_name}".strip() or user.email
         
-        # Enregistrer la connexion réussie
+        # Enregistrer la connexion réussie (non bloquant)
         try:
             ip_address = request.client.host if request.client else None
             user_agent = request.headers.get("user-agent", None)
@@ -153,8 +225,13 @@ def login(
             )
             session.add(log)
             session.commit()
-        except Exception:
-            session.rollback()
+        except Exception as e:
+            # Ne pas faire échouer la connexion si l'enregistrement du log échoue
+            logger.warning(f"⚠️ [LOGIN] Impossible d'enregistrer le log de sécurité (non bloquant): {str(e)}")
+            try:
+                session.rollback()
+            except:
+                pass
         
         return {
             "access_token": access_token,
@@ -168,11 +245,23 @@ def login(
         # Relancer les HTTPException telles quelles
         raise
     except Exception as e:
-        # Logger l'erreur pour le débogage
-        logger.error(f"Erreur lors de la connexion pour {username}: {str(e)}", exc_info=True)
+        # Logger l'erreur pour le débogage avec plus de détails
+        username_received = username if 'username' in locals() else 'N/A'
+        logger.error(f"❌ [LOGIN] Erreur lors de la connexion pour {username_received}: {str(e)}", exc_info=True)
+        logger.error(f"❌ [LOGIN] Type d'erreur: {type(e).__name__}")
+        
+        # Donner un message d'erreur plus informatif
+        error_detail = f"Internal server error during login: {str(e)}"
+        if "SecurityLog" in str(e) or "security_log" in str(e).lower():
+            error_detail = "Error logging security event (login may still succeed)"
+        elif "password" in str(e).lower() or "hash" in str(e).lower():
+            error_detail = "Error during password verification"
+        elif "session" in str(e).lower() or "database" in str(e).lower():
+            error_detail = "Database connection error"
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error during login"
+            detail=error_detail
         )
 
 

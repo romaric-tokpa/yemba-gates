@@ -37,7 +37,11 @@ CREATE TABLE jobs (
     contract_type VARCHAR(50),                      -- Type de contrat (CDI, CDD, etc.)
     budget DECIMAL(10, 2),                          -- Budget
     urgency VARCHAR(20) CHECK (urgency IN ('faible', 'moyenne', 'haute', 'critique')),
-    status VARCHAR(20) DEFAULT 'brouillon' CHECK (status IN ('brouillon', 'validé', 'en_cours', 'clôturé')),
+    status VARCHAR(50) DEFAULT 'brouillon' CHECK (status IN (
+        'brouillon', 'a_valider', 'urgent', 'tres_urgent', 'besoin_courant',
+        'validé', 'en_cours', 'gagne', 'standby', 'archive', 'clôturé',
+        'en_attente', 'en_attente_validation'
+    )),
     job_description_file_path VARCHAR(500),        -- Chemin vers la fiche de poste
     created_by UUID NOT NULL REFERENCES users(id), -- Recruteur qui a créé le besoin
     validated_by UUID REFERENCES users(id),        -- Manager qui a validé
@@ -147,7 +151,7 @@ CREATE INDEX idx_interviews_type ON interviews(interview_type);
 -- ============================================
 CREATE TABLE job_history (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,  -- Permet NULL pour conserver l'historique après suppression
     modified_by UUID NOT NULL REFERENCES users(id),
     field_name VARCHAR(100),                        -- Champ modifié
     old_value TEXT,                                 -- Ancienne valeur
@@ -173,6 +177,30 @@ CREATE TABLE application_history (
 CREATE INDEX idx_application_history_application_id ON application_history(application_id);
 
 -- ============================================
+-- TABLE: notifications
+-- ============================================
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id),  -- Destinataire
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    notification_type VARCHAR(50),  -- 'offer_accepted', 'job_pending_validation', 'feedback_received', etc.
+    is_read BOOLEAN DEFAULT FALSE,
+    related_job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+    related_application_id UUID REFERENCES applications(id) ON DELETE CASCADE,
+    email_sent BOOLEAN DEFAULT FALSE,
+    email_sent_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX idx_notifications_related_job_id ON notifications(related_job_id);
+CREATE INDEX idx_notifications_related_application_id ON notifications(related_application_id);
+
+-- ============================================
 -- TRIGGERS: Mise à jour automatique de updated_at
 -- ============================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -196,6 +224,9 @@ CREATE TRIGGER update_applications_updated_at BEFORE UPDATE ON applications
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_interviews_updated_at BEFORE UPDATE ON interviews
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_notifications_updated_at BEFORE UPDATE ON notifications
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================

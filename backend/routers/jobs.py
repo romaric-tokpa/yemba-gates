@@ -2,13 +2,13 @@
 Routes pour la gestion des besoins de recrutement (US01)
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel
 
 from database import get_session, engine
-from models import Job, JobStatus, UrgencyLevel, User, UserRole, JobHistory
+from models import Job, JobStatus, UrgencyLevel, User, UserRole, JobHistory, Application
 from schemas import JobCreate, JobUpdate, JobResponse, JobResponseWithCreator, JobSubmitForValidation
 from auth import get_current_active_user, require_recruteur, require_manager
 from datetime import datetime, date
@@ -217,15 +217,24 @@ Règles importantes:
         
         # Valider que title est présent
         if not parsed_data.get("title"):
-            raise ValueError("Le titre du poste est obligatoire")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le titre du poste est obligatoire"
+            )
         
         return parsed_data
         
     except json.JSONDecodeError as e:
+        error_msg = f"Erreur lors du parsing JSON de la réponse LLM: {str(e)}"
+        if 'response_text' in locals():
+            error_msg += f". Réponse reçue: {response_text[:200]}"
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors du parsing JSON de la réponse LLM: {str(e)}. Réponse reçue: {response_text[:200]}"
+            detail=error_msg
         )
+    except HTTPException:
+        # Répercuter les HTTPException telles quelles
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -357,7 +366,25 @@ async def parse_job_description(
             )
         
         # Parser le texte avec le LLM
-        parsed_data = parse_job_description_with_llm(job_text)
+        try:
+            parsed_data = parse_job_description_with_llm(job_text)
+        except ValueError as e:
+            # Nettoyer le fichier temporaire
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+        except Exception as e:
+            # Nettoyer le fichier temporaire
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            logger.error(f"Erreur lors du parsing de la fiche de poste: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Erreur lors de l'analyse de la fiche de poste: {str(e)}"
+            )
         
         # Convertir experience_requise en int si présent
         if "experience_requise" in parsed_data and parsed_data["experience_requise"] is not None:
@@ -617,13 +644,11 @@ def get_pending_approval_jobs(
     """
     Récupérer tous les besoins pour approbation (créés par client, recruteur ou manager)
     
-    Retourne TOUS les besoins (sauf clôturés) avec les informations du créateur.
-    Le manager peut ainsi approuver ou changer le statut de n'importe quel besoin.
+    Retourne TOUS les besoins avec les informations du créateur.
+    Le manager peut ainsi approuver, modifier le statut, archiver ou supprimer n'importe quel besoin.
     """
-    # Récupérer tous les besoins sauf ceux clôturés
-    statement = select(Job).where(
-        Job.status != "clôturé"
-    ).order_by(Job.created_at.desc())
+    # Récupérer tous les besoins (y compris archivés et clôturés pour gestion complète)
+    statement = select(Job).order_by(Job.created_at.desc())
     
     jobs = session.exec(statement).all()
     
@@ -1139,4 +1164,215 @@ def get_job_history(
         })
     
     return history_list
+
+
+@router.patch("/{job_id}/status", response_model=JobResponse)
+def update_job_status(
+    job_id: UUID,
+    new_status: str = Query(..., description="Nouveau statut du besoin"),
+    current_user: User = Depends(require_manager),
+    session: Session = Depends(get_session)
+):
+    """
+    Modifier le statut d'un besoin de recrutement
+    
+    Statuts possibles: a_valider, urgent, tres_urgent, besoin_courant, validé, en_cours, gagne, standby, archive, clôturé
+    """
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Besoin de recrutement non trouvé"
+        )
+    
+    # Valider le statut
+    valid_statuses = [
+        "brouillon", "a_valider", "urgent", "tres_urgent", "besoin_courant",
+        "validé", "en_cours", "gagne", "standby", "archive", "clôturé"
+    ]
+    if new_status not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Statut invalide. Statuts possibles: {', '.join(valid_statuses)}"
+        )
+    
+    # Enregistrer l'ancien statut pour l'historique
+    old_status = job.status
+    job.status = new_status
+    job.updated_at = datetime.utcnow()
+    
+    # Si le statut est "validé", enregistrer la validation
+    if new_status == "validé" and not job.validated_by:
+        job.validated_by = current_user.id
+        job.validated_at = datetime.utcnow()
+    
+    # Si le statut est "clôturé" ou "archive", enregistrer la date de clôture
+    if new_status in ["clôturé", "archive"] and not job.closed_at:
+        job.closed_at = datetime.utcnow()
+    
+    # Enregistrer dans l'historique
+    history_entry = JobHistory(
+        job_id=job.id,
+        modified_by=current_user.id,
+        field_name="status",
+        old_value=old_status,
+        new_value=new_status
+    )
+    session.add(history_entry)
+    session.commit()
+    session.refresh(job)
+    
+    return job
+
+
+@router.post("/{job_id}/archive", response_model=JobResponse)
+def archive_job(
+    job_id: UUID,
+    current_user: User = Depends(require_manager),
+    session: Session = Depends(get_session)
+):
+    """
+    Archiver un besoin de recrutement
+    
+    Change le statut en "archive" et enregistre la date de clôture.
+    """
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Besoin de recrutement non trouvé"
+        )
+    
+    old_status = job.status
+    job.status = "archive"
+    job.closed_at = datetime.utcnow()
+    job.updated_at = datetime.utcnow()
+    
+    # Enregistrer dans l'historique
+    history_entry = JobHistory(
+        job_id=job.id,
+        modified_by=current_user.id,
+        field_name="status",
+        old_value=old_status,
+        new_value="archive"
+    )
+    session.add(history_entry)
+    session.commit()
+    session.refresh(job)
+    
+    return job
+
+
+@router.post("/{job_id}/mark-won", response_model=JobResponse)
+def mark_job_as_won(
+    job_id: UUID,
+    current_user: User = Depends(require_manager),
+    session: Session = Depends(get_session)
+):
+    """
+    Marquer un besoin comme gagné
+    
+    Change le statut en "gagne".
+    """
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Besoin de recrutement non trouvé"
+        )
+    
+    old_status = job.status
+    job.status = "gagne"
+    job.updated_at = datetime.utcnow()
+    
+    # Enregistrer dans l'historique
+    history_entry = JobHistory(
+        job_id=job.id,
+        modified_by=current_user.id,
+        field_name="status",
+        old_value=old_status,
+        new_value="gagne"
+    )
+    session.add(history_entry)
+    session.commit()
+    session.refresh(job)
+    
+    return job
+
+
+@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_job(
+    job_id: UUID,
+    current_user: User = Depends(require_manager),
+    session: Session = Depends(get_session)
+):
+    """
+    Supprimer un besoin de recrutement
+    
+    Supprime définitivement le besoin de la base de données.
+    Attention: Cette action est irréversible.
+    """
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Besoin de recrutement non trouvé"
+        )
+    
+    # Vérifier qu'il n'y a pas de candidatures associées
+    applications_count = session.exec(
+        select(func.count(Application.id)).where(Application.job_id == job_id)
+    ).one()
+    
+    if applications_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Impossible de supprimer ce besoin car il contient {applications_count} candidature(s). Archivez-le plutôt."
+        )
+    
+    # Ne pas supprimer l'historique - le conserver pour traçabilité
+    # Stocker le job_id et les informations importantes avant la suppression
+    job_id_to_keep = job.id
+    
+    # Créer des entrées d'historique pour conserver les informations importantes
+    # 1. Historique du statut (supprimé)
+    history_status = JobHistory(
+        job_id=job_id_to_keep,
+        modified_by=current_user.id,
+        field_name="status",
+        old_value=job.status,
+        new_value="supprimé"
+    )
+    session.add(history_status)
+    
+    # 2. Historique du titre (pour pouvoir l'afficher après suppression)
+    if job.title:
+        history_title = JobHistory(
+            job_id=job_id_to_keep,
+            modified_by=current_user.id,
+            field_name="title",
+            old_value=job.title,
+            new_value=job.title  # Conserver le titre
+        )
+        session.add(history_title)
+    
+    # 3. Historique du département (pour pouvoir l'afficher après suppression)
+    if job.department:
+        history_department = JobHistory(
+            job_id=job_id_to_keep,
+            modified_by=current_user.id,
+            field_name="department",
+            old_value=job.department,
+            new_value=job.department  # Conserver le département
+        )
+        session.add(history_department)
+    
+    # Flush pour sauvegarder l'historique avant de supprimer le job
+    session.flush()
+    
+    # Supprimer le besoin
+    session.delete(job)
+    session.commit()
+    
+    return None
 

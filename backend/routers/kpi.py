@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import case, cast, Date
 
 from database import get_session
-from models import User, UserRole, Candidate, Job, Application, Interview
+from models import User, UserRole, Candidate, Job, Application, Interview, ApplicationHistory
 from auth import get_current_active_user, require_manager, require_recruteur
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
@@ -182,6 +182,364 @@ def calculate_time_to_fill(session: Session, filters: KPIFilters) -> Optional[fl
     return float(result) if result else None
 
 
+def calculate_average_cycle_per_stage(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Cycle moyen par étape: Durée moyenne passée par les candidats à chaque étape"""
+    # Calculer manuellement la moyenne des durées entre changements de statut
+    all_history = session.exec(
+        select(ApplicationHistory)
+        .order_by(ApplicationHistory.application_id, ApplicationHistory.created_at)
+    ).all()
+    
+    if not all_history:
+        return None
+    
+    # Grouper par application et calculer les durées
+    durations = []
+    current_app = None
+    prev_date = None
+    
+    for hist in all_history:
+        if current_app != hist.application_id:
+            current_app = hist.application_id
+            prev_date = hist.created_at
+        else:
+            if prev_date:
+                duration = (hist.created_at - prev_date).total_seconds() / 86400
+                if duration > 0:
+                    durations.append(duration)
+            prev_date = hist.created_at
+    
+    return sum(durations) / len(durations) if durations else None
+
+
+def calculate_average_feedback_delay(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Délai moyen feedback: Temps moyen de retour du manager/client après sollicitation"""
+    # Utiliser Interview.feedback_provided_at - Interview.scheduled_at
+    statement = select(
+        func.avg(
+            func.extract('epoch', Interview.feedback_provided_at - Interview.scheduled_at) / 86400
+        )
+    ).where(
+        Interview.feedback_provided_at.isnot(None),
+        Interview.scheduled_at.isnot(None)
+    )
+    
+    if filters.recruiter_id:
+        statement = statement.where(Interview.created_by == filters.recruiter_id)
+    
+    result = session.exec(statement).one()
+    return float(result) if result else None
+
+
+def calculate_percentage_jobs_on_time(session: Session, filters: KPIFilters) -> Optional[float]:
+    """% de postes respectant le délai: Pourcentage de postes clôturés dans le délai cible"""
+    # Pour simplifier, on considère un délai cible de 60 jours (configurable)
+    TARGET_DAYS = 60
+    
+    statement = select(Job).where(
+        Job.status == "clôturé",
+        Job.closed_at.isnot(None),
+        Job.validated_at.isnot(None)
+    )
+    
+    if filters.recruiter_id:
+        statement = statement.where(Job.created_by == filters.recruiter_id)
+    if filters.job_id:
+        statement = statement.where(Job.id == filters.job_id)
+    
+    jobs = session.exec(statement).all()
+    
+    if not jobs:
+        return None
+    
+    on_time = 0
+    for job in jobs:
+        if job.closed_at and job.validated_at:
+            duration = (job.closed_at - job.validated_at).total_seconds() / 86400
+            if duration <= TARGET_DAYS:
+                on_time += 1
+    
+    return (on_time / len(jobs) * 100) if jobs else None
+
+
+def calculate_rejection_rate_per_stage(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Taux de rejet par étape: Pourcentage de candidats rejetés à chaque étape"""
+    # Compter les candidats rejetés vs total candidats
+    total_applications = session.exec(
+        select(func.count(Application.id))
+    ).one()
+    
+    rejected_applications = session.exec(
+        select(func.count(Application.id)).where(Application.status == "rejeté")
+    ).one()
+    
+    return (rejected_applications / total_applications * 100) if total_applications > 0 else None
+
+
+def calculate_no_show_rate(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Taux de no-show entretien: Pourcentage de candidats absents aux entretiens"""
+    # Approximation: entretiens sans feedback = no-show potentiel
+    total_interviews = session.exec(
+        select(func.count(Interview.id)).where(Interview.scheduled_at.isnot(None))
+    ).one()
+    
+    interviews_with_feedback = session.exec(
+        select(func.count(Interview.id)).where(
+            Interview.feedback.isnot(None),
+            Interview.feedback_provided_at.isnot(None)
+        )
+    ).one()
+    
+    # Approximation: si un entretien est passé et n'a pas de feedback, c'est peut-être un no-show
+    # On considère les entretiens planifiés dans le passé sans feedback comme no-show
+    from datetime import datetime
+    now = datetime.utcnow()
+    no_show_interviews = session.exec(
+        select(func.count(Interview.id)).where(
+            Interview.scheduled_at < now,
+            Interview.feedback.is_(None)
+        )
+    ).one()
+    
+    return (no_show_interviews / total_interviews * 100) if total_interviews > 0 else None
+
+
+def calculate_turnover_rate(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Taux de turnover post-onboarding: Pourcentage de candidats quittant le poste"""
+    # Approximation: candidats embauchés qui sont ensuite rejetés ou dont le statut change
+    # Pour l'instant, on retourne None car cela nécessite un suivi post-embauche
+    return None
+
+
+def calculate_average_recruitment_cost(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Coût moyen par recrutement"""
+    # Utiliser Job.budget comme approximation
+    statement = select(func.avg(Job.budget)).where(Job.budget.isnot(None))
+    
+    if filters.recruiter_id:
+        statement = statement.where(Job.created_by == filters.recruiter_id)
+    if filters.job_id:
+        statement = statement.where(Job.id == filters.job_id)
+    
+    result = session.exec(statement).one()
+    return float(result) if result else None
+
+
+def calculate_cost_per_source(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Coût par source"""
+    # Approximation basée sur le budget des jobs liés aux candidats d'une source
+    if not filters.source:
+        return None
+    
+    # Trouver les candidats de cette source
+    candidates = session.exec(
+        select(Candidate.id).where(Candidate.source == filters.source)
+    ).all()
+    
+    if not candidates:
+        return None
+    
+    # Trouver les applications de ces candidats
+    applications = session.exec(
+        select(Application.job_id).where(Application.candidate_id.in_(candidates))
+    ).all()
+    
+    if not applications:
+        return None
+    
+    # Calculer le budget moyen des jobs
+    avg_budget = session.exec(
+        select(func.avg(Job.budget)).where(
+            Job.id.in_(applications),
+            Job.budget.isnot(None)
+        )
+    ).one()
+    
+    return float(avg_budget) if avg_budget else None
+
+
+def calculate_budget_spent_vs_planned(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Budget dépensé vs prévu"""
+    # Somme des budgets des jobs clôturés vs total budget
+    total_budget = session.exec(
+        select(func.sum(Job.budget)).where(Job.budget.isnot(None))
+    ).one() or 0
+    
+    spent_budget = session.exec(
+        select(func.sum(Job.budget)).where(
+            Job.status == "clôturé",
+            Job.budget.isnot(None)
+        )
+    ).one() or 0
+    
+    return (spent_budget / total_budget * 100) if total_budget > 0 else None
+
+
+def calculate_candidate_response_rate(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Taux de réponse candidat: Pourcentage de réponses aux messages envoyés"""
+    # Approximation: offres envoyées avec réponse (acceptée ou refusée) vs total offres
+    total_offers = session.exec(
+        select(func.count(Application.id)).where(Application.offer_sent_at.isnot(None))
+    ).one()
+    
+    responded_offers = session.exec(
+        select(func.count(Application.id)).where(
+            Application.offer_sent_at.isnot(None),
+            Application.offer_accepted.isnot(None)
+        )
+    ).one()
+    
+    return (responded_offers / total_offers * 100) if total_offers > 0 else None
+
+
+def calculate_recruiter_success_rate(session: Session, recruiter_id: UUID) -> Optional[float]:
+    """Taux de réussite recruteur: (Nb embauches / Nb shortlists) x100"""
+    total_shortlists = session.exec(
+        select(func.count(Application.id)).where(
+            Application.created_by == recruiter_id,
+            Application.is_in_shortlist == True
+        )
+    ).one()
+    
+    total_hired = session.exec(
+        select(func.count(Application.id)).where(
+            Application.created_by == recruiter_id,
+            Application.status == "embauché"
+        )
+    ).one()
+    
+    return (total_hired / total_shortlists * 100) if total_shortlists > 0 else None
+
+
+def calculate_feedbacks_on_time_rate(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Feedbacks fournis à temps: Pourcentage de feedbacks transmis dans les délais"""
+    # Délai cible: 2 jours après l'entretien
+    TARGET_DAYS = 2
+    
+    total_feedbacks = session.exec(
+        select(func.count(Interview.id)).where(
+            Interview.feedback_provided_at.isnot(None),
+            Interview.scheduled_at.isnot(None)
+        )
+    ).one()
+    
+    if total_feedbacks == 0:
+        return None
+    
+    on_time_count = 0
+    interviews = session.exec(
+        select(Interview).where(
+            Interview.feedback_provided_at.isnot(None),
+            Interview.scheduled_at.isnot(None)
+        )
+    ).all()
+    
+    for interview in interviews:
+        delay = (interview.feedback_provided_at - interview.scheduled_at).total_seconds() / 86400
+        if delay <= TARGET_DAYS:
+            on_time_count += 1
+    
+    return (on_time_count / total_feedbacks * 100) if total_feedbacks > 0 else None
+
+
+def calculate_performance_per_source(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Performance par source: Pourcentage d'embauches générées par chaque source"""
+    if not filters.source:
+        return None
+    
+    # Candidats de cette source
+    candidates = session.exec(
+        select(Candidate.id).where(Candidate.source == filters.source)
+    ).all()
+    
+    if not candidates:
+        return None
+    
+    # Applications de ces candidats
+    applications = session.exec(
+        select(Application.id).where(Application.candidate_id.in_(candidates))
+    ).all()
+    
+    if not applications:
+        return None
+    
+    # Embauchés parmi ces applications
+    hired = session.exec(
+        select(func.count(Application.id)).where(
+            Application.id.in_(applications),
+            Application.status == "embauché"
+        )
+    ).one()
+    
+    return (hired / len(applications) * 100) if applications else None
+
+
+def calculate_conversion_rate_per_source(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Taux de conversion par source: Conversion candidats sourcés vers embauche"""
+    if not filters.source:
+        return None
+    
+    total_sourced = session.exec(
+        select(func.count(Candidate.id)).where(Candidate.source == filters.source)
+    ).one()
+    
+    if total_sourced == 0:
+        return None
+    
+    # Candidats de cette source embauchés
+    candidates = session.exec(
+        select(Candidate.id).where(Candidate.source == filters.source)
+    ).all()
+    
+    hired = session.exec(
+        select(func.count(Application.id)).where(
+            Application.candidate_id.in_(candidates),
+            Application.status == "embauché"
+        )
+    ).one()
+    
+    return (hired / total_sourced * 100) if total_sourced > 0 else None
+
+
+def calculate_average_sourcing_time(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Temps moyen de sourcing: Durée moyenne de la phase de sourcing"""
+    # Approximation: temps entre création du candidat et première application
+    statement = select(
+        func.avg(
+            func.extract('epoch', Application.created_at - Candidate.created_at) / 86400
+        )
+    ).select_from(Application).join(Candidate, Application.candidate_id == Candidate.id)
+    
+    if filters.source:
+        statement = statement.where(Candidate.source == filters.source)
+    if filters.recruiter_id:
+        statement = statement.where(Candidate.created_by == filters.recruiter_id)
+    
+    result = session.exec(statement).one()
+    return float(result) if result else None
+
+
+def calculate_average_onboarding_delay(session: Session, filters: KPIFilters) -> Optional[float]:
+    """Délai moyen d'onboarding: Durée entre début onboarding et prise de poste"""
+    # Utiliser onboarding_completed_at - offer_accepted_at comme approximation
+    statement = select(
+        func.avg(
+            func.extract('epoch', Application.onboarding_completed_at - Application.offer_accepted_at) / 86400
+        )
+    ).where(
+        Application.onboarding_completed_at.isnot(None),
+        Application.offer_accepted_at.isnot(None)
+    )
+    
+    if filters.recruiter_id:
+        statement = statement.where(Application.created_by == filters.recruiter_id)
+    if filters.job_id:
+        statement = statement.where(Application.job_id == filters.job_id)
+    
+    result = session.exec(statement).one()
+    return float(result) if result else None
+
+
 # ==================== ENDPOINTS KPI MANAGER ====================
 
 @router.get("/manager", response_model=ManagerKPIs)
@@ -214,12 +572,24 @@ def get_manager_kpis(
     time_to_fill = calculate_time_to_fill(session, filters)
     
     # Taux candidats qualifiés: (Nb qualifiés / Nb candidats sourcés) x100
-    total_sourced = session.exec(
-        select(func.count(Candidate.id)).where(Candidate.status == "sourcé")
-    ).one()
-    total_qualified = session.exec(
-        select(func.count(Candidate.id)).where(Candidate.status == "qualifié")
-    ).one()
+    sourced_query = select(func.count(Candidate.id)).where(Candidate.status == "sourcé")
+    qualified_query = select(func.count(Candidate.id)).where(Candidate.status == "qualifié")
+    
+    if filters.recruiter_id:
+        sourced_query = sourced_query.where(Candidate.created_by == filters.recruiter_id)
+        qualified_query = qualified_query.where(Candidate.created_by == filters.recruiter_id)
+    if filters.source:
+        sourced_query = sourced_query.where(Candidate.source == filters.source)
+        qualified_query = qualified_query.where(Candidate.source == filters.source)
+    if filters.start_date:
+        sourced_query = sourced_query.where(Candidate.created_at >= filters.start_date)
+        qualified_query = qualified_query.where(Candidate.created_at >= filters.start_date)
+    if filters.end_date:
+        sourced_query = sourced_query.where(Candidate.created_at <= filters.end_date)
+        qualified_query = qualified_query.where(Candidate.created_at <= filters.end_date)
+    
+    total_sourced = session.exec(sourced_query).one()
+    total_qualified = session.exec(qualified_query).one()
     qualified_rate = (total_qualified / total_sourced * 100) if total_sourced > 0 else None
     
     # Taux acceptation offre: (Nb acceptations / Nb offres envoyées) x100
@@ -279,21 +649,61 @@ def get_manager_kpis(
     ).one()
     onboarding_success_rate = (total_onboarded / total_hired * 100) if total_hired > 0 else None
     
+    # Calculer tous les KPIs supplémentaires
+    avg_cycle_per_stage = calculate_average_cycle_per_stage(session, filters)
+    avg_feedback_delay = calculate_average_feedback_delay(session, filters)
+    pct_jobs_on_time = calculate_percentage_jobs_on_time(session, filters)
+    rejection_rate = calculate_rejection_rate_per_stage(session, filters)
+    no_show_rate = calculate_no_show_rate(session, filters)
+    turnover_rate = calculate_turnover_rate(session, filters)
+    avg_recruitment_cost = calculate_average_recruitment_cost(session, filters)
+    cost_per_source = calculate_cost_per_source(session, filters)
+    budget_spent_vs_planned = calculate_budget_spent_vs_planned(session, filters)
+    candidate_response_rate = calculate_candidate_response_rate(session, filters)
+    recruiter_success_rate = calculate_recruiter_success_rate(session, filters.recruiter_id) if filters.recruiter_id else None
+    avg_time_per_stage = calculate_average_cycle_per_stage(session, filters)  # Même calcul
+    feedbacks_on_time = calculate_feedbacks_on_time_rate(session, filters)
+    performance_per_source = calculate_performance_per_source(session, filters)
+    conversion_rate_per_source = calculate_conversion_rate_per_source(session, filters)
+    avg_sourcing_time = calculate_average_sourcing_time(session, filters)
+    avg_onboarding_delay = calculate_average_onboarding_delay(session, filters)
+    
+    # Appliquer les filtres aux comptages de base
+    candidate_query = select(func.count(Candidate.id))
+    if filters.recruiter_id:
+        candidate_query = candidate_query.where(Candidate.created_by == filters.recruiter_id)
+    if filters.source:
+        candidate_query = candidate_query.where(Candidate.source == filters.source)
+    if filters.start_date:
+        candidate_query = candidate_query.where(Candidate.created_at >= filters.start_date)
+    if filters.end_date:
+        candidate_query = candidate_query.where(Candidate.created_at <= filters.end_date)
+    total_candidates_sourced = session.exec(candidate_query).one()
+    
+    interview_query = select(func.count(Interview.id))
+    if filters.recruiter_id:
+        interview_query = interview_query.where(Interview.created_by == filters.recruiter_id)
+    if filters.start_date:
+        interview_query = interview_query.where(Interview.created_at >= filters.start_date)
+    if filters.end_date:
+        interview_query = interview_query.where(Interview.created_at <= filters.end_date)
+    total_interviews = session.exec(interview_query).one()
+    
     return {
         "time_process": {
             "time_to_hire": time_to_hire,
             "time_to_fill": time_to_fill,
-            "average_cycle_per_stage": None,  # Nécessite ApplicationHistory pour calculer
-            "average_feedback_delay": None,  # Nécessite ApplicationHistory
-            "percentage_jobs_on_time": None  # Nécessite un délai cible configuré
+            "average_cycle_per_stage": avg_cycle_per_stage,
+            "average_feedback_delay": avg_feedback_delay,
+            "percentage_jobs_on_time": pct_jobs_on_time
         },
         "quality_selection": {
             "qualified_candidates_rate": qualified_rate,
-            "rejection_rate_per_stage": None,  # Nécessite ApplicationHistory
+            "rejection_rate_per_stage": rejection_rate,
             "shortlist_acceptance_rate": shortlist_acceptance_rate,
             "average_candidate_score": average_candidate_score,
-            "no_show_rate": None,  # Nécessite un champ dans Interview
-            "turnover_rate_post_onboarding": None  # Nécessite un suivi post-embauche
+            "no_show_rate": no_show_rate,
+            "turnover_rate_post_onboarding": turnover_rate
         },
         "volume_productivity": {
             "total_candidates_sourced": total_candidates_sourced,
@@ -302,29 +712,29 @@ def get_manager_kpis(
             "total_interviews_conducted": total_interviews
         },
         "cost_budget": {
-            "average_recruitment_cost": None,  # Nécessite un champ coût
-            "cost_per_source": None,  # Nécessite un champ coût
-            "budget_spent_vs_planned": None  # Nécessite budget prévu vs dépensé
+            "average_recruitment_cost": avg_recruitment_cost,
+            "cost_per_source": cost_per_source,
+            "budget_spent_vs_planned": budget_spent_vs_planned
         },
         "engagement_satisfaction": {
             "offer_acceptance_rate": offer_acceptance_rate,
             "offer_rejection_rate": offer_rejection_rate,
-            "candidate_response_rate": None  # Nécessite un suivi des messages
+            "candidate_response_rate": candidate_response_rate
         },
         "recruiter_performance": {
             "jobs_managed": open_jobs,
-            "success_rate": None,  # (Nb embauches / Nb shortlist) x100
-            "average_time_per_stage": None,  # Nécessite ApplicationHistory
-            "feedbacks_on_time_rate": None  # Nécessite un délai cible
+            "success_rate": recruiter_success_rate,
+            "average_time_per_stage": avg_time_per_stage,
+            "feedbacks_on_time_rate": feedbacks_on_time
         },
         "source_channel": {
-            "performance_per_source": None,  # Nécessite groupement par source
-            "conversion_rate_per_source": None,  # Nécessite groupement par source
-            "average_sourcing_time": None  # Nécessite ApplicationHistory
+            "performance_per_source": performance_per_source,
+            "conversion_rate_per_source": conversion_rate_per_source,
+            "average_sourcing_time": avg_sourcing_time
         },
         "onboarding": {
             "onboarding_success_rate": onboarding_success_rate,
-            "average_onboarding_delay": None,  # Date prise poste - Date début onboarding
+            "average_onboarding_delay": avg_onboarding_delay,
             "post_integration_issues_count": 0  # Nécessite un suivi des incidents
         }
     }

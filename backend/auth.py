@@ -83,27 +83,41 @@ def get_user_by_email(email: str, session: Session) -> Optional[User]:
 
 def authenticate_user(email: str, password: str, session: Session) -> Optional[User]:
     """Authentifie un utilisateur"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
+        logger.info(f"🔐 Tentative d'authentification pour l'email: {email}")
+        
         user = get_user_by_email(email, session)
         if not user:
+            logger.warning(f"❌ Utilisateur non trouvé pour l'email: {email}")
             return None
+        
+        logger.info(f"✅ Utilisateur trouvé: {user.email} (ID: {user.id}, Actif: {user.is_active})")
         
         # Vérifier que le password_hash existe
         if not user.password_hash:
+            logger.warning(f"❌ Aucun hash de mot de passe pour l'utilisateur: {email}")
             return None
         
-        if not verify_password(password, user.password_hash):
+        # Vérifier le mot de passe
+        password_valid = verify_password(password, user.password_hash)
+        if not password_valid:
+            logger.warning(f"❌ Mot de passe incorrect pour l'utilisateur: {email}")
             return None
+        
+        logger.info(f"✅ Mot de passe valide pour l'utilisateur: {email}")
         
         if not user.is_active:
+            logger.warning(f"❌ Utilisateur inactif: {email}")
             return None
         
+        logger.info(f"✅ Authentification réussie pour l'utilisateur: {email}")
         return user
     except Exception as e:
         # Logger l'erreur pour le débogage
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Erreur lors de l'authentification: {str(e)}", exc_info=True)
+        logger.error(f"❌ Erreur lors de l'authentification pour {email}: {str(e)}", exc_info=True)
         # Retourner None en cas d'erreur pour ne pas exposer les détails
         return None
 
