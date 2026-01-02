@@ -3,12 +3,40 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, FileText, Tag, Mail, Phone, Calendar, User, Eye, Briefcase, Award, MapPin, GraduationCap, Languages, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { ArrowLeft, FileText, Tag, Mail, Phone, Calendar, User, Eye, Briefcase, Award, MapPin, GraduationCap, Languages, CheckCircle, XCircle, Clock, Download, X, Maximize2 } from 'lucide-react'
 import { getCandidate, CandidateResponse } from '@/lib/api'
 import { authenticatedFetch } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Détection automatique de l'URL de l'API
+function getApiUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL
+  }
+  
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    const protocol = window.location.protocol
+    
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:8000'
+    }
+    
+    if (protocol === 'https:' || hostname.includes('ngrok') || hostname.includes('cloudflare') || hostname.includes('tunnel')) {
+      const tunnelBackendUrl = sessionStorage.getItem('TUNNEL_BACKEND_URL')
+      if (tunnelBackendUrl) {
+        return tunnelBackendUrl
+      }
+      return `${protocol}//${hostname.replace(':3000', ':8000').replace(':3001', ':8000')}`
+    }
+    
+    return `http://${hostname}:8000`
+  }
+  
+  return 'http://localhost:8000'
+}
+
+const API_URL = getApiUrl()
 
 export default function ClientCandidateDetailPage() {
   const params = useParams()
@@ -18,7 +46,7 @@ export default function ClientCandidateDetailPage() {
   const [candidate, setCandidate] = useState<CandidateResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showCvPreview, setShowCvPreview] = useState(false)
+  const [previewDocument, setPreviewDocument] = useState<{ url: string; name: string; type: string } | null>(null)
   const { error: showError } = useToastContext()
 
   useEffect(() => {
@@ -40,6 +68,70 @@ export default function ClientCandidateDetailPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Fonction pour obtenir le type de fichier
+  const getFileType = (filePath: string): string => {
+    const extension = filePath.split('.').pop()?.toLowerCase() || ''
+    if (['pdf'].includes(extension)) return 'pdf'
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension)) return 'image'
+    if (['doc', 'docx'].includes(extension)) return 'word'
+    return 'other'
+  }
+
+  // Fonction pour obtenir le nom du fichier
+  const getFileName = (filePath: string): string => {
+    return filePath.split('/').pop() || 'document'
+  }
+
+  // Fonction pour télécharger un fichier
+  const handleDownload = async (filePath: string, fileName: string) => {
+    try {
+      // Utiliser fetch directement avec le token pour télécharger le fichier
+      const token = localStorage.getItem('token')
+      const headers: HeadersInit = {}
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const response = await fetch(`${API_URL}${filePath}`, {
+        method: 'GET',
+        headers,
+      })
+      
+      if (!response.ok) {
+        throw new Error('Erreur lors du téléchargement')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors du téléchargement'
+      showError(errorMessage)
+    }
+  }
+
+  // Fonction pour ouvrir la prévisualisation
+  const handlePreview = (filePath: string, name: string) => {
+    const fileType = getFileType(filePath)
+    setPreviewDocument({
+      url: `${API_URL}${filePath}`,
+      name: name,
+      type: fileType
+    })
+  }
+
+  // Fonction pour fermer la prévisualisation
+  const closePreview = () => {
+    setPreviewDocument(null)
   }
 
   const getStatusBadge = (status: string | null) => {
@@ -165,25 +257,23 @@ export default function ClientCandidateDetailPage() {
                   <FileText className="w-5 h-5 mr-2 text-emerald-600" />
                   Curriculum Vitae
                 </h2>
-                <a
-                  href={`${API_URL}${candidate.cv_file_path}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  Voir le CV
-                </a>
-              </div>
-              {showCvPreview && candidate.cv_file_path && (
-                <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
-                  <iframe
-                    src={`${API_URL}${candidate.cv_file_path}`}
-                    className="w-full h-96"
-                    title="CV Preview"
-                  />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePreview(candidate.cv_file_path!, 'CV')}
+                    className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    Prévisualiser
+                  </button>
+                  <button
+                    onClick={() => handleDownload(candidate.cv_file_path!, getFileName(candidate.cv_file_path!))}
+                    className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Télécharger
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
@@ -250,15 +340,22 @@ export default function ClientCandidateDetailPage() {
                   <FileText className="w-5 h-5 mr-2 text-emerald-600" />
                   Lettre de motivation
                 </h2>
-                <a
-                  href={`${API_URL}${candidate.motivation_letter_file_path}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  Voir la lettre
-                </a>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePreview(candidate.motivation_letter_file_path!, 'Lettre de motivation')}
+                    className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    Prévisualiser
+                  </button>
+                  <button
+                    onClick={() => handleDownload(candidate.motivation_letter_file_path!, getFileName(candidate.motivation_letter_file_path!))}
+                    className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Télécharger
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -308,19 +405,44 @@ export default function ClientCandidateDetailPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Actions</h2>
             <div className="space-y-2">
               {candidate.cv_file_path && (
-                <a
-                  href={`${API_URL}${candidate.cv_file_path}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Télécharger le CV
-                </a>
+                <>
+                  <button
+                    onClick={() => handlePreview(candidate.cv_file_path!, 'CV')}
+                    className="flex items-center justify-center w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors mb-2"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    Prévisualiser le CV
+                  </button>
+                  <button
+                    onClick={() => handleDownload(candidate.cv_file_path!, getFileName(candidate.cv_file_path!))}
+                    className="flex items-center justify-center w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Télécharger le CV
+                  </button>
+                </>
+              )}
+              {candidate.motivation_letter_file_path && (
+                <>
+                  <button
+                    onClick={() => handlePreview(candidate.motivation_letter_file_path!, 'Lettre de motivation')}
+                    className="flex items-center justify-center w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors mt-2"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    Prévisualiser la lettre
+                  </button>
+                  <button
+                    onClick={() => handleDownload(candidate.motivation_letter_file_path!, getFileName(candidate.motivation_letter_file_path!))}
+                    className="flex items-center justify-center w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Télécharger la lettre
+                  </button>
+                </>
               )}
               <Link
                 href="/client/shortlist"
-                className="flex items-center justify-center w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center justify-center w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors mt-2"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Retour aux shortlists
@@ -329,6 +451,79 @@ export default function ClientCandidateDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal de prévisualisation */}
+      {previewDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4" onClick={closePreview}>
+          <div className="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* En-tête du modal */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <FileText className="w-5 h-5 mr-2 text-emerald-600" />
+                {previewDocument.name}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const link = document.createElement('a')
+                    link.href = previewDocument.url
+                    link.download = previewDocument.name
+                    link.click()
+                  }}
+                  className="flex items-center px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  title="Télécharger"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={closePreview}
+                  className="flex items-center px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  title="Fermer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Contenu de la prévisualisation */}
+            <div className="flex-1 overflow-auto p-4">
+              {previewDocument.type === 'pdf' && (
+                <iframe
+                  src={previewDocument.url}
+                  className="w-full h-full min-h-[600px] border border-gray-200 rounded-lg"
+                  title={previewDocument.name}
+                />
+              )}
+              {previewDocument.type === 'image' && (
+                <div className="flex items-center justify-center">
+                  <img
+                    src={previewDocument.url}
+                    alt={previewDocument.name}
+                    className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                  />
+                </div>
+              )}
+              {(previewDocument.type === 'word' || previewDocument.type === 'other') && (
+                <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center">
+                  <FileText className="w-16 h-16 text-gray-400 mb-4" />
+                  <p className="text-gray-600 mb-4">
+                    La prévisualisation n'est pas disponible pour ce type de fichier.
+                  </p>
+                  <a
+                    href={previewDocument.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    Ouvrir dans un nouvel onglet
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
