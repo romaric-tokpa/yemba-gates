@@ -144,11 +144,16 @@ export default function ManagerInterviewsPage() {
           console.warn('Erreur lors du chargement des entretiens:', err)
           return [] // Si l'API n'est pas accessible, retourner un tableau vide
         }),
-        getUsers().catch(() => []) // Si l'API n'est pas accessible, retourner un tableau vide
+        getUsers().catch((err) => {
+          console.error('❌ [ERROR] Erreur lors du chargement des utilisateurs:', err)
+          return [] // Si l'API n'est pas accessible, retourner un tableau vide
+        })
       ])
       
       setInterviews(Array.isArray(interviewsData) ? interviewsData : [])
-      setUsers(Array.isArray(usersData) ? usersData : [])
+      const usersArray = Array.isArray(usersData) ? usersData : []
+      setUsers(usersArray)
+      console.log('✅ [LOAD] Utilisateurs chargés:', usersArray.length, usersArray)
       
       // Charger les applications et candidats pour le formulaire
       try {
@@ -476,12 +481,27 @@ export default function ManagerInterviewsPage() {
   }
 
   const toggleParticipant = (userId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      participants: prev.participants?.includes(userId)
-        ? prev.participants.filter(id => id !== userId)
-        : [...(prev.participants || []), userId]
-    }))
+    setFormData(prev => {
+      // S'assurer que participants est toujours un tableau
+      const currentParticipants = Array.isArray(prev.participants) ? prev.participants : []
+      const isSelected = currentParticipants.includes(userId)
+      const newParticipants = isSelected
+        ? currentParticipants.filter(id => id !== userId)
+        : [...currentParticipants, userId]
+      
+      console.log('🔄 [TOGGLE PARTICIPANT]', {
+        userId,
+        isSelected,
+        before: currentParticipants,
+        after: newParticipants,
+        prevParticipants: prev.participants
+      })
+      
+      return {
+        ...prev,
+        participants: newParticipants
+      }
+    })
   }
 
   const addParticipantEmail = (email: string) => {
@@ -508,17 +528,36 @@ export default function ManagerInterviewsPage() {
 
   // Filtrer les utilisateurs pour la recherche de participants
   const filteredUsersForParticipants = useMemo(() => {
+    console.log('🔍 [FILTER] Filtrage des participants:', {
+      totalUsers: users.length,
+      searchQuery: participantSearchQuery,
+      users: users.map(u => ({ id: u.id, name: `${u.first_name} ${u.last_name}`, role: u.role, email: u.email }))
+    })
+    
     if (!participantSearchQuery.trim()) {
-      return users.filter(u => u.role === 'recruteur' || u.role === 'manager' || u.role === 'client')
+      const filtered = users.filter(u => {
+        const role = u.role?.toLowerCase()
+        const match = role === 'recruteur' || role === 'manager' || role === 'client' || role === 'recruiter' || role === 'administrateur' || role === 'admin'
+        if (!match) {
+          console.log('❌ [FILTER] Utilisateur exclu:', u.first_name, u.last_name, 'role:', u.role)
+        }
+        return match
+      })
+      console.log('✅ [FILTER] Utilisateurs filtrés (sans recherche):', filtered.length, filtered.map(u => `${u.first_name} ${u.last_name} (${u.role})`))
+      return filtered
     }
     
     const searchLower = participantSearchQuery.toLowerCase()
-    return users.filter(u => 
-      (u.role === 'recruteur' || u.role === 'manager' || u.role === 'client') &&
-      (u.first_name.toLowerCase().includes(searchLower) ||
-       u.last_name.toLowerCase().includes(searchLower) ||
-       u.email.toLowerCase().includes(searchLower))
-    )
+    const filtered = users.filter(u => {
+      const role = u.role?.toLowerCase()
+      const roleMatch = role === 'recruteur' || role === 'manager' || role === 'client' || role === 'recruiter' || role === 'administrateur' || role === 'admin'
+      const nameMatch = u.first_name?.toLowerCase().includes(searchLower) ||
+                       u.last_name?.toLowerCase().includes(searchLower) ||
+                       u.email?.toLowerCase().includes(searchLower)
+      return roleMatch && nameMatch
+    })
+    console.log('✅ [FILTER] Utilisateurs filtrés (avec recherche):', filtered.length, filtered.map(u => `${u.first_name} ${u.last_name} (${u.role})`))
+    return filtered
   }, [participantSearchQuery, users])
 
   const handleAddFeedback = async (e: React.FormEvent) => {
@@ -1256,54 +1295,169 @@ export default function ManagerInterviewsPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Participants additionnels
                     </label>
+                    
+                    {/* Recherche de participants */}
+                    <div className="mb-3">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="text"
+                          value={participantSearchQuery}
+                          onChange={(e) => setParticipantSearchQuery(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter' && participantSearchQuery.includes('@')) {
+                              e.preventDefault()
+                              addParticipantEmail(participantSearchQuery)
+                            }
+                          }}
+                          placeholder="Rechercher par nom, prénom, email ou entrer un email..."
+                          className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white text-sm"
+                        />
+                      </div>
+                      {participantSearchQuery && participantSearchQuery.includes('@') && !formData.participantEmails?.includes(participantSearchQuery.trim()) && (
+                        <button
+                          type="button"
+                          onClick={() => addParticipantEmail(participantSearchQuery)}
+                          className="mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          + Ajouter l'email "{participantSearchQuery}"
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Liste des utilisateurs filtrés */}
                     <div className="border-2 border-gray-200 rounded-xl p-4 max-h-48 overflow-y-auto bg-gray-50">
                       {users.length === 0 ? (
-                        <p className="text-sm text-gray-500">Aucun utilisateur disponible</p>
+                        <div className="text-center py-4">
+                          <p className="text-sm text-gray-500 mb-2">Aucun utilisateur disponible</p>
+                          <p className="text-xs text-gray-400">Vérifiez que les utilisateurs sont bien chargés</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              console.log('🔄 [RELOAD] Rechargement des utilisateurs...')
+                              loadData()
+                            }}
+                            className="mt-2 text-xs text-indigo-600 hover:text-indigo-800 underline"
+                          >
+                            Recharger
+                          </button>
+                        </div>
+                      ) : filteredUsersForParticipants.length === 0 ? (
+                        <div className="text-center py-4">
+                          <p className="text-sm text-gray-500 mb-2">Aucun utilisateur trouvé</p>
+                          <p className="text-xs text-gray-400">
+                            {participantSearchQuery ? `Aucun résultat pour "${participantSearchQuery}"` : 'Aucun utilisateur avec les rôles recruteur, manager ou client'}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Total utilisateurs chargés: {users.length}
+                          </p>
+                          <details className="mt-2 text-left">
+                            <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                              Voir tous les utilisateurs ({users.length})
+                            </summary>
+                            <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                              {users.map(u => (
+                                <div key={u.id} className="text-xs text-gray-600 p-1 bg-white rounded">
+                                  {u.first_name} {u.last_name} ({u.role}) - {u.email}
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        </div>
                       ) : (
                         <div className="space-y-2">
-                          {users.map((user) => (
-                            <label
-                              key={user.id}
-                              className="flex items-center gap-3 p-3 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-indigo-200"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={formData.participants?.includes(user.id) || false}
-                                onChange={() => toggleParticipant(user.id)}
-                                className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
-                              />
-                              <div className="flex-1">
-                                <div className="font-medium text-gray-900">
-                                  {user.first_name} {user.last_name}
+                          {filteredUsersForParticipants.map((user) => {
+                            const isSelected = Array.isArray(formData.participants) && formData.participants.includes(user.id)
+                            return (
+                              <div
+                                key={user.id}
+                                className={`flex items-center gap-3 p-3 hover:bg-white rounded-lg cursor-pointer transition-colors border ${
+                                  isSelected ? 'border-indigo-300 bg-indigo-50' : 'border-transparent hover:border-indigo-200'
+                                }`}
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  console.log('🔄 [CLICK LABEL] Participant:', user.id, user.first_name, user.last_name, 'Current state:', formData.participants)
+                                  toggleParticipant(user.id)
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    e.stopPropagation()
+                                    console.log('🔄 [TOGGLE CHECKBOX] Participant:', user.id, user.first_name, user.last_name, 'Current state:', formData.participants)
+                                    toggleParticipant(user.id)
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                  }}
+                                  className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer pointer-events-none"
+                                />
+                                <div className="flex-1 pointer-events-none">
+                                  <div className="font-medium text-gray-900">
+                                    {user.first_name} {user.last_name}
+                                  </div>
+                                  <div className="text-xs text-gray-500">{user.email} • {user.role}</div>
                                 </div>
-                                <div className="text-xs text-gray-500">{user.email} • {user.role}</div>
                               </div>
-                            </label>
-                          ))}
+                            )
+                          })}
                         </div>
                       )}
                     </div>
-                    {formData.participants && formData.participants.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {formData.participants.map((userId) => {
-                          const user = users.find(u => u.id === userId)
-                          return user ? (
+                    
+                    {/* Participants sélectionnés */}
+                    {((Array.isArray(formData.participants) && formData.participants.length > 0) || (Array.isArray(formData.participantEmails) && formData.participantEmails.length > 0)) ? (
+                      <div className="mt-3">
+                        <p className="text-xs text-gray-600 mb-2 font-medium">Participants sélectionnés :</p>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.isArray(formData.participants) && formData.participants.map((userId) => {
+                            const user = users.find(u => u.id === userId)
+                            return user ? (
+                              <span
+                                key={userId}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-100 text-indigo-800 text-sm rounded-lg font-medium"
+                              >
+                                {user.first_name} {user.last_name} ({user.role})
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    console.log('❌ [REMOVE] Participant:', userId)
+                                    toggleParticipant(userId)
+                                  }}
+                                  className="hover:text-indigo-900 transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </span>
+                            ) : null
+                          })}
+                          {Array.isArray(formData.participantEmails) && formData.participantEmails.map((email) => (
                             <span
-                              key={userId}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-100 text-indigo-800 text-sm rounded-lg font-medium"
+                              key={email}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-800 text-sm rounded-lg font-medium"
                             >
-                              {user.first_name} {user.last_name}
+                              {email}
                               <button
                                 type="button"
-                                onClick={() => toggleParticipant(userId)}
-                                className="hover:text-indigo-900"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  e.preventDefault()
+                                  removeParticipantEmail(email)
+                                }}
+                                className="hover:text-green-900 transition-colors"
                               >
                                 <X className="w-4 h-4" />
                               </button>
                             </span>
-                          ) : null
-                        })}
+                          ))}
+                        </div>
                       </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-gray-500">Aucun participant sélectionné</p>
                     )}
                   </div>
                 </div>

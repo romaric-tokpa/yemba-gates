@@ -77,6 +77,12 @@ export interface JobResponse {
   validated_at: string | null
   created_at: string
   updated_at: string
+  // Champs pour le comparatif
+  competences_techniques_obligatoires?: string[] | null
+  competences_techniques_souhaitees?: string[] | null
+  experience_requise?: number | null
+  niveau_formation?: string | null
+  langues_requises?: string | null
   [key: string]: any
 }
 
@@ -921,6 +927,106 @@ export async function getClientJobRequests(): Promise<JobResponse[]> {
   return response.json()
 }
 
+export interface JobResponseWithCreator extends JobResponse {
+  created_by_name?: string | null
+  created_by_email?: string | null
+  created_by_role?: string | null
+}
+
+export async function getPendingApprovalJobs(): Promise<JobResponseWithCreator[]> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/pending-approval`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('Accès refusé. Réservé aux Managers.')
+    }
+    if (response.status === 401) {
+      return []
+    }
+    throw new Error('Erreur lors de la récupération des besoins en attente d\'approbation')
+  }
+
+  return response.json()
+}
+
+export async function updateJobStatus(jobId: string, newStatus: string): Promise<JobResponse> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}/status?new_status=${encodeURIComponent(newStatus)}`, {
+    method: 'PATCH',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour du statut' }))
+    throw new Error(error.detail || 'Erreur lors de la mise à jour du statut')
+  }
+
+  return response.json()
+}
+
+export async function archiveJob(jobId: string): Promise<JobResponse> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}/archive`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'archivage' }))
+    throw new Error(error.detail || 'Erreur lors de l\'archivage')
+  }
+
+  return response.json()
+}
+
+export async function markJobAsWon(jobId: string): Promise<JobResponse> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}/mark-won`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors du marquage comme gagné' }))
+    throw new Error(error.detail || 'Erreur lors du marquage comme gagné')
+  }
+
+  return response.json()
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression')
+  }
+}
+
+export interface DeletedJobItem {
+  job_id: string
+  title: string | null
+  deleted_by: string
+  deleted_by_name: string
+  deleted_at: string
+  last_status: string | null
+  department: string | null
+  created_at: string | null
+}
+
+export async function getDeletedJobs(): Promise<DeletedJobItem[]> {
+  const response = await authenticatedFetch(`${API_URL}/history/deleted-jobs`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      return []
+    }
+    throw new Error('Erreur lors de la récupération des besoins supprimés')
+  }
+
+  return response.json()
+}
+
 export interface JobHistoryItem {
   id: string
   job_id: string
@@ -1101,28 +1207,39 @@ export interface UserCreateResponse {
 }
 
 export async function getUsers(): Promise<UserResponse[]> {
-  // Essayer d'abord l'endpoint admin, puis l'endpoint manager
+  // Essayer d'abord l'endpoint admin, puis l'endpoint auth (accessible aux recruteurs, managers et administrateurs)
   let response = await authenticatedFetch(`${API_URL}/admin/users`, {
     method: 'GET',
   })
 
-  // Si accès refusé (403), essayer l'endpoint manager
-  if (response.status === 403) {
-    response = await authenticatedFetch(`${API_URL}/users/by-manager`, {
+  // Si accès refusé (403) ou non trouvé (404), essayer l'endpoint auth
+  if (response.status === 403 || response.status === 404) {
+    console.log('🔄 [GET_USERS] Tentative avec /auth/users')
+    response = await authenticatedFetch(`${API_URL}/auth/users`, {
       method: 'GET',
     })
   }
 
   if (!response.ok) {
     if (response.status === 403) {
-      throw new Error('Accès refusé. Réservé aux Administrateurs ou Managers.')
+      // Ne pas lever d'erreur, retourner un tableau vide pour permettre à l'application de continuer
+      console.warn('⚠️ [GET_USERS] Accès refusé à tous les endpoints. Retour d\'un tableau vide.')
+      return []
     }
-    throw new Error('Erreur lors de la récupération des utilisateurs')
+    if (response.status === 404) {
+      console.warn('⚠️ [GET_USERS] Endpoint non trouvé. Retour d\'un tableau vide.')
+      return []
+    }
+    const errorText = await response.text().catch(() => 'Erreur inconnue')
+    console.error('❌ [GET_USERS] Erreur:', response.status, errorText)
+    // Retourner un tableau vide plutôt que de lever une erreur
+    return []
   }
 
   const users = await response.json()
+  console.log('✅ [GET_USERS] Utilisateurs récupérés:', Array.isArray(users) ? users.length : 0)
   // Normaliser la réponse pour correspondre à UserResponse
-  return users.map((user: any) => ({
+  const normalizedUsers = Array.isArray(users) ? users.map((user: any) => ({
     id: user.id,
     email: user.email,
     first_name: user.first_name,
@@ -1133,7 +1250,9 @@ export async function getUsers(): Promise<UserResponse[]> {
     is_active: user.is_active !== undefined ? user.is_active : true,
     created_at: user.created_at,
     updated_at: user.updated_at || user.created_at,
-  }))
+  })) : []
+  
+  return normalizedUsers
 }
 
 export async function getUsersByManager(): Promise<UserCreateResponse[]> {
