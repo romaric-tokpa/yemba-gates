@@ -1,7 +1,7 @@
 import { authenticatedFetch } from './auth'
 
 // Détection automatique de l'URL de l'API
-function getApiUrl(): string {
+export function getApiUrl(): string {
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL
   }
@@ -339,7 +339,7 @@ export async function createJob(jobData: JobCreate): Promise<JobResponse> {
 
 export async function parseJobDescription(jobDescriptionFile: File): Promise<JobCreate> {
   const formData = new FormData()
-  formData.append('file', jobDescriptionFile)
+  formData.append('job_description_file', jobDescriptionFile)
 
   const response = await authenticatedFetch(`${API_URL}/jobs/parse-job-description`, {
     method: 'POST',
@@ -355,8 +355,52 @@ export async function parseJobDescription(jobDescriptionFile: File): Promise<Job
       }
       throw new Error('Session expirée. Veuillez vous reconnecter.')
     }
-    const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'analyse de la fiche de poste' }))
-    throw new Error(error.detail || 'Erreur lors de l\'analyse de la fiche de poste')
+    let errorMessage = 'Erreur lors de l\'analyse de la fiche de poste'
+    try {
+      // Fonction helper pour convertir n'importe quelle valeur en string
+      const toString = (value: any): string => {
+        if (value === null || value === undefined) {
+          return ''
+        }
+        if (typeof value === 'string') {
+          return value
+        }
+        if (typeof value === 'object') {
+          try {
+            return JSON.stringify(value)
+          } catch {
+            return String(value)
+          }
+        }
+        return String(value)
+      }
+      
+      // Vérifier si la réponse contient du JSON
+      const contentType = response.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json()
+        if (typeof error === 'string') {
+          errorMessage = error
+        } else if (error && typeof error === 'object') {
+          // Essayer detail, puis message, puis convertir l'objet entier
+          const detail = error.detail ? toString(error.detail) : ''
+          const message = error.message ? toString(error.message) : ''
+          errorMessage = detail || message || toString(error)
+        }
+      } else {
+        // Si ce n'est pas du JSON, essayer de lire le texte
+        const text = await response.text()
+        errorMessage = text || `Erreur ${response.status}: ${response.statusText || 'Erreur lors de l\'analyse de la fiche de poste'}`
+      }
+    } catch (e) {
+      // Si le parsing échoue, utiliser le message par défaut
+      errorMessage = `Erreur ${response.status}: ${response.statusText || 'Erreur lors de l\'analyse de la fiche de poste'}`
+    }
+    // S'assurer que errorMessage est toujours une string valide
+    if (!errorMessage || typeof errorMessage !== 'string') {
+      errorMessage = 'Erreur lors de l\'analyse de la fiche de poste'
+    }
+    throw new Error(errorMessage)
   }
 
   return response.json()
@@ -1340,4 +1384,158 @@ export async function markAllAsRead(): Promise<void> {
     const error = await response.json().catch(() => ({ detail: 'Erreur lors du marquage de toutes les notifications' }))
     throw new Error(error.detail || 'Erreur lors du marquage de toutes les notifications')
   }
+}
+
+// ===== DEMANDES D'ENTRETIEN CLIENT =====
+
+export interface AvailabilitySlot {
+  date: string  // Format: YYYY-MM-DD
+  start_time: string  // Format: HH:MM
+  end_time: string  // Format: HH:MM
+}
+
+export interface ClientInterviewRequestCreate {
+  application_id: string
+  availability_slots: AvailabilitySlot[]
+  notes?: string
+}
+
+export interface ClientInterviewRequestResponse {
+  id: string
+  application_id: string
+  client_id: string
+  client_name: string
+  availability_slots: AvailabilitySlot[]
+  notes: string | null
+  status: 'pending' | 'scheduled' | 'cancelled'
+  scheduled_interview_id: string | null
+  candidate_name: string
+  job_title: string
+  job_id: string
+  created_at: string
+  updated_at: string
+}
+
+export async function createClientInterviewRequest(
+  data: ClientInterviewRequestCreate
+): Promise<ClientInterviewRequestResponse> {
+  const response = await authenticatedFetch(`${API_URL}/client-interview-requests/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la création de la demande' }))
+    throw new Error(error.detail || 'Erreur lors de la création de la demande')
+  }
+
+  return response.json()
+}
+
+export async function getClientInterviewRequests(
+  statusFilter?: string
+): Promise<ClientInterviewRequestResponse[]> {
+  const queryParams = new URLSearchParams()
+  if (statusFilter) {
+    queryParams.append('status_filter', statusFilter)
+  }
+
+  const queryString = queryParams.toString()
+  const url = queryString 
+    ? `${API_URL}/client-interview-requests/?${queryString}`
+    : `${API_URL}/client-interview-requests/`
+
+  const response = await authenticatedFetch(url, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    throw new Error('Erreur lors de la récupération des demandes')
+  }
+
+  return response.json()
+}
+
+export async function getClientInterviewRequest(
+  requestId: string
+): Promise<ClientInterviewRequestResponse> {
+  const response = await authenticatedFetch(`${API_URL}/client-interview-requests/${requestId}`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération de la demande' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération de la demande')
+  }
+
+  return response.json()
+}
+
+export async function scheduleClientInterview(
+  requestId: string,
+  interviewId: string
+): Promise<ClientInterviewRequestResponse> {
+  const response = await authenticatedFetch(`${API_URL}/client-interview-requests/${requestId}/schedule`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ interview_id: interviewId }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la programmation de l\'entretien' }))
+    throw new Error(error.detail || 'Erreur lors de la programmation de l\'entretien')
+  }
+
+  return response.json()
+}
+
+// ===== LOGS DE SÉCURITÉ =====
+
+export interface SecurityLogResponse {
+  id: string
+  user_id: string | null
+  user_email: string | null
+  user_name: string | null
+  action: string
+  ip_address: string | null
+  user_agent: string | null
+  success: boolean
+  details: string | null
+  created_at: string
+}
+
+export async function getSecurityLogs(params?: {
+  user_id?: string
+  action?: string
+  skip?: number
+  limit?: number
+}): Promise<SecurityLogResponse[]> {
+  const queryParams = new URLSearchParams()
+  if (params?.user_id) queryParams.append('user_id', params.user_id)
+  if (params?.action) queryParams.append('action', params.action)
+  if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString())
+  if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString())
+
+  const queryString = queryParams.toString()
+  const url = queryString 
+    ? `${API_URL}/admin/security-logs?${queryString}`
+    : `${API_URL}/admin/security-logs`
+
+  const response = await authenticatedFetch(url, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('Accès refusé. Réservé aux administrateurs.')
+    }
+    throw new Error('Erreur lors de la récupération des logs de sécurité')
+  }
+
+  return response.json()
 }

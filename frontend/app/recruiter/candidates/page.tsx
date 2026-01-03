@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createCandidate, getCandidates, CandidateResponse, CandidateCreate, uploadCandidatePhoto, parseCv, getJobs, JobResponse, createApplication } from '@/lib/api'
+import { getCandidatePhotoUrl } from '@/lib/imageUtils'
 import { getToken, isAuthenticated } from '@/lib/auth'
 import { 
   Plus, X, Upload, Tag, Mail, Phone, Search, List, LayoutGrid, Image as ImageIcon, 
@@ -417,22 +418,29 @@ export default function RecruiterCandidatesPage() {
         <div className="p-6">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div className="flex items-start gap-3 flex-1 min-w-0">
-              {candidate.profile_picture_url || candidate.photo_url ? (
-                <img
-                  src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${candidate.profile_picture_url || candidate.photo_url}`}
-                  alt={`${candidate.first_name} ${candidate.last_name}`}
-                  className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 group-hover:border-blue-300 transition-colors flex-shrink-0"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement
-                    target.style.display = 'none'
-                    const parent = target.parentElement
-                    if (parent) {
-                      const fallback = parent.querySelector('.photo-fallback') as HTMLElement
-                      if (fallback) fallback.style.display = 'flex'
-                    }
-                  }}
-                />
-              ) : null}
+              {(() => {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+                const photoUrl = getCandidatePhotoUrl(candidate, apiUrl)
+                if (photoUrl) {
+                  return (
+                    <img
+                      src={photoUrl}
+                      alt={`${candidate.first_name} ${candidate.last_name}`}
+                      className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 group-hover:border-blue-300 transition-colors flex-shrink-0"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.style.display = 'none'
+                        const parent = target.parentElement
+                        if (parent) {
+                          const fallback = parent.querySelector('.photo-fallback') as HTMLElement
+                          if (fallback) fallback.style.display = 'flex'
+                        }
+                      }}
+                    />
+                  )
+                }
+                return null
+              })()}
               <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-2 border-gray-200 group-hover:border-blue-300 transition-colors flex-shrink-0 ${candidate.profile_picture_url || candidate.photo_url ? 'hidden photo-fallback' : ''}`}>
                 <span className="text-white font-semibold text-lg">
                   {candidate.first_name[0]}{candidate.last_name[0]}

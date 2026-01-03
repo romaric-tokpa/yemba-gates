@@ -14,6 +14,8 @@ import {
   getCandidateApplications,
   getJobs,
   createApplication,
+  getClientInterviewRequests,
+  scheduleClientInterview,
   InterviewResponse,
   InterviewCreate,
   InterviewUpdate,
@@ -21,7 +23,8 @@ import {
   ApplicationResponse,
   CandidateResponse,
   UserResponse,
-  JobResponse
+  JobResponse,
+  ClientInterviewRequestResponse
 } from '@/lib/api'
 import { getToken, isAuthenticated, getCurrentUser } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
@@ -59,10 +62,16 @@ export default function ManagerInterviewsPage() {
   const [candidates, setCandidates] = useState<CandidateResponse[]>([])
   const [users, setUsers] = useState<UserResponse[]>([])
   const [jobs, setJobs] = useState<JobResponse[]>([])
+  const [clientInterviewRequests, setClientInterviewRequests] = useState<ClientInterviewRequestResponse[]>([])
   const [selectedJobId, setSelectedJobId] = useState<string>('')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Modal pour programmer un entretien client
+  const [showScheduleClientInterviewModal, setShowScheduleClientInterviewModal] = useState(false)
+  const [selectedClientRequest, setSelectedClientRequest] = useState<ClientInterviewRequestResponse | null>(null)
+  const [selectedAvailabilitySlot, setSelectedAvailabilitySlot] = useState<{ date: string; start_time: string; end_time: string } | null>(null)
   
   // Vues
   const [viewMode, setViewMode] = useState<ViewMode>('calendar')
@@ -139,7 +148,7 @@ export default function ManagerInterviewsPage() {
         console.warn('Erreur lors de la récupération de l\'utilisateur connecté:', err)
       }
       
-      const [interviewsData, usersData] = await Promise.all([
+      const [interviewsData, usersData, clientRequestsData] = await Promise.all([
         getInterviews().catch((err) => {
           console.warn('Erreur lors du chargement des entretiens:', err)
           return [] // Si l'API n'est pas accessible, retourner un tableau vide
@@ -147,12 +156,14 @@ export default function ManagerInterviewsPage() {
         getUsers().catch((err) => {
           console.error('❌ [ERROR] Erreur lors du chargement des utilisateurs:', err)
           return [] // Si l'API n'est pas accessible, retourner un tableau vide
-        })
+        }),
+        getClientInterviewRequests('pending').catch(() => []) // Charger les demandes en attente
       ])
       
       setInterviews(Array.isArray(interviewsData) ? interviewsData : [])
       const usersArray = Array.isArray(usersData) ? usersData : []
       setUsers(usersArray)
+      setClientInterviewRequests(Array.isArray(clientRequestsData) ? clientRequestsData : [])
       console.log('✅ [LOAD] Utilisateurs chargés:', usersArray.length, usersArray)
       
       // Charger les applications et candidats pour le formulaire
@@ -333,6 +344,49 @@ export default function ManagerInterviewsPage() {
     } catch (err) {
       console.error('Erreur lors de la suppression:', err)
       showError('Erreur lors de la suppression de l\'entretien')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleScheduleClientInterview = async () => {
+    if (!selectedClientRequest || !selectedAvailabilitySlot) {
+      showError('Veuillez sélectionner un créneau de disponibilité')
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      
+      // Créer la date/heure de début et fin
+      const scheduledAt = new Date(`${selectedAvailabilitySlot.date}T${selectedAvailabilitySlot.start_time}`)
+      const scheduledEndAt = new Date(`${selectedAvailabilitySlot.date}T${selectedAvailabilitySlot.end_time}`)
+      
+      // Créer l'entretien
+      const interviewData: InterviewCreate = {
+        application_id: selectedClientRequest.application_id,
+        interview_type: 'client',
+        scheduled_at: scheduledAt.toISOString(),
+        scheduled_end_at: scheduledEndAt.toISOString(),
+        location: formData.location || undefined,
+        interviewer_id: selectedInterviewerId || currentUserId || undefined,
+        preparation_notes: formData.preparation_notes || undefined
+      }
+      
+      const newInterview = await createInterview(interviewData)
+      
+      // Lier la demande à l'entretien créé
+      await scheduleClientInterview(selectedClientRequest.id, newInterview.id)
+      
+      success('Entretien client programmé avec succès')
+      setShowScheduleClientInterviewModal(false)
+      setSelectedClientRequest(null)
+      setSelectedAvailabilitySlot(null)
+      resetForm()
+      loadData()
+    } catch (err: any) {
+      console.error('Erreur lors de la programmation:', err)
+      showError(err?.message || 'Erreur lors de la programmation de l\'entretien')
     } finally {
       setIsLoading(false)
     }
@@ -827,6 +881,105 @@ export default function ManagerInterviewsPage() {
             <p className="text-3xl font-bold text-gray-900">{interviews.length}</p>
           </div>
         </div>
+
+        {/* Section Demandes d'entretien client */}
+        {clientInterviewRequests.length > 0 && (
+          <div className="mb-8 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl shadow-xl border border-orange-200 overflow-hidden">
+            <div className="p-6 border-b border-orange-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-orange-100 rounded-xl">
+                    <MessageSquare className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Demandes d'entretien client</h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {clientInterviewRequests.length} demande{clientInterviewRequests.length > 1 ? 's' : ''} en attente de programmation
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                {clientInterviewRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="bg-white rounded-xl border-2 border-orange-200 p-6 hover:shadow-lg transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <h3 className="text-lg font-semibold text-gray-900">{request.candidate_name}</h3>
+                          <span className="px-3 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">
+                            En attente
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
+                          <Briefcase className="w-4 h-4" />
+                          <span>{request.job_title}</span>
+                          <span className="text-gray-400">•</span>
+                          <span>Client: {request.client_name}</span>
+                        </div>
+                        
+                        <div className="mb-4">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Disponibilités proposées par le client :</p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {request.availability_slots.map((slot, index) => (
+                              <div
+                                key={index}
+                                className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                                  selectedClientRequest?.id === request.id && 
+                                  selectedAvailabilitySlot?.date === slot.date &&
+                                  selectedAvailabilitySlot?.start_time === slot.start_time
+                                    ? 'border-blue-500 bg-blue-50'
+                                    : 'border-gray-200 bg-gray-50 hover:border-orange-300 hover:bg-orange-50'
+                                }`}
+                                onClick={() => {
+                                  setSelectedClientRequest(request)
+                                  setSelectedAvailabilitySlot(slot)
+                                  setShowScheduleClientInterviewModal(true)
+                                }}
+                              >
+                                <div className="font-medium text-sm text-gray-900">
+                                  {new Date(slot.date).toLocaleDateString('fr-FR', {
+                                    weekday: 'long',
+                                    day: 'numeric',
+                                    month: 'long'
+                                  })}
+                                </div>
+                                <div className="text-xs text-gray-600 mt-1">
+                                  {slot.start_time} - {slot.end_time}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {request.notes && (
+                          <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                            <p className="text-xs font-medium text-gray-700 mb-1">Notes du client</p>
+                            <p className="text-sm text-gray-600">{request.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedClientRequest(request)
+                          setSelectedAvailabilitySlot(request.availability_slots[0])
+                          setShowScheduleClientInterviewModal(true)
+                        }}
+                        className="ml-4 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm"
+                      >
+                        Programmer
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Contenu selon la vue */}
         {viewMode === 'calendar' ? (
@@ -1884,6 +2037,125 @@ export default function ManagerInterviewsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de programmation d'entretien client */}
+      {showScheduleClientInterviewModal && selectedClientRequest && selectedAvailabilitySlot && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-900">Programmer un entretien client</h3>
+                <button
+                  onClick={() => {
+                    setShowScheduleClientInterviewModal(false)
+                    setSelectedClientRequest(null)
+                    setSelectedAvailabilitySlot(null)
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm font-medium text-blue-900 mb-2">Candidat</p>
+                <p className="text-lg text-blue-800">{selectedClientRequest.candidate_name}</p>
+                <p className="text-sm text-blue-700 mt-1">{selectedClientRequest.job_title}</p>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-sm font-medium text-green-900 mb-2">Créneau sélectionné</p>
+                <p className="text-lg text-green-800">
+                  {new Date(selectedAvailabilitySlot.date).toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
+                </p>
+                <p className="text-sm text-green-700 mt-1">
+                  {selectedAvailabilitySlot.start_time} - {selectedAvailabilitySlot.end_time}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Interviewer principal *
+                </label>
+                <select
+                  value={selectedInterviewerId || currentUserId || ''}
+                  onChange={(e) => setSelectedInterviewerId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                >
+                  <option value="">Sélectionner un interviewer</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.first_name} {user.last_name} ({user.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Lieu / Lien visioconférence
+                </label>
+                <input
+                  type="text"
+                  value={formData.location || ''}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  placeholder="Lieu physique ou lien Zoom/Teams"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes de préparation
+                </label>
+                <textarea
+                  value={formData.preparation_notes || ''}
+                  onChange={(e) => setFormData({ ...formData, preparation_notes: e.target.value })}
+                  rows={4}
+                  placeholder="Notes pour préparer l'entretien..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              {selectedClientRequest.notes && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-xs font-medium text-gray-700 mb-1">Notes du client</p>
+                  <p className="text-sm text-gray-600">{selectedClientRequest.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowScheduleClientInterviewModal(false)
+                  setSelectedClientRequest(null)
+                  setSelectedAvailabilitySlot(null)
+                }}
+                disabled={isLoading}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleScheduleClientInterview}
+                disabled={isLoading || !(selectedInterviewerId || currentUserId)}
+                className="px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg hover:from-orange-700 hover:to-orange-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed font-semibold shadow-lg hover:shadow-xl transition-all"
+              >
+                {isLoading ? 'Programmation...' : 'Programmer l\'entretien'}
+              </button>
+            </div>
           </div>
         </div>
       )}

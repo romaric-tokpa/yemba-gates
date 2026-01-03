@@ -151,7 +151,7 @@ class Candidate(SQLModel, table=True):
     profile_title: str | None = Field(default=None, max_length=255)  # Titre du profil (ex: Développeur Fullstack)
     years_of_experience: int | None = Field(default=None)  # Nombre d'années d'expérience
     email: str | None = Field(default=None, max_length=255)
-    phone: str | None = Field(default=None, max_length=30)
+    phone: str | None = Field(default=None, max_length=100)
     cv_file_path: str | None = Field(default=None, max_length=500)
     profile_picture_url: str | None = Field(default=None, max_length=500)  # URL de la photo de profil
     # photo_url n'est pas mappé à la base de données, on utilise seulement profile_picture_url
@@ -408,4 +408,20 @@ class TeamMember(SQLModel, table=True):
     user: User = Relationship(sa_relationship_kwargs={"lazy": "select"})
 
 
-
+class ClientInterviewRequest(SQLModel, table=True):
+    """Modèle pour les demandes d'entretien client avec disponibilités"""
+    __tablename__ = "client_interview_requests"
+    
+    id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
+    application_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE")))
+    client_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")))
+    availability_slots: str = Field(sa_column=Column(Text))  # JSON string avec les créneaux de disponibilité
+    notes: str | None = Field(default=None, sa_column=Column(Text))  # Notes additionnelles du client
+    status: str = Field(default="pending", max_length=20)  # 'pending', 'scheduled', 'cancelled'
+    scheduled_interview_id: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("interviews.id", ondelete="SET NULL")))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships - définies sans type annotation pour éviter les problèmes de résolution
+    # Les relations peuvent être accédées via les IDs (application_id, client_id, scheduled_interview_id)
+    # et chargées manuellement si nécessaire dans les routers

@@ -16,6 +16,7 @@ import {
 } from '@/lib/api'
 import { authenticatedFetch, getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
+import { getCandidatePhotoUrl } from '@/lib/imageUtils'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -365,7 +366,7 @@ export default function ManagerCandidateDetailPage() {
     }
   }
 
-  const handleOpenInterviewForm = (applicationId: string, interview?: InterviewResponse) => {
+  const handleOpenInterviewForm = (applicationId: string, interview?: InterviewResponse, interviewType?: 'rh' | 'technique' | 'client' | 'prequalification' | 'qualification' | 'autre') => {
     if (interview) {
       setSelectedInterview(interview)
       // Parser le feedback pour extraire les champs structurés si disponibles
@@ -388,7 +389,7 @@ export default function ManagerCandidateDetailPage() {
       setSelectedInterview(null)
       setInterviewForm({
         application_id: applicationId,
-        interview_type: 'rh',
+        interview_type: interviewType || 'rh',
         scheduled_at: '',
         scheduled_end_at: '',
         location: '',
@@ -540,9 +541,10 @@ export default function ManagerCandidateDetailPage() {
         const newInterview = await createInterview(interviewData)
         
         // Si un feedback est fourni, l'ajouter immédiatement
-        if (interviewForm.feedback) {
+        const formattedFeedback = formatFeedbackData(interviewForm)
+        if (formattedFeedback) {
           await addInterviewFeedback(newInterview.id, {
-            feedback: interviewForm.feedback,
+            feedback: formattedFeedback,
             decision: interviewForm.decision,
             score: interviewForm.score || undefined,
           })
@@ -665,290 +667,321 @@ export default function ManagerCandidateDetailPage() {
   ]
 
   return (
-    <div className="p-4 lg:p-8 max-w-7xl mx-auto bg-gray-50 min-h-screen">
-      {/* En-tête */}
-      <div className="mb-6 lg:mb-8">
-        <Link 
-          href="/manager/candidats" 
-          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Retour aux candidats
-        </Link>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
-              Profil Candidat
-            </h1>
-            <p className="text-gray-600 mt-1">Gestion complète du profil et des entretiens</p>
-          </div>
-          {!isEditing && (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors w-full sm:w-auto"
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              Modifier le profil
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      {/* Header avec fond coloré */}
+      <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-8">
+          <Link 
+            href="/manager/candidats" 
+            className="inline-flex items-center text-indigo-100 hover:text-white mb-6 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            <span className="font-medium">Retour aux candidats</span>
+          </Link>
+          
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
+            {/* Photo/Avatar */}
+            <div className="relative">
+              {(() => {
+                const photoUrl = getCandidatePhotoUrl(candidate, API_URL)
+                if (photoUrl) {
+                  return (
+                    <img
+                      src={photoUrl}
+                      alt={`${candidate.first_name} ${candidate.last_name}`}
+                      className="w-32 h-32 lg:w-40 lg:h-40 rounded-2xl object-cover border-4 border-white shadow-2xl"
+                      onError={(e) => {
+                        // Si l'image ne se charge pas, afficher l'avatar par défaut
+                        const target = e.target as HTMLImageElement
+                        target.style.display = 'none'
+                        const parent = target.parentElement
+                        if (parent) {
+                          const fallback = document.createElement('div')
+                          fallback.className = 'w-32 h-32 lg:w-40 lg:h-40 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-4 border-white shadow-2xl'
+                          fallback.innerHTML = `<svg class="w-16 h-16 lg:w-20 lg:h-20 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>`
+                          parent.appendChild(fallback)
+                        }
+                      }}
+                    />
+                  )
+                }
+                return (
+                  <div className="w-32 h-32 lg:w-40 lg:h-40 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-4 border-white shadow-2xl">
+                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-white" />
+                  </div>
+                )
+              })()}
+              <div className="absolute -bottom-2 -right-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-lg ${
+                  candidate.status === 'embauché' ? 'bg-green-500 text-white' :
+                  candidate.status === 'rejeté' ? 'bg-red-500 text-white' :
+                  candidate.status === 'offre' ? 'bg-yellow-500 text-white' :
+                  candidate.status === 'shortlist' ? 'bg-blue-500 text-white' :
+                  'bg-white text-indigo-600'
+                }`}>
+                  {candidate.status.charAt(0).toUpperCase() + candidate.status.slice(1).replace('_', ' ')}
+                </span>
+              </div>
+            </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Colonne gauche - Profil */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Carte profil */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-center mb-4">
-              {candidate.profile_picture_url || candidate.photo_url ? (
-                <img
-                  src={`${API_URL}${candidate.profile_picture_url || candidate.photo_url}`}
-                  alt={`${candidate.first_name} ${candidate.last_name}`}
-                  className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
-                />
-              ) : (
-                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center border-4 border-white shadow-lg">
-                  <User className="w-16 h-16 text-white" />
+            {/* Informations principales */}
+            <div className="flex-1">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl lg:text-4xl font-bold mb-2">
+                    {isEditing ? (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={formData.first_name}
+                          onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                          className="px-3 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg text-white placeholder-white/70 focus:ring-2 focus:ring-white/50 focus:border-white"
+                          placeholder="Prénom"
+                        />
+                        <input
+                          type="text"
+                          value={formData.last_name}
+                          onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                          className="px-3 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg text-white placeholder-white/70 focus:ring-2 focus:ring-white/50 focus:border-white"
+                          placeholder="Nom"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        {candidate.first_name} {candidate.last_name}
+                      </>
+                    )}
+                  </h1>
+                  {!isEditing && candidate.profile_title && (
+                    <p className="text-lg text-indigo-100 mb-2">{candidate.profile_title}</p>
+                  )}
+                  {!isEditing && candidate.years_of_experience !== null && candidate.years_of_experience !== undefined && (
+                    <p className="text-sm text-indigo-200">
+                      {candidate.years_of_experience} ans d&apos;expérience
+                    </p>
+                  )}
                 </div>
-              )}
-            </div>
-
-            <div className="text-center mb-4">
-              <h2 className="text-2xl font-bold text-gray-900">
-                {isEditing ? (
-                  <>
-                    <input
-                      type="text"
-                      value={formData.first_name}
-                      onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                      className="w-full text-center px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 mb-2"
-                      placeholder="Prénom"
-                    />
-                    <input
-                      type="text"
-                      value={formData.last_name}
-                      onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                      className="w-full text-center px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="Nom"
-                    />
-                  </>
-                ) : (
-                  <>
-                    {candidate.first_name} {candidate.last_name}
-                  </>
+                {!isEditing && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-indigo-600 rounded-xl hover:bg-indigo-50 transition-all shadow-lg hover:shadow-xl font-semibold"
+                  >
+                    <Edit className="w-5 h-5" />
+                    Modifier
+                  </button>
                 )}
-              </h2>
-              {!isEditing && candidate.profile_title && (
-                <p className="text-sm text-gray-600 mt-1">
-                  {candidate.profile_title}
-                </p>
-              )}
-              {!isEditing && candidate.years_of_experience !== null && candidate.years_of_experience !== undefined && (
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {candidate.years_of_experience} ans d&apos;expérience
-                </p>
-              )}
-            </div>
+              </div>
 
-            <div className="flex justify-center mb-4">
-              <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusBadgeColor(candidate.status)}`}>
-                {candidate.status.charAt(0).toUpperCase() + candidate.status.slice(1).replace('_', ' ')}
-              </span>
-            </div>
-
-            <div className="space-y-3 pt-4 border-t border-gray-200">
-              {isEditing ? (
-                <>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="email@example.com"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Téléphone</label>
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="+33 6 12 34 56 78"
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
+              {/* Contact rapide */}
+              {!isEditing && (
+                <div className="flex flex-wrap gap-4 mt-6">
                   {candidate.email && (
                     <a
                       href={`mailto:${candidate.email}`}
-                      className="flex items-center text-sm text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer"
+                      className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg hover:bg-white/20 transition-colors"
                     >
-                      <Mail className="w-4 h-4 mr-2 text-gray-400" />
-                      <span className="truncate">{candidate.email}</span>
+                      <Mail className="w-4 h-4" />
+                      <span className="text-sm">{candidate.email}</span>
                     </a>
                   )}
                   {candidate.phone && (
                     <a
                       href={`tel:${candidate.phone}`}
-                      className="flex items-center text-sm text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer"
+                      className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg hover:bg-white/20 transition-colors"
                     >
-                      <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                      <span>{candidate.phone}</span>
+                      <Phone className="w-4 h-4" />
+                      <span className="text-sm">{candidate.phone}</span>
                     </a>
                   )}
-                </>
+                </div>
               )}
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Statistiques rapides */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Statistiques</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Besoins attribués</span>
-                <span className="text-lg font-bold text-gray-900">{applications.length}</span>
+      {/* Statistiques rapides */}
+      <div className="max-w-7xl mx-auto px-4 lg:px-8 -mt-8 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Besoins attribués</p>
+                <p className="text-3xl font-bold text-gray-900">{applications.length}</p>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Entretiens</span>
-                <span className="text-lg font-bold text-gray-900">{interviews.length}</span>
+              <div className="p-3 bg-indigo-100 rounded-lg">
+                <Briefcase className="w-6 h-6 text-indigo-600" />
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Entretiens avec feedback</span>
-                <span className="text-lg font-bold text-gray-900">
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Total entretiens</p>
+                <p className="text-3xl font-bold text-gray-900">{interviews.length}</p>
+              </div>
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <MessageSquare className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Avec feedback</p>
+                <p className="text-3xl font-bold text-gray-900">
                   {interviews.filter(i => i.feedback).length}
-                </span>
+                </p>
+              </div>
+              <div className="p-3 bg-green-100 rounded-lg">
+                <FileCheck className="w-6 h-6 text-green-600" />
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Colonne droite - Contenu principal */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Système d'onglets */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="border-b border-gray-200">
-              <nav className="flex -mb-px">
-                <button
-                  onClick={() => setActiveTab('profil')}
-                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-                    activeTab === 'profil'
-                      ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <User className="w-4 h-4" />
-                    <span>Profil</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('postes')}
-                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-                    activeTab === 'postes'
-                      ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <Briefcase className="w-4 h-4" />
-                    <span>Postes ({applications.length})</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('entretiens')}
-                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-                    activeTab === 'entretiens'
-                      ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <MessageSquare className="w-4 h-4" />
-                    <span>Entretiens ({interviews.length})</span>
-                  </div>
-                </button>
-              </nav>
-            </div>
+      {/* Contenu principal */}
+      <div className="max-w-7xl mx-auto px-4 lg:px-8 pb-8">
+        {/* Système d'onglets moderne */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden mb-6">
+          <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+            <nav className="flex -mb-px">
+              <button
+                onClick={() => setActiveTab('profil')}
+                className={`flex-1 px-6 py-5 text-sm font-semibold transition-all relative ${
+                  activeTab === 'profil'
+                    ? 'text-indigo-600 bg-white'
+                    : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <User className={`w-5 h-5 ${activeTab === 'profil' ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  <span>Profil</span>
+                </div>
+                {activeTab === 'profil' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-600"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('postes')}
+                className={`flex-1 px-6 py-5 text-sm font-semibold transition-all relative ${
+                  activeTab === 'postes'
+                    ? 'text-indigo-600 bg-white'
+                    : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Briefcase className={`w-5 h-5 ${activeTab === 'postes' ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  <span>Postes</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    activeTab === 'postes' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {applications.length}
+                  </span>
+                </div>
+                {activeTab === 'postes' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-600"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('entretiens')}
+                className={`flex-1 px-6 py-5 text-sm font-semibold transition-all relative ${
+                  activeTab === 'entretiens'
+                    ? 'text-indigo-600 bg-white'
+                    : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <MessageSquare className={`w-5 h-5 ${activeTab === 'entretiens' ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  <span>Entretiens</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    activeTab === 'entretiens' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {interviews.length}
+                  </span>
+                </div>
+                {activeTab === 'entretiens' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-600"></div>
+                )}
+              </button>
+            </nav>
+          </div>
 
-            {/* Contenu des onglets */}
-            <div className="p-6">
-              {/* Onglet Profil */}
-              {activeTab === 'profil' && (
-                <div className="space-y-6">
-                  {/* Informations détaillées */}
-                  <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Briefcase className="w-5 h-5 mr-2" />
-              Informations détaillées
-            </h2>
+          {/* Contenu des onglets */}
+          <div className="p-6 lg:p-8">
+            {/* Onglet Profil */}
+            {activeTab === 'profil' && (
+              <div className="space-y-6">
+                {/* Informations détaillées */}
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-100">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                    <User className="w-6 h-6 mr-3 text-indigo-600" />
+                    Informations personnelles
+                  </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Prénom</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                ) : (
-                  <p className="text-sm text-gray-900">{candidate.first_name}</p>
-                )}
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Prénom</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={formData.first_name}
+                          onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        />
+                      ) : (
+                        <p className="text-sm font-medium text-gray-900">{candidate.first_name}</p>
+                      )}
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                ) : (
-                  <p className="text-sm text-gray-900">{candidate.last_name}</p>
-                )}
-              </div>
+                    <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Nom</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={formData.last_name}
+                          onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        />
+                      ) : (
+                        <p className="text-sm font-medium text-gray-900">{candidate.last_name}</p>
+                      )}
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <Mail className="w-4 h-4 mr-1" />
-                  Email
-                </label>
-                {isEditing ? (
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                ) : (
-                  <p className="text-sm text-gray-900">{candidate.email || '-'}</p>
-                )}
-              </div>
+                    <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center">
+                        <Mail className="w-3 h-3 mr-1" />
+                        Email
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        />
+                      ) : (
+                        <p className="text-sm font-medium text-gray-900">{candidate.email || '-'}</p>
+                      )}
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <Phone className="w-4 h-4 mr-1" />
-                  Téléphone
-                </label>
-                {isEditing ? (
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                ) : (
-                  <p className="text-sm text-gray-900">{candidate.phone || '-'}</p>
-                )}
-              </div>
+                    <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center">
+                        <Phone className="w-3 h-3 mr-1" />
+                        Téléphone
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="tel"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        />
+                      ) : (
+                        <p className="text-sm font-medium text-gray-900">{candidate.phone || '-'}</p>
+                      )}
+                    </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Titre du profil</label>
@@ -1016,14 +1049,14 @@ export default function ManagerCandidateDetailPage() {
             </div>
           </div>
 
-          {/* Tags et Compétences */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Tags */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Tag className="w-5 h-5 mr-2" />
-                Tags & Mots-clés
-              </h2>
+                {/* Tags et Compétences */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                  {/* Tags */}
+                  <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+                    <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                      <Tag className="w-5 h-5 mr-2 text-indigo-600" />
+                      Tags & Mots-clés
+                    </h2>
               
               {isEditing ? (
                 <div className="space-y-4">
@@ -1084,12 +1117,12 @@ export default function ManagerCandidateDetailPage() {
               )}
             </div>
 
-            {/* Compétences */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Award className="w-5 h-5 mr-2" />
-                Compétences
-              </h2>
+                {/* Compétences */}
+                <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+                  <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                    <Award className="w-5 h-5 mr-2 text-indigo-600" />
+                    Compétences
+                  </h2>
               
               {isEditing ? (
                 <div className="space-y-4">
@@ -1506,25 +1539,56 @@ export default function ManagerCandidateDetailPage() {
               {/* Onglet Entretiens */}
               {activeTab === 'entretiens' && (
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                     <h2 className="text-lg font-semibold text-gray-900 flex items-center">
                       <MessageSquare className="w-5 h-5 mr-2" />
                       Comptes rendus d&apos;entretien
                     </h2>
                     {applications.length > 0 && (
-                      <button
-                        onClick={() => {
-                          if (applications.length === 1) {
-                            handleOpenInterviewForm(applications[0].id)
-                          } else {
-                            handleOpenInterviewForm(applications[0].id)
-                          }
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Nouvel entretien
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => handleOpenInterviewForm(applications[0].id, undefined, 'prequalification')}
+                          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Préqualification
+                        </button>
+                        <button
+                          onClick={() => handleOpenInterviewForm(applications[0].id, undefined, 'qualification')}
+                          className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Qualification
+                        </button>
+                        <button
+                          onClick={() => handleOpenInterviewForm(applications[0].id, undefined, 'rh')}
+                          className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          RH
+                        </button>
+                        <button
+                          onClick={() => handleOpenInterviewForm(applications[0].id, undefined, 'technique')}
+                          className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Technique
+                        </button>
+                        <button
+                          onClick={() => handleOpenInterviewForm(applications[0].id, undefined, 'client')}
+                          className="flex items-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Client
+                        </button>
+                        <button
+                          onClick={() => handleOpenInterviewForm(applications[0].id)}
+                          className="flex items-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Autre
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1574,19 +1638,101 @@ export default function ManagerCandidateDetailPage() {
                                   {appInterviews.length} entretien{appInterviews.length > 1 ? 's' : ''}
                                 </p>
                               </div>
-                              <button
-                                onClick={() => handleOpenInterviewForm(app.id)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
-                              >
-                                <Plus className="w-4 h-4" />
-                                Ajouter
-                              </button>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  onClick={() => handleOpenInterviewForm(app.id, undefined, 'prequalification')}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                                  title="Ajouter une préqualification"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  Préqualif.
+                                </button>
+                                <button
+                                  onClick={() => handleOpenInterviewForm(app.id, undefined, 'qualification')}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors"
+                                  title="Ajouter une qualification"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  Qualif.
+                                </button>
+                                <button
+                                  onClick={() => handleOpenInterviewForm(app.id, undefined, 'rh')}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+                                  title="Ajouter un entretien RH"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  RH
+                                </button>
+                                <button
+                                  onClick={() => handleOpenInterviewForm(app.id, undefined, 'technique')}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                                  title="Ajouter un entretien technique"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  Technique
+                                </button>
+                                <button
+                                  onClick={() => handleOpenInterviewForm(app.id, undefined, 'client')}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors"
+                                  title="Ajouter un entretien client"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  Client
+                                </button>
+                                <button
+                                  onClick={() => handleOpenInterviewForm(app.id)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                                  title="Ajouter un autre type d'entretien"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  Autre
+                                </button>
+                              </div>
                             </div>
 
                             {appInterviews.length > 0 ? (
-                              <div className="space-y-4">
-                                {appInterviews.map((interview) => (
-                                  <div key={interview.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                              <div className="space-y-6">
+                                {/* Grouper les entretiens par type */}
+                                {(() => {
+                                  const interviewsByType = appInterviews.reduce((acc, interview) => {
+                                    const type = interview.interview_type || 'autre'
+                                    if (!acc[type]) {
+                                      acc[type] = []
+                                    }
+                                    acc[type].push(interview)
+                                    return acc
+                                  }, {} as Record<string, InterviewResponse[]>)
+
+                                  return Object.entries(interviewsByType).map(([type, typeInterviews]) => (
+                                    <div key={type} className="space-y-3">
+                                      <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+                                        <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                                            type === 'prequalification' ? 'bg-blue-100 text-blue-800' :
+                                            type === 'qualification' ? 'bg-purple-100 text-purple-800' :
+                                            type === 'rh' ? 'bg-indigo-100 text-indigo-800' :
+                                            type === 'technique' ? 'bg-green-100 text-green-800' :
+                                            type === 'client' ? 'bg-orange-100 text-orange-800' :
+                                            'bg-gray-100 text-gray-800'
+                                          }`}>
+                                            {getInterviewTypeLabel(type)}
+                                          </span>
+                                          <span className="text-xs text-gray-500">
+                                            {typeInterviews.length} entretien{typeInterviews.length > 1 ? 's' : ''}
+                                          </span>
+                                        </h4>
+                                        <button
+                                          onClick={() => handleOpenInterviewForm(app.id, undefined, type as any)}
+                                          className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                                          title={`Ajouter un autre entretien ${getInterviewTypeLabel(type)}`}
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                          Ajouter
+                                        </button>
+                                      </div>
+                                      <div className="space-y-3 pl-4 border-l-2 border-gray-200">
+                                        {typeInterviews.map((interview) => (
+                                          <div key={interview.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                                     <div className="flex items-start justify-between mb-3">
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-2">
@@ -2232,8 +2378,12 @@ export default function ManagerCandidateDetailPage() {
                                         })()}
                                       </div>
                                     )}
-                                  </div>
-                                ))}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))
+                                })()}
                               </div>
                             ) : (
                               <div className="text-center py-4 text-sm text-gray-500">
@@ -2247,11 +2397,10 @@ export default function ManagerCandidateDetailPage() {
                   )}
                 </div>
               )}
-            </div>
           </div>
         </div>
       </div>
-
+      
       {/* Modal de création/édition d'entretien */}
       {showInterviewForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -2626,19 +2775,26 @@ export default function ManagerCandidateDetailPage() {
                 </button>
                 <button
                   onClick={handleSubmitInterview}
-                  disabled={isSubmittingInterview || !interviewForm.application_id || !interviewForm.scheduled_at || 
-                    (interviewForm.interview_type === 'prequalification' && 
-                      (!interviewForm.prequalification_competences_techniques || 
-                       !interviewForm.prequalification_experience || 
-                       !interviewForm.prequalification_motivation)) ||
-                    (interviewForm.interview_type === 'qualification' && 
-                      (!interviewForm.qualification_competences_techniques || 
-                       !interviewForm.qualification_competences_comportementales || 
-                       !interviewForm.qualification_culture_entreprise || 
-                       !interviewForm.qualification_potentiel)) ||
-                    (interviewForm.interview_type !== 'prequalification' && 
-                     interviewForm.interview_type !== 'qualification' && 
-                     !interviewForm.feedback)}
+                  disabled={
+                    isSubmittingInterview || 
+                    !interviewForm.application_id || 
+                    !interviewForm.scheduled_at ||
+                    // Pour la mise à jour, on exige le feedback selon le type
+                    (selectedInterview && (
+                      (interviewForm.interview_type === 'prequalification' && 
+                        (!interviewForm.prequalification_competences_techniques || 
+                         !interviewForm.prequalification_experience || 
+                         !interviewForm.prequalification_motivation)) ||
+                      (interviewForm.interview_type === 'qualification' && 
+                        (!interviewForm.qualification_competences_techniques || 
+                         !interviewForm.qualification_competences_comportementales || 
+                         !interviewForm.qualification_culture_entreprise || 
+                         !interviewForm.qualification_potentiel)) ||
+                      (interviewForm.interview_type !== 'prequalification' && 
+                       interviewForm.interview_type !== 'qualification' && 
+                       !interviewForm.feedback)
+                    ))
+                  }
                   className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmittingInterview ? 'Enregistrement...' : selectedInterview ? 'Mettre à jour' : 'Créer l\'entretien'}

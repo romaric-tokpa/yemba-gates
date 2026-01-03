@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from database import init_db
-from routers import jobs, candidates, auth, kpi, shortlists, notifications, interviews, offers, onboarding, history, admin, applications, teams
+from routers import jobs, candidates, auth, kpi, shortlists, notifications, interviews, offers, onboarding, history, admin, applications, teams, client_interview_requests
 
 # Configuration du logging
 logging.basicConfig(
@@ -98,6 +98,7 @@ app.include_router(offers.router)
 app.include_router(onboarding.router)
 app.include_router(history.router)
 app.include_router(applications.router)
+app.include_router(client_interview_requests.router)
 app.include_router(teams.router)
 app.include_router(admin.router)
 
