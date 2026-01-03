@@ -36,6 +36,22 @@ class InterviewUpdate(BaseModel):
     preparation_notes: Optional[str] = None
 
 
+class InterviewStatusUpdate(BaseModel):
+    """Schéma pour mettre à jour le statut d'un entretien"""
+    status: str = Field(..., description="Nouveau statut: 'réalisé', 'reporté', 'annulé'")
+    rescheduled_at: Optional[datetime] = None  # Requis si status = 'reporté'
+    rescheduling_reason: Optional[str] = None  # Motif du report
+    cancellation_reason: Optional[str] = None  # Requis si status = 'annulé'
+    
+    @field_validator('status')
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        valid_statuses = ['planifié', 'réalisé', 'reporté', 'annulé']
+        if v.lower() not in valid_statuses:
+            raise ValueError(f"Statut invalide. Valeurs valides: {', '.join(valid_statuses)}")
+        return v.lower()
+
+
 class InterviewFeedback(BaseModel):
     """Schéma pour saisir le feedback d'un entretien"""
     feedback: str = Field(..., min_length=1, description="Feedback obligatoire de l'entretien")
@@ -75,12 +91,55 @@ class InterviewResponse(BaseModel):
     feedback_provided_at: Optional[datetime]
     decision: Optional[str]
     score: Optional[int]
+    status: Optional[str] = "planifié"
+    rescheduled_at: Optional[datetime] = None
+    rescheduling_reason: Optional[str] = None
+    cancellation_reason: Optional[str] = None
+    cancelled_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     created_by: str
     created_by_name: str
     candidate_name: str
     job_title: str
     created_at: datetime
     updated_at: datetime
+
+
+def build_interview_response(interview: Interview, session: Session) -> dict:
+    """Helper pour construire une réponse InterviewResponse"""
+    application = session.get(Application, interview.application_id)
+    candidate = session.get(Candidate, application.candidate_id) if application else None
+    job = session.get(Job, application.job_id) if application else None
+    interviewer = session.get(User, interview.interviewer_id) if interview.interviewer_id else None
+    creator = session.get(User, interview.created_by) if interview.created_by else None
+    
+    return {
+        "id": str(interview.id),
+        "application_id": str(interview.application_id),
+        "interview_type": interview.interview_type,
+        "scheduled_at": interview.scheduled_at,
+        "scheduled_end_at": interview.scheduled_end_at,
+        "location": interview.location,
+        "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
+        "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
+        "preparation_notes": interview.preparation_notes,
+        "feedback": interview.feedback,
+        "feedback_provided_at": interview.feedback_provided_at,
+        "decision": interview.decision,
+        "score": interview.score,
+        "status": interview.status if hasattr(interview, 'status') else "planifié",
+        "rescheduled_at": interview.rescheduled_at if hasattr(interview, 'rescheduled_at') else None,
+        "rescheduling_reason": interview.rescheduling_reason if hasattr(interview, 'rescheduling_reason') else None,
+        "cancellation_reason": interview.cancellation_reason if hasattr(interview, 'cancellation_reason') else None,
+        "cancelled_at": interview.cancelled_at if hasattr(interview, 'cancelled_at') else None,
+        "completed_at": interview.completed_at if hasattr(interview, 'completed_at') else None,
+        "created_by": str(interview.created_by) if interview.created_by else None,
+        "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
+        "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
+        "job_title": job.title if job else "",
+        "created_at": interview.created_at,
+        "updated_at": interview.updated_at
+    }
 
 
 @router.post("/", response_model=InterviewResponse, status_code=status.HTTP_201_CREATED)
@@ -140,33 +199,7 @@ def create_interview(
         session.commit()
         session.refresh(new_interview)
         
-        # Récupérer les informations complètes pour la réponse
-        candidate = session.get(Candidate, application.candidate_id)
-        job = session.get(Job, application.job_id)
-        interviewer = session.get(User, new_interview.interviewer_id) if new_interview.interviewer_id else None
-        creator = session.get(User, new_interview.created_by)
-        
-        return {
-            "id": str(new_interview.id),
-            "application_id": str(new_interview.application_id),
-            "interview_type": new_interview.interview_type,
-            "scheduled_at": new_interview.scheduled_at,
-            "scheduled_end_at": new_interview.scheduled_end_at,
-            "location": new_interview.location,
-            "interviewer_id": str(new_interview.interviewer_id) if new_interview.interviewer_id else None,
-            "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
-            "preparation_notes": new_interview.preparation_notes,
-            "feedback": new_interview.feedback,
-            "feedback_provided_at": new_interview.feedback_provided_at,
-            "decision": new_interview.decision,
-            "score": new_interview.score,
-            "created_by": str(new_interview.created_by),
-            "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
-            "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
-            "job_title": job.title if job else "",
-            "created_at": new_interview.created_at,
-            "updated_at": new_interview.updated_at
-        }
+        return build_interview_response(new_interview, session)
     except Exception as e:
         session.rollback()
         import logging
@@ -246,27 +279,7 @@ def list_interviews(
             interviewer = session.get(User, interview.interviewer_id) if interview.interviewer_id else None
             creator = session.get(User, interview.created_by) if interview.created_by else None
             
-            results.append({
-                "id": str(interview.id),
-                "application_id": str(interview.application_id),
-                "interview_type": interview.interview_type,
-                "scheduled_at": interview.scheduled_at,
-                "scheduled_end_at": interview.scheduled_end_at,
-                "location": interview.location,
-                "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
-                "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
-                "preparation_notes": interview.preparation_notes,
-                "feedback": interview.feedback,
-                "feedback_provided_at": interview.feedback_provided_at,
-                "decision": interview.decision,
-                "score": interview.score,
-                "created_by": str(interview.created_by) if interview.created_by else None,
-                "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
-                "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
-                "job_title": job.title if job else "",
-                "created_at": interview.created_at,
-                "updated_at": interview.updated_at
-            })
+            results.append(build_interview_response(interview, session))
         except Exception as e:
             # Logger l'erreur et continuer avec les autres entretiens
             import logging
@@ -293,33 +306,7 @@ def get_interview(
             detail="Entretien non trouvé"
         )
     
-    application = session.get(Application, interview.application_id)
-    candidate = session.get(Candidate, application.candidate_id) if application else None
-    job = session.get(Job, application.job_id) if application else None
-    interviewer = session.get(User, interview.interviewer_id) if interview.interviewer_id else None
-    creator = session.get(User, interview.created_by)
-    
-    return {
-        "id": str(interview.id),
-        "application_id": str(interview.application_id),
-        "interview_type": interview.interview_type,
-        "scheduled_at": interview.scheduled_at,
-        "scheduled_end_at": interview.scheduled_end_at,
-        "location": interview.location,
-        "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
-        "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
-        "preparation_notes": interview.preparation_notes,
-        "feedback": interview.feedback,
-        "feedback_provided_at": interview.feedback_provided_at,
-        "decision": interview.decision,
-        "score": interview.score,
-        "created_by": str(interview.created_by),
-        "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
-        "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
-        "job_title": job.title if job else "",
-        "created_at": interview.created_at,
-        "updated_at": interview.updated_at
-    }
+    return build_interview_response(interview, session)
 
 
 @router.patch("/{interview_id}/feedback", response_model=InterviewResponse)
@@ -367,33 +354,7 @@ def add_interview_feedback(
     session.commit()
     session.refresh(interview)
     
-    # Récupérer les informations complètes pour la réponse
-    candidate = session.get(Candidate, application.candidate_id) if application else None
-    job = session.get(Job, application.job_id) if application else None
-    interviewer = session.get(User, interview.interviewer_id) if interview.interviewer_id else None
-    creator = session.get(User, interview.created_by)
-    
-    return {
-        "id": str(interview.id),
-        "application_id": str(interview.application_id),
-        "interview_type": interview.interview_type,
-        "scheduled_at": interview.scheduled_at,
-        "scheduled_end_at": interview.scheduled_end_at,
-        "location": interview.location,
-        "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
-        "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
-        "preparation_notes": interview.preparation_notes,
-        "feedback": interview.feedback,
-        "feedback_provided_at": interview.feedback_provided_at,
-        "decision": interview.decision,
-        "score": interview.score,
-        "created_by": str(interview.created_by),
-        "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
-        "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
-        "job_title": job.title if job else "",
-        "created_at": interview.created_at,
-        "updated_at": interview.updated_at
-    }
+    return build_interview_response(interview, session)
 
 
 @router.patch("/{interview_id}", response_model=InterviewResponse)
@@ -449,34 +410,74 @@ def update_interview(
     session.commit()
     session.refresh(interview)
     
-    # Récupérer les informations complètes pour la réponse
-    application = session.get(Application, interview.application_id)
-    candidate = session.get(Candidate, application.candidate_id) if application else None
-    job = session.get(Job, application.job_id) if application else None
-    interviewer = session.get(User, interview.interviewer_id) if interview.interviewer_id else None
-    creator = session.get(User, interview.created_by)
+    return build_interview_response(interview, session)
+
+
+@router.patch("/{interview_id}/status", response_model=InterviewResponse)
+def update_interview_status(
+    interview_id: UUID,
+    status_data: InterviewStatusUpdate,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Mettre à jour le statut d'un entretien (réalisé, reporté, annulé)
+    """
+    interview = session.get(Interview, interview_id)
+    if not interview:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Entretien non trouvé"
+        )
     
-    return {
-        "id": str(interview.id),
-        "application_id": str(interview.application_id),
-        "interview_type": interview.interview_type,
-        "scheduled_at": interview.scheduled_at,
-        "scheduled_end_at": interview.scheduled_end_at,
-        "location": interview.location,
-        "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
-        "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
-        "preparation_notes": interview.preparation_notes,
-        "feedback": interview.feedback,
-        "feedback_provided_at": interview.feedback_provided_at,
-        "decision": interview.decision,
-        "score": interview.score,
-        "created_by": str(interview.created_by),
-        "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
-        "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
-        "job_title": job.title if job else "",
-        "created_at": interview.created_at,
-        "updated_at": interview.updated_at
-    }
+    new_status = status_data.status.lower()
+    
+    # Validation selon le statut
+    if new_status == "reporté":
+        if not status_data.rescheduled_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La nouvelle date (rescheduled_at) est requise pour reporter un entretien"
+            )
+        interview.status = "reporté"
+        interview.rescheduled_at = status_data.rescheduled_at
+        interview.rescheduling_reason = status_data.rescheduling_reason
+        # Mettre à jour la date planifiée
+        interview.scheduled_at = status_data.rescheduled_at
+        if status_data.rescheduled_at and interview.scheduled_end_at:
+            # Ajuster la fin en gardant la même durée
+            duration = interview.scheduled_end_at - interview.scheduled_at
+            interview.scheduled_end_at = status_data.rescheduled_at + duration
+    
+    elif new_status == "annulé":
+        if not status_data.cancellation_reason:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le motif d'annulation (cancellation_reason) est requis"
+            )
+        interview.status = "annulé"
+        interview.cancellation_reason = status_data.cancellation_reason
+        interview.cancelled_at = datetime.utcnow()
+    
+    elif new_status == "réalisé":
+        interview.status = "réalisé"
+        interview.completed_at = datetime.utcnow()
+    
+    elif new_status == "planifié":
+        interview.status = "planifié"
+        # Réinitialiser les champs de report/annulation si on revient à planifié
+        interview.rescheduled_at = None
+        interview.rescheduling_reason = None
+        interview.cancellation_reason = None
+        interview.cancelled_at = None
+    
+    interview.updated_at = datetime.utcnow()
+    
+    session.add(interview)
+    session.commit()
+    session.refresh(interview)
+    
+    return build_interview_response(interview, session)
 
 
 @router.delete("/{interview_id}", status_code=status.HTTP_204_NO_CONTENT)

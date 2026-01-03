@@ -185,6 +185,12 @@ class Interview(SQLModel, table=True):
     feedback_provided_at: datetime | None = None
     decision: str | None = Field(default=None, max_length=20)  # 'positif', 'négatif', 'en_attente'
     score: int | None = Field(default=None)  # Score sur 10
+    status: str = Field(default="planifié", max_length=20)  # 'planifié', 'réalisé', 'reporté', 'annulé'
+    rescheduled_at: datetime | None = None  # Nouvelle date si reporté
+    rescheduling_reason: str | None = Field(default=None, sa_column=Column(Text))  # Motif du report
+    cancellation_reason: str | None = Field(default=None, sa_column=Column(Text))  # Motif de l'annulation
+    cancelled_at: datetime | None = None  # Date d'annulation
+    completed_at: datetime | None = None  # Date de réalisation
     created_by: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id")))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
