@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { createCandidate, getCandidates, CandidateResponse, CandidateCreate, uploadCandidatePhoto, parseCv } from '@/lib/api'
+import { createCandidate, getCandidates, CandidateResponse, CandidateCreate, uploadCandidatePhoto, parseCv, getJobs, JobResponse, createApplication } from '@/lib/api'
 import { getToken, isAuthenticated } from '@/lib/auth'
 import { 
   Plus, X, Upload, Tag, Mail, Phone, Search, List, LayoutGrid, Image as ImageIcon, 
@@ -30,6 +30,8 @@ export default function ManagerCandidatsPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAddMenu, setShowAddMenu] = useState(false)
+  const [jobs, setJobs] = useState<JobResponse[]>([])
+  const [selectedJobId, setSelectedJobId] = useState<string>('')
   
   // Formulaire
   const [formData, setFormData] = useState<CandidateCreate>({
@@ -80,7 +82,17 @@ export default function ManagerCandidatsPage() {
     }
 
     loadCandidates()
+    loadJobs()
   }, [router, searchParams])
+
+  const loadJobs = async () => {
+    try {
+      const jobsData = await getJobs()
+      setJobs(Array.isArray(jobsData) ? jobsData : [])
+    } catch (error) {
+      console.error('Erreur lors du chargement des jobs:', error)
+    }
+  }
 
   const loadCandidates = useCallback(async () => {
     try {
@@ -270,7 +282,23 @@ export default function ManagerCandidatsPage() {
         cv_file: cvFile || undefined,
       })
       
-      success('Candidat créé avec succès')
+      // Si un job est sélectionné, créer l'application (attribuer le candidat au job)
+      if (selectedJobId && candidateData.id) {
+        try {
+          await createApplication({
+            candidate_id: candidateData.id,
+            job_id: selectedJobId,
+            status: 'sourcé'
+          })
+          success('Candidat créé et attribué au besoin avec succès')
+        } catch (appError) {
+          console.error('Erreur lors de l\'attribution au besoin:', appError)
+          showError('Candidat créé mais erreur lors de l\'attribution au besoin')
+        }
+      } else {
+        success('Candidat créé avec succès')
+      }
+      
       setIsModalOpen(false)
       setAddMode('manual')
       setFormData({
@@ -288,6 +316,7 @@ export default function ManagerCandidatsPage() {
       setCvFile(null)
       setPhotoFile(null)
       setPhotoPreview(null)
+      setSelectedJobId('')
       loadCandidates()
     } catch (error) {
       console.error('Erreur lors de la création:', error)
@@ -1032,6 +1061,7 @@ export default function ManagerCandidatsPage() {
                   setCvFile(null)
                   setPhotoFile(null)
                   setPhotoPreview(null)
+                  setSelectedJobId('')
                 }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
@@ -1142,6 +1172,33 @@ export default function ManagerCandidatsPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
+                </div>
+                
+                {/* Attribuer à un besoin */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <Briefcase className="w-4 h-4 mr-1" />
+                    Attribuer à un besoin (optionnel)
+                  </label>
+                  <select
+                    value={selectedJobId}
+                    onChange={(e) => setSelectedJobId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">-- Aucun besoin sélectionné --</option>
+                    {jobs.map((job) => (
+                      <option key={job.id} value={job.id}>
+                        {job.title}
+                        {job.department && ` - ${job.department}`}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Le candidat sera automatiquement attribué au besoin sélectionné après création
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Photo de profil</label>
                     <input
@@ -1255,10 +1312,11 @@ export default function ManagerCandidatsPage() {
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsModalOpen(false)
-                      setAddMode('manual')
-                    }}
+                  onClick={() => {
+                    setIsModalOpen(false)
+                    setAddMode('manual')
+                    setSelectedJobId('')
+                  }}
                     className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Annuler

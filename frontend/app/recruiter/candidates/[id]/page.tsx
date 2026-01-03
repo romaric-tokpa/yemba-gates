@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Upload, FileText, Tag, Mail, Phone, Calendar, User, Briefcase, Edit, X, Plus, Save, Eye } from 'lucide-react'
-import { getCandidate, CandidateResponse, updateCandidateStatus, updateCandidate, CandidateUpdate } from '@/lib/api'
+import { getCandidate, CandidateResponse, updateCandidateStatus, updateCandidate, CandidateUpdate, getJobs, JobResponse, createApplication, getCandidateApplications, ApplicationResponse } from '@/lib/api'
 import { authenticatedFetch, getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
 
@@ -46,6 +46,12 @@ export default function RecruiterCandidateDetailPage() {
   // États pour l'ajout de tags/compétences
   const [newTag, setNewTag] = useState('')
   const [newSkill, setNewSkill] = useState('')
+  
+  // États pour l'attribution à un besoin
+  const [jobs, setJobs] = useState<JobResponse[]>([])
+  const [applications, setApplications] = useState<ApplicationResponse[]>([])
+  const [selectedJobId, setSelectedJobId] = useState<string>('')
+  const [isAssigning, setIsAssigning] = useState(false)
 
   useEffect(() => {
     // Vérifier l'authentification
@@ -56,8 +62,28 @@ export default function RecruiterCandidateDetailPage() {
 
     if (candidateId) {
       loadCandidate()
+      loadJobs()
+      loadApplications()
     }
   }, [candidateId, router])
+  
+  const loadJobs = async () => {
+    try {
+      const jobsData = await getJobs()
+      setJobs(Array.isArray(jobsData) ? jobsData : [])
+    } catch (error) {
+      console.error('Erreur lors du chargement des jobs:', error)
+    }
+  }
+  
+  const loadApplications = async () => {
+    try {
+      const applicationsData = await getCandidateApplications(candidateId)
+      setApplications(Array.isArray(applicationsData) ? applicationsData : [])
+    } catch (error) {
+      console.error('Erreur lors du chargement des applications:', error)
+    }
+  }
 
   // Initialiser le formulaire quand le candidat est chargé
   useEffect(() => {
@@ -220,6 +246,27 @@ export default function RecruiterCandidateDetailPage() {
         const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la mise à jour'
         showError(errorMessage)
       }
+    }
+  }
+  
+  const handleAssignToJob = async () => {
+    if (!selectedJobId || !candidate) return
+    
+    try {
+      setIsAssigning(true)
+      await createApplication({
+        candidate_id: candidate.id,
+        job_id: selectedJobId,
+        status: 'sourcé'
+      })
+      await loadApplications()
+      setSelectedJobId('')
+      success('Candidat attribué au besoin avec succès')
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'attribution'
+      showError(errorMessage)
+    } finally {
+      setIsAssigning(false)
     }
   }
 
@@ -906,6 +953,83 @@ export default function RecruiterCandidateDetailPage() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Attribution à un besoin */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Briefcase className="w-5 h-5 mr-2" />
+              Attribution à un besoin
+            </h2>
+            
+            {/* Besoins existants */}
+            {applications.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Besoins attribués</h3>
+                <div className="space-y-2">
+                  {applications.map((app) => {
+                    const job = jobs.find(j => j.id === app.job_id)
+                    return (
+                      <div key={app.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">
+                            {job ? job.title : 'Besoin inconnu'}
+                            {job?.department && (
+                              <span className="text-gray-500 ml-2">- {job.department}</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Statut: {app.status}
+                          </p>
+                        </div>
+                        {job && (
+                          <Link
+                            href={`/recruiter/jobs/${job.id}`}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          >
+                            Voir le besoin
+                          </Link>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            
+            {/* Ajouter un nouveau besoin */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Attribuer à un nouveau besoin
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={selectedJobId}
+                  onChange={(e) => setSelectedJobId(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">-- Sélectionner un besoin --</option>
+                  {jobs
+                    .filter(job => !applications.some(app => app.job_id === job.id))
+                    .map((job) => (
+                      <option key={job.id} value={job.id}>
+                        {job.title}
+                        {job.department && ` - ${job.department}`}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={handleAssignToJob}
+                  disabled={!selectedJobId || isAssigning}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isAssigning ? 'Attribution...' : 'Attribuer'}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Le candidat sera attribué au besoin sélectionné avec le statut "Sourcé"
+              </p>
             </div>
           </div>
 
