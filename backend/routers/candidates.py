@@ -858,6 +858,96 @@ def list_candidates(
         )
 
 
+# Routes spécifiques AVANT les routes génériques pour éviter les conflits de routage
+@router.patch("/{candidate_id}/status", response_model=CandidateResponse)
+def update_candidate_status(
+    candidate_id: UUID,
+    new_status: str = Query(..., description="Nouveau statut"),
+    current_user: User = Depends(require_recruteur),
+    session: Session = Depends(get_session)
+):
+    """
+    Mettre à jour le statut d'un candidat
+    
+    Règle métier : Pour passer un candidat à "shortlist", il faut qu'il y ait au moins un entretien avec un feedback.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"🔍 [DEBUG] update_candidate_status appelé - candidate_id: {candidate_id}, new_status: {new_status}")
+    
+    candidate = session.get(Candidate, candidate_id)
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidat non trouvé"
+        )
+    
+    # Vérifier si le changement de statut nécessite un feedback
+    if new_status in ["shortlist", "offre"] and candidate.status not in ["shortlist", "offre"]:
+        # Trouver les applications de ce candidat
+        applications_statement = select(Application).where(Application.candidate_id == candidate_id)
+        applications = session.exec(applications_statement).all()
+        
+        if not applications:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Veuillez saisir un feedback avant de changer le statut"
+            )
+        
+        # Vérifier qu'il existe au moins un entretien avec un feedback non vide pour ce candidat
+        has_feedback = False
+        for app in applications:
+            # Vérifier les entretiens avec feedback non null et non vide
+            interviews_statement = select(Interview).where(
+                Interview.application_id == app.id
+            )
+            all_interviews = session.exec(interviews_statement).all()
+            
+            for interview in all_interviews:
+                if interview.feedback and interview.feedback.strip():
+                    has_feedback = True
+                    break
+            
+            if has_feedback:
+                break
+        
+        if not has_feedback:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Veuillez saisir un feedback avant de changer le statut"
+            )
+    
+    candidate.status = new_status
+    session.add(candidate)
+    session.commit()
+    session.refresh(candidate)
+    
+    # Normaliser la réponse comme dans les autres endpoints
+    candidate_dict = {
+        "id": candidate.id,
+        "first_name": candidate.first_name,
+        "last_name": candidate.last_name,
+        "profile_title": candidate.profile_title,
+        "years_of_experience": candidate.years_of_experience,
+        "email": candidate.email,
+        "phone": candidate.phone,
+        "cv_file_path": candidate.cv_file_path,
+        "profile_picture_url": candidate.profile_picture_url,
+        "photo_url": candidate.profile_picture_url,  # Alias de profile_picture_url (non mappé en DB)
+        "tags": candidate.tags if candidate.tags else None,
+        "skills": candidate.skills if candidate.skills else [],  # Convertir None en []
+        "source": candidate.source,
+        "status": candidate.status,
+        "notes": candidate.notes,
+        "created_by": candidate.created_by,
+        "created_at": candidate.created_at,
+        "updated_at": candidate.updated_at,
+    }
+    
+    # Valider avec le schéma Pydantic
+    return CandidateResponse.model_validate(candidate_dict)
+
+
 @router.get("/{candidate_id}", response_model=CandidateResponse)
 def get_candidate(
     candidate_id: UUID,
@@ -948,91 +1038,6 @@ def update_candidate(
     session.refresh(candidate)
     
     # Normaliser la réponse comme dans get_candidate et create_candidate
-    candidate_dict = {
-        "id": candidate.id,
-        "first_name": candidate.first_name,
-        "last_name": candidate.last_name,
-        "profile_title": candidate.profile_title,
-        "years_of_experience": candidate.years_of_experience,
-        "email": candidate.email,
-        "phone": candidate.phone,
-        "cv_file_path": candidate.cv_file_path,
-        "profile_picture_url": candidate.profile_picture_url,
-        "photo_url": candidate.profile_picture_url,  # Alias de profile_picture_url (non mappé en DB)
-        "tags": candidate.tags if candidate.tags else None,
-        "skills": candidate.skills if candidate.skills else [],  # Convertir None en []
-        "source": candidate.source,
-        "status": candidate.status,
-        "notes": candidate.notes,
-        "created_by": candidate.created_by,
-        "created_at": candidate.created_at,
-        "updated_at": candidate.updated_at,
-    }
-    
-    # Valider avec le schéma Pydantic
-    return CandidateResponse.model_validate(candidate_dict)
-
-
-@router.patch("/{candidate_id}/status", response_model=CandidateResponse)
-def update_candidate_status(
-    candidate_id: UUID,
-    new_status: str = Query(..., description="Nouveau statut"),
-    current_user: User = Depends(require_recruteur),
-    session: Session = Depends(get_session)
-):
-    """
-    Mettre à jour le statut d'un candidat
-    
-    Règle métier : Pour passer un candidat à "shortlist", il faut qu'il y ait au moins un entretien avec un feedback.
-    """
-    candidate = session.get(Candidate, candidate_id)
-    if not candidate:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidat non trouvé"
-        )
-    
-    # Vérifier si le changement de statut nécessite un feedback
-    if new_status in ["shortlist", "offre"] and candidate.status not in ["shortlist", "offre"]:
-        # Trouver les applications de ce candidat
-        applications_statement = select(Application).where(Application.candidate_id == candidate_id)
-        applications = session.exec(applications_statement).all()
-        
-        if not applications:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Veuillez saisir un feedback avant de changer le statut"
-            )
-        
-        # Vérifier qu'il existe au moins un entretien avec un feedback non vide pour ce candidat
-        has_feedback = False
-        for app in applications:
-            # Vérifier les entretiens avec feedback non null et non vide
-            interviews_statement = select(Interview).where(
-                Interview.application_id == app.id
-            )
-            all_interviews = session.exec(interviews_statement).all()
-            
-            for interview in all_interviews:
-                if interview.feedback and interview.feedback.strip():
-                    has_feedback = True
-                    break
-            
-            if has_feedback:
-                break
-        
-        if not has_feedback:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Veuillez saisir un feedback avant de changer le statut"
-            )
-    
-    candidate.status = new_status
-    session.add(candidate)
-    session.commit()
-    session.refresh(candidate)
-    
-    # Normaliser la réponse comme dans les autres endpoints
     candidate_dict = {
         "id": candidate.id,
         "first_name": candidate.first_name,

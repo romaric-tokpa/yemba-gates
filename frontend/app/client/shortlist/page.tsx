@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Briefcase, User, CheckCircle, XCircle, Clock, Eye, FileText, Mail, Phone, Tag, ExternalLink, MessageSquare, Calendar, Plus, X } from 'lucide-react'
+import { Briefcase, User, CheckCircle, XCircle, Clock, Eye, FileText, Mail, Phone, Tag, ExternalLink, MessageSquare, Calendar, Plus, X, Search, Filter, Sparkles, TrendingUp, Award, MapPin, Building2, ArrowLeft } from 'lucide-react'
 import { getClientShortlists, validateCandidate, type ShortlistItem, type ShortlistValidation, createClientInterviewRequest, type AvailabilitySlot, type ClientInterviewRequestResponse } from '@/lib/api'
 import { useToastContext } from '@/components/ToastProvider'
 import { formatDateTime } from '@/lib/utils'
@@ -20,6 +20,9 @@ export default function ClientShortlistPage() {
   const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([])
   const [requestNotes, setRequestNotes] = useState('')
   const [isCreatingRequest, setIsCreatingRequest] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'validated' | 'rejected'>('all')
+  const [selectedJobFilter, setSelectedJobFilter] = useState<string>('all')
   const { success, error: showError } = useToastContext()
 
   useEffect(() => {
@@ -40,20 +43,82 @@ export default function ClientShortlistPage() {
   }
 
   // Grouper les shortlists par besoin (job)
-  const shortlistsByJob = shortlists.reduce((acc, item) => {
-    if (!acc[item.job_id]) {
-      acc[item.job_id] = {
-        job_id: item.job_id,
-        job_title: item.job_title,
-        job_department: item.job_department,
-        candidates: []
+  const shortlistsByJob = useMemo(() => {
+    return shortlists.reduce((acc, item) => {
+      if (!acc[item.job_id]) {
+        acc[item.job_id] = {
+          job_id: item.job_id,
+          job_title: item.job_title,
+          job_department: item.job_department,
+          candidates: []
+        }
       }
-    }
-    acc[item.job_id].candidates.push(item)
-    return acc
-  }, {} as Record<string, { job_id: string; job_title: string; job_department: string | null; candidates: ShortlistItem[] }>)
+      acc[item.job_id].candidates.push(item)
+      return acc
+    }, {} as Record<string, { job_id: string; job_title: string; job_department: string | null; candidates: ShortlistItem[] }>)
+  }, [shortlists])
 
   const jobs = Object.values(shortlistsByJob)
+
+  // Filtrer les candidats
+  const filteredShortlists = useMemo(() => {
+    let filtered = shortlists
+
+    // Filtre par recherche
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(item =>
+        item.candidate_name.toLowerCase().includes(query) ||
+        item.candidate_email?.toLowerCase().includes(query) ||
+        item.job_title.toLowerCase().includes(query) ||
+        item.candidate_tags?.some(tag => tag.toLowerCase().includes(query))
+      )
+    }
+
+    // Filtre par statut
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(item => {
+        if (filterStatus === 'pending') return item.client_validated === null
+        if (filterStatus === 'validated') return item.client_validated === true
+        if (filterStatus === 'rejected') return item.client_validated === false
+        return true
+      })
+    }
+
+    // Filtre par job
+    if (selectedJobFilter !== 'all') {
+      filtered = filtered.filter(item => item.job_id === selectedJobFilter)
+    }
+
+    return filtered
+  }, [shortlists, searchQuery, filterStatus, selectedJobFilter])
+
+  // Re-grouper les candidats filtrés
+  const filteredShortlistsByJob = useMemo(() => {
+    return filteredShortlists.reduce((acc, item) => {
+      if (!acc[item.job_id]) {
+        acc[item.job_id] = {
+          job_id: item.job_id,
+          job_title: item.job_title,
+          job_department: item.job_department,
+          candidates: []
+        }
+      }
+      acc[item.job_id].candidates.push(item)
+      return acc
+    }, {} as Record<string, { job_id: string; job_title: string; job_department: string | null; candidates: ShortlistItem[] }>)
+  }, [filteredShortlists])
+
+  const filteredJobs = Object.values(filteredShortlistsByJob)
+
+  // Statistiques
+  const stats = useMemo(() => {
+    const total = shortlists.length
+    const pending = shortlists.filter(s => s.client_validated === null).length
+    const validated = shortlists.filter(s => s.client_validated === true).length
+    const rejected = shortlists.filter(s => s.client_validated === false).length
+    return { total, pending, validated, rejected }
+  }, [shortlists])
 
   const handleOpenValidationModal = (item: ShortlistItem) => {
     setValidationModal({ open: true, item })
@@ -176,401 +241,527 @@ export default function ClientShortlistPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="text-center py-12 text-gray-500">Chargement...</div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mb-4"></div>
+          <p className="text-gray-600">Chargement des shortlists...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* En-tête */}
-      <div className="mb-8">
-        <Link
-          href="/client"
-          className="inline-flex items-center text-emerald-600 hover:text-emerald-700 mb-4"
-        >
-          ← Retour au dashboard
-        </Link>
-        <h1 className="text-3xl font-bold text-gray-900">Shortlists</h1>
-        <p className="text-gray-600 mt-2">Candidats proposés pour vos besoins de recrutement</p>
-      </div>
-
-      {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-emerald-600">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      {/* Header avec fond coloré */}
+      <div className="bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-700 text-white">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-8">
+          <Link 
+            href="/client" 
+            className="inline-flex items-center text-emerald-100 hover:text-white mb-6 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            <span className="font-medium">Retour au dashboard</span>
+          </Link>
+          
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div>
-              <p className="text-sm text-gray-600">Total candidats</p>
-              <p className="text-2xl font-bold text-gray-900">{shortlists.length}</p>
-            </div>
-            <User className="w-8 h-8 text-emerald-600" />
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-emerald-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">En attente</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {shortlists.filter(s => s.client_validated === null).length}
+              <h1 className="text-3xl lg:text-4xl font-bold mb-2">Shortlists</h1>
+              <p className="text-emerald-100 text-sm lg:text-base">
+                Candidats proposés pour vos besoins de recrutement
               </p>
             </div>
-            <Clock className="w-8 h-8 text-emerald-600" />
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-emerald-600">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Validés</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {shortlists.filter(s => s.client_validated === true).length}
-              </p>
-            </div>
-            <CheckCircle className="w-8 h-8 text-emerald-600" />
           </div>
         </div>
       </div>
 
-      {/* Liste des shortlists groupées par besoin */}
-      {jobs.length > 0 ? (
-        <div className="space-y-6">
-          {jobs.map((job) => (
-            <div key={job.job_id} className="bg-white rounded-lg shadow">
-              {/* En-tête du besoin */}
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <Briefcase className="w-5 h-5 text-emerald-600" />
-                      <div>
-                        <h2 className="text-xl font-semibold text-gray-900">{job.job_title}</h2>
-                        {job.job_department && (
-                          <p className="text-sm text-gray-600 mt-1">{job.job_department}</p>
-                        )}
+      <div className="max-w-7xl mx-auto px-4 lg:px-8 py-8">
+        {/* Statistiques améliorées */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8 -mt-8">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Total candidats</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
+              </div>
+              <div className="p-3 bg-emerald-100 rounded-lg">
+                <User className="w-6 h-6 text-emerald-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">En attente</p>
+                <p className="text-3xl font-bold text-orange-600">{stats.pending}</p>
+              </div>
+              <div className="p-3 bg-orange-100 rounded-lg">
+                <Clock className="w-6 h-6 text-orange-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Validés</p>
+                <p className="text-3xl font-bold text-green-600">{stats.validated}</p>
+              </div>
+              <div className="p-3 bg-green-100 rounded-lg">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Refusés</p>
+                <p className="text-3xl font-bold text-red-600">{stats.rejected}</p>
+              </div>
+              <div className="p-3 bg-red-100 rounded-lg">
+                <XCircle className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Barre de recherche et filtres */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-4 lg:p-6 mb-8">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Recherche */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Rechercher un candidat, un poste..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+            
+            {/* Filtre par statut */}
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as any)}
+                className="pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none bg-white"
+              >
+                <option value="all">Tous les statuts</option>
+                <option value="pending">En attente</option>
+                <option value="validated">Validés</option>
+                <option value="rejected">Refusés</option>
+              </select>
+            </div>
+
+            {/* Filtre par job */}
+            {jobs.length > 1 && (
+              <div className="relative">
+                <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <select
+                  value={selectedJobFilter}
+                  onChange={(e) => setSelectedJobFilter(e.target.value)}
+                  className="pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none bg-white"
+                >
+                  <option value="all">Tous les postes</option>
+                  {jobs.map((job) => (
+                    <option key={job.job_id} value={job.job_id}>
+                      {job.job_title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Liste des shortlists groupées par besoin */}
+        {filteredJobs.length > 0 ? (
+          <div className="space-y-6">
+            {filteredJobs.map((job) => (
+              <div key={job.job_id} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                {/* En-tête du besoin amélioré */}
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 border-b border-gray-200">
+                  <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-emerald-600 rounded-lg">
+                          <Briefcase className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h2 className="text-xl lg:text-2xl font-bold text-gray-900">{job.job_title}</h2>
+                          {job.job_department && (
+                            <div className="flex items-center gap-1 mt-1 text-sm text-gray-600">
+                              <Building2 className="w-4 h-4" />
+                              <span>{job.job_department}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 text-sm font-medium bg-emerald-100 text-emerald-800 rounded-full">
-                      {job.candidates.length} candidat{job.candidates.length > 1 ? 's' : ''}
-                    </span>
-                    <Link
-                      href={`/client/jobs/${job.job_id}`}
-                      className="flex items-center text-emerald-600 hover:text-emerald-700 text-sm font-medium"
-                    >
-                      <Eye className="w-4 h-4 mr-1" />
-                      Voir le besoin
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      <span className="px-4 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-full shadow-sm">
+                        {job.candidates.length} candidat{job.candidates.length > 1 ? 's' : ''}
+                      </span>
+                      <Link
+                        href={`/client/jobs/${job.job_id}`}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                      >
+                        <Eye className="w-4 h-4" />
+                        Voir le besoin
+                      </Link>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Liste des candidats */}
-              <div className="p-6">
-                <div className="space-y-4">
-                  {job.candidates.map((candidate) => (
-                    <div
-                      key={candidate.application_id}
-                      className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="font-medium text-gray-900">{candidate.candidate_name}</h3>
+                {/* Liste des candidats améliorée */}
+                <div className="p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+                    {job.candidates.map((candidate) => (
+                      <div
+                        key={candidate.application_id}
+                        className={`p-5 border-2 rounded-xl transition-all hover:shadow-lg ${
+                          candidate.client_validated === true
+                            ? 'border-green-200 bg-green-50/30'
+                            : candidate.client_validated === false
+                            ? 'border-red-200 bg-red-50/30'
+                            : 'border-yellow-200 bg-yellow-50/30 hover:border-emerald-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <User className="w-5 h-5 text-emerald-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-bold text-gray-900 text-lg truncate">{candidate.candidate_name}</h3>
+                              </div>
+                            </div>
                             {getValidationBadge(candidate)}
                           </div>
-                          
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mt-3">
-                            {candidate.candidate_email && (
-                              <div className="flex items-center">
-                                <Mail className="w-4 h-4 mr-1" />
-                                {candidate.candidate_email}
-                              </div>
-                            )}
-                            {candidate.candidate_phone && (
-                              <div className="flex items-center">
-                                <Phone className="w-4 h-4 mr-1" />
-                                {candidate.candidate_phone}
-                              </div>
+                        </div>
+                        
+                        <div className="space-y-3 mb-4">
+                          {candidate.candidate_email && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{candidate.candidate_email}</span>
+                            </div>
+                          )}
+                          {candidate.candidate_phone && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <span>{candidate.candidate_phone}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {candidate.candidate_tags && candidate.candidate_tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-4">
+                            {candidate.candidate_tags.slice(0, 3).map((tag, index) => (
+                              <span
+                                key={index}
+                                className="px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                            {candidate.candidate_tags.length > 3 && (
+                              <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
+                                +{candidate.candidate_tags.length - 3}
+                              </span>
                             )}
                           </div>
+                        )}
 
-                          {candidate.candidate_tags && candidate.candidate_tags.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-3">
-                              {candidate.candidate_tags.map((tag, index) => (
-                                <span
-                                  key={index}
-                                  className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-
-                          {candidate.client_feedback && (
-                            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                              <div className="flex items-start">
-                                <MessageSquare className="w-4 h-4 text-blue-600 mr-2 mt-0.5" />
-                                <div className="flex-1">
-                                  <p className="text-xs font-medium text-blue-900 mb-1">Votre commentaire</p>
-                                  <p className="text-sm text-blue-800">{candidate.client_feedback}</p>
-                                </div>
+                        {candidate.client_feedback && (
+                          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="flex items-start gap-2">
+                              <MessageSquare className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-blue-900 mb-1">Votre commentaire</p>
+                                <p className="text-sm text-blue-800 line-clamp-2">{candidate.client_feedback}</p>
                               </div>
                             </div>
-                          )}
-                          
-                          {/* Dates */}
-                          <div className="mt-3 pt-3 border-t border-gray-200">
-                            <div className="flex flex-col gap-1 text-xs text-gray-500">
-                              <div className="flex items-center gap-1">
-                                <Calendar className="w-3 h-3" />
-                                <span>Ajouté le {formatDateTime(candidate.created_at)}</span>
-                              </div>
-                              {candidate.client_validated_at && (
-                                <div className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  <span>Validé/Refusé le {formatDateTime(candidate.client_validated_at)}</span>
-                                </div>
-                              )}
+                          </div>
+                        )}
+                        
+                        {/* Dates */}
+                        <div className="mb-4 pt-3 border-t border-gray-200">
+                          <div className="flex flex-col gap-1.5 text-xs text-gray-500">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5" />
+                              <span>Ajouté le {formatDateTime(candidate.created_at)}</span>
                             </div>
+                            {candidate.client_validated_at && (
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>Décision le {formatDateTime(candidate.client_validated_at)}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 ml-4">
+                        {/* Actions */}
+                        <div className="flex flex-wrap gap-2">
                           {candidate.candidate_cv_path && (
                             <a
                               href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${candidate.candidate_cv_path}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center px-3 py-2 text-sm text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
                             >
-                              <FileText className="w-4 h-4 mr-1" />
+                              <FileText className="w-4 h-4" />
                               CV
                             </a>
                           )}
                           <button
                             onClick={() => router.push(`/client/candidats/${candidate.candidate_id}`)}
-                            className="flex items-center px-3 py-2 text-sm text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
                           >
-                            <Eye className="w-4 h-4 mr-1" />
+                            <Eye className="w-4 h-4" />
                             Fiche
                           </button>
                           {candidate.client_validated === true && (
                             <button
                               onClick={() => handleOpenInterviewRequestModal(candidate)}
-                              className="flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                             >
-                              <Calendar className="w-4 h-4 mr-1" />
-                              Demander entretien
+                              <Calendar className="w-4 h-4" />
+                              Entretien
                             </button>
                           )}
                           {candidate.client_validated === null && (
                             <button
                               onClick={() => handleOpenValidationModal(candidate)}
-                              className="flex items-center px-3 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
                             >
-                              <MessageSquare className="w-4 h-4 mr-1" />
-                              Valider/Refuser
+                              <MessageSquare className="w-4 h-4" />
+                              Décider
                             </button>
                           )}
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-12 text-center">
+            <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 text-lg font-semibold mb-2">
+              {searchQuery || filterStatus !== 'all' || selectedJobFilter !== 'all'
+                ? 'Aucun candidat ne correspond à vos critères'
+                : 'Aucune shortlist disponible'}
+            </p>
+            <p className="text-gray-400 text-sm">
+              {searchQuery || filterStatus !== 'all' || selectedJobFilter !== 'all'
+                ? 'Essayez de modifier vos filtres de recherche'
+                : 'Les recruteurs vous enverront des candidats pour vos besoins'}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Modal de demande d'entretien client amélioré */}
+      {interviewRequestModal.open && interviewRequestModal.item && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold mb-1">Demander un entretien client</h3>
+                  <p className="text-blue-100 text-sm">
+                    {interviewRequestModal.item.candidate_name} - {interviewRequestModal.item.job_title}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseInterviewRequestModal}
+                  className="text-white hover:text-gray-200 transition-colors p-1 hover:bg-white/10 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-900 flex items-start gap-2">
+                  <Calendar className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <span>Indiquez vos disponibilités pour planifier l'entretien. Le recruteur sera notifié et pourra choisir parmi vos créneaux.</span>
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-semibold text-gray-900">
+                    Créneaux de disponibilité *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddAvailabilitySlot}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Ajouter
+                  </button>
+                </div>
+                
+                <div className="space-y-3">
+                  {availabilitySlots.map((slot, index) => (
+                    <div key={index} className="p-4 border-2 border-gray-200 rounded-lg bg-gray-50 hover:border-emerald-300 transition-colors">
+                      <div className="flex items-end gap-3">
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1.5">Date *</label>
+                          <input
+                            type="date"
+                            value={slot.date}
+                            onChange={(e) => handleUpdateAvailabilitySlot(index, 'date', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1.5">Heure début *</label>
+                          <input
+                            type="time"
+                            value={slot.start_time}
+                            onChange={(e) => handleUpdateAvailabilitySlot(index, 'start_time', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1.5">Heure fin *</label>
+                          <input
+                            type="time"
+                            value={slot.end_time}
+                            onChange={(e) => handleUpdateAvailabilitySlot(index, 'end_time', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                            required
+                          />
+                        </div>
+                        {availabilitySlots.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAvailabilitySlot(index)}
+                            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors mb-0.5"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <User className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 text-lg mb-2">Aucune shortlist disponible</p>
-          <p className="text-gray-400 text-sm">Les recruteurs vous enverront des candidats pour vos besoins</p>
-        </div>
-      )}
 
-      {/* Modal de demande d'entretien client */}
-      {interviewRequestModal.open && interviewRequestModal.item && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-gray-900">
-                Demander un entretien client
-              </h3>
-              <button
-                onClick={handleCloseInterviewRequestModal}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-900">
-                <strong>{interviewRequestModal.item.candidate_name}</strong> - {interviewRequestModal.item.job_title}
-              </p>
-              <p className="text-xs text-blue-700 mt-1">
-                Indiquez vos disponibilités pour planifier l'entretien. Le recruteur sera notifié et pourra choisir parmi vos créneaux.
-              </p>
-            </div>
-
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Créneaux de disponibilité *
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Notes (optionnel)
                 </label>
+                <textarea
+                  value={requestNotes}
+                  onChange={(e) => setRequestNotes(e.target.value)}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Ajoutez des informations complémentaires sur vos disponibilités..."
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
                 <button
-                  type="button"
-                  onClick={handleAddAvailabilitySlot}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                  onClick={handleCloseInterviewRequestModal}
+                  disabled={isCreatingRequest}
+                  className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
                 >
-                  <Plus className="w-4 h-4" />
-                  Ajouter un créneau
+                  Annuler
+                </button>
+                <button
+                  onClick={handleCreateInterviewRequest}
+                  disabled={isCreatingRequest || availabilitySlots.filter(s => s.date && s.start_time && s.end_time).length === 0}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCreatingRequest ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Création...
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="w-4 h-4" />
+                      Envoyer la demande
+                    </>
+                  )}
                 </button>
               </div>
-              
-              <div className="space-y-3">
-                {availabilitySlots.map((slot, index) => (
-                  <div key={index} className="p-4 border border-gray-200 rounded-lg bg-gray-50">
-                    <div className="flex items-end gap-3">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Date *</label>
-                        <input
-                          type="date"
-                          value={slot.date}
-                          onChange={(e) => handleUpdateAvailabilitySlot(index, 'date', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                          required
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Heure début *</label>
-                        <input
-                          type="time"
-                          value={slot.start_time}
-                          onChange={(e) => handleUpdateAvailabilitySlot(index, 'start_time', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                          required
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Heure fin *</label>
-                        <input
-                          type="time"
-                          value={slot.end_time}
-                          onChange={(e) => handleUpdateAvailabilitySlot(index, 'end_time', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                          required
-                        />
-                      </div>
-                      {availabilitySlots.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAvailabilitySlot(index)}
-                          className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Notes (optionnel)
-              </label>
-              <textarea
-                value={requestNotes}
-                onChange={(e) => setRequestNotes(e.target.value)}
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="Ajoutez des informations complémentaires sur vos disponibilités..."
-              />
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={handleCloseInterviewRequestModal}
-                disabled={isCreatingRequest}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleCreateInterviewRequest}
-                disabled={isCreatingRequest || availabilitySlots.filter(s => s.date && s.start_time && s.end_time).length === 0}
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isCreatingRequest ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Création...
-                  </>
-                ) : (
-                  <>
-                    <Calendar className="w-4 h-4 mr-1" />
-                    Envoyer la demande
-                  </>
-                )}
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal de validation */}
+      {/* Modal de validation amélioré */}
       {validationModal.open && validationModal.item && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Valider ou refuser le candidat
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              <strong>{validationModal.item.candidate_name}</strong> - {validationModal.item.job_title}
-            </p>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Commentaire (optionnel)
-              </label>
-              <textarea
-                value={validationFeedback}
-                onChange={(e) => setValidationFeedback(e.target.value)}
-                rows={4}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="Ajoutez un commentaire sur votre décision..."
-              />
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white px-6 py-4 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold mb-1">Valider ou refuser le candidat</h3>
+                  <p className="text-emerald-100 text-sm">
+                    {validationModal.item.candidate_name} - {validationModal.item.job_title}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseValidationModal}
+                  className="text-white hover:text-gray-200 transition-colors p-1 hover:bg-white/10 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
+            
+            <div className="p-6">
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Commentaire (optionnel)
+                </label>
+                <textarea
+                  value={validationFeedback}
+                  onChange={(e) => setValidationFeedback(e.target.value)}
+                  rows={4}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Ajoutez un commentaire sur votre décision..."
+                />
+              </div>
 
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={handleCloseValidationModal}
-                disabled={isValidating}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={() => handleValidate(false)}
-                disabled={isValidating}
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                <XCircle className="w-4 h-4 mr-1" />
-                Refuser
-              </button>
-              <button
-                onClick={() => handleValidate(true)}
-                disabled={isValidating}
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
-              >
-                <CheckCircle className="w-4 h-4 mr-1" />
-                {isValidating ? 'Validation...' : 'Valider'}
-              </button>
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
+                <button
+                  onClick={handleCloseValidationModal}
+                  disabled={isValidating}
+                  className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={() => handleValidate(false)}
+                  disabled={isValidating}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Refuser
+                </button>
+                <button
+                  onClick={() => handleValidate(true)}
+                  disabled={isValidating}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  {isValidating ? 'Validation...' : 'Valider'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

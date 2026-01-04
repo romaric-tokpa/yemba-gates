@@ -6,15 +6,15 @@ import Link from 'next/link'
 import { 
   ArrowLeft, Upload, FileText, Tag, Mail, Phone, Calendar, User, Briefcase, 
   Edit, X, Plus, Save, Eye, Clock, MapPin, MessageSquare, Star, CheckCircle2, 
-  XCircle, AlertCircle, Users, Building2, Award, FileCheck, BarChart3, TrendingUp, TrendingDown, Search
+  XCircle, AlertCircle, Users, Building2, Award, FileCheck, BarChart3, TrendingUp, TrendingDown, Sparkles, Loader2
 } from 'lucide-react'
 import { 
   getCandidate, CandidateResponse, updateCandidateStatus, updateCandidate, CandidateUpdate,
   getJobs, JobResponse, createApplication, getCandidateApplications, ApplicationResponse,
   getInterviews, InterviewResponse, createInterview, InterviewCreate, addInterviewFeedback,
-  InterviewFeedback, updateInterview, deleteInterview, getUsers, UserResponse
+  InterviewFeedback, updateInterview, deleteInterview, compareCandidateWithJob, getSavedComparison, JobCandidateComparisonResponse
 } from '@/lib/api'
-import { authenticatedFetch, getToken, isAuthenticated, getCurrentUser } from '@/lib/auth'
+import { authenticatedFetch, getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
 import { getCandidatePhotoUrl } from '@/lib/imageUtils'
 
@@ -45,20 +45,17 @@ export default function RecruiterCandidateDetailPage() {
   const [selectedInterview, setSelectedInterview] = useState<InterviewResponse | null>(null)
   const [isSubmittingInterview, setIsSubmittingInterview] = useState(false)
   
-  // États pour interviewer et participants
-  const [users, setUsers] = useState<UserResponse[]>([])
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [selectedInterviewerId, setSelectedInterviewerId] = useState<string>('')
-  const [participantSearchQuery, setParticipantSearchQuery] = useState<string>('')
-  
   // États pour les onglets et le comparatif
   const [activeTab, setActiveTab] = useState<'profil' | 'postes' | 'entretiens'>('profil')
   const [selectedJobForComparison, setSelectedJobForComparison] = useState<JobResponse | null>(null)
   const [showComparisonModal, setShowComparisonModal] = useState(false)
-  const [isEditingComparison, setIsEditingComparison] = useState(false)
-  const [comparisonSkills, setComparisonSkills] = useState<string[]>([])
-  const [comparisonExperience, setComparisonExperience] = useState<number | null>(null)
-  const [isSavingComparison, setIsSavingComparison] = useState(false)
+  
+  // États pour l'analyse IA
+  const [aiAnalysis, setAiAnalysis] = useState<JobCandidateComparisonResponse | null>(null)
+  const [isLoadingAiAnalysis, setIsLoadingAiAnalysis] = useState(false)
+  // États pour les analyses IA par job (pour l'affichage dans la liste des postes)
+  const [jobAnalyses, setJobAnalyses] = useState<Record<string, JobCandidateComparisonResponse>>({})
+  const [loadingJobAnalyses, setLoadingJobAnalyses] = useState<Record<string, boolean>>({})
   
   // États pour l'édition des entretiens dans la fiche
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null)
@@ -91,8 +88,6 @@ export default function RecruiterCandidateDetailPage() {
     feedback: string
     decision: 'positif' | 'négatif' | 'en_attente'
     score: number | null
-    participants: string[]
-    participantEmails: string[]
     // Champs pour préqualification
     prequalification_competences_techniques: string
     prequalification_experience: string
@@ -108,7 +103,7 @@ export default function RecruiterCandidateDetailPage() {
     qualification_remarques: string
   }>({
     application_id: '',
-    interview_type: 'prequalification',
+    interview_type: 'rh',
     scheduled_at: '',
     scheduled_end_at: '',
     location: '',
@@ -116,8 +111,6 @@ export default function RecruiterCandidateDetailPage() {
     feedback: '',
     decision: 'en_attente',
     score: null,
-    participants: [],
-    participantEmails: [],
     // Préqualification
     prequalification_competences_techniques: '',
     prequalification_experience: '',
@@ -161,23 +154,8 @@ export default function RecruiterCandidateDetailPage() {
       loadJobs()
       loadApplications()
       loadInterviews()
-      loadUsers()
     }
   }, [candidateId, router])
-  
-  // Synchroniser selectedInterviewerId avec currentUserId si vide
-  useEffect(() => {
-    if (currentUserId && !selectedInterviewerId) {
-      setSelectedInterviewerId(currentUserId)
-    }
-  }, [currentUserId])
-  
-  // S'assurer que selectedInterviewerId est défini quand le modal s'ouvre
-  useEffect(() => {
-    if (showInterviewForm && currentUserId && !selectedInterviewerId) {
-      setSelectedInterviewerId(currentUserId)
-    }
-  }, [showInterviewForm, currentUserId, selectedInterviewerId])
 
   useEffect(() => {
     if (candidate && !isEditing) {
@@ -242,25 +220,44 @@ export default function RecruiterCandidateDetailPage() {
     }
   }
 
-  const loadUsers = async () => {
-    try {
-      // Récupérer l'utilisateur connecté
-      try {
-        const currentUser = await getCurrentUser()
-        setCurrentUserId(currentUser.id)
-        // Définir automatiquement l'utilisateur connecté comme interviewer principal
-        setSelectedInterviewerId(currentUser.id)
-      } catch (err) {
-        console.warn('Erreur lors de la récupération de l\'utilisateur connecté:', err)
-      }
+  // Charger les analyses IA pour tous les postes du candidat
+  const loadJobAnalyses = async () => {
+    if (!candidate || !candidate.cv_file_path || applications.length === 0) return
+    
+    const newAnalyses: Record<string, JobCandidateComparisonResponse> = {}
+    const newLoading: Record<string, boolean> = {}
+    
+    // Charger les analyses pour chaque application
+    for (const app of applications) {
+      const jobId = app.job_id
+      if (!jobId) continue
       
-      const usersData = await getUsers()
-      setUsers(Array.isArray(usersData) ? usersData : [])
-    } catch (error) {
-      console.error('Erreur lors du chargement des utilisateurs:', error)
-      setUsers([])
+      newLoading[jobId] = true
+      setLoadingJobAnalyses(prev => ({ ...prev, [jobId]: true }))
+      
+      try {
+        const savedAnalysis = await getSavedComparison(candidate.id!, jobId)
+        if (savedAnalysis) {
+          newAnalyses[jobId] = savedAnalysis
+        }
+      } catch (err) {
+        // Pas d'analyse sauvegardée, ce n'est pas une erreur
+        console.log(`Aucune analyse IA sauvegardée pour le job ${jobId}`)
+      } finally {
+        newLoading[jobId] = false
+        setLoadingJobAnalyses(prev => ({ ...prev, [jobId]: false }))
+      }
     }
+    
+    setJobAnalyses(newAnalyses)
   }
+
+  // Charger les analyses IA quand les applications sont chargées
+  useEffect(() => {
+    if (applications.length > 0 && candidate && candidate.cv_file_path) {
+      loadJobAnalyses()
+    }
+  }, [applications.length, candidate?.id, candidate?.cv_file_path])
 
   const handleSave = async () => {
     if (!candidate) return
@@ -333,34 +330,55 @@ export default function RecruiterCandidateDetailPage() {
     })
   }
 
-  const handleSaveComparison = async () => {
-    if (!candidate) return
-
+  const handleAiAnalysis = async (forceNew: boolean = false) => {
+    if (!candidate || !selectedJobForComparison) return
+    
     try {
-      setIsSavingComparison(true)
-      const updateData: CandidateUpdate = {
-        skills: comparisonSkills,
-        years_of_experience: comparisonExperience ?? undefined,
+      setIsLoadingAiAnalysis(true)
+      
+      // Essayer d'abord de charger l'analyse sauvegardée si on ne force pas une nouvelle analyse
+      if (!forceNew) {
+        try {
+          const savedAnalysis = await getSavedComparison(candidate.id!, selectedJobForComparison.id)
+          if (savedAnalysis) {
+            setAiAnalysis(savedAnalysis)
+            setIsLoadingAiAnalysis(false)
+            success('Analyse IA chargée depuis la sauvegarde')
+            return
+          }
+        } catch (err) {
+          // Si l'analyse sauvegardée n'existe pas, continuer pour créer une nouvelle
+          console.log('Aucune analyse sauvegardée trouvée, création d\'une nouvelle analyse...')
+        }
       }
-      const updatedCandidate = await updateCandidate(candidateId, updateData)
-      setCandidate(updatedCandidate)
-      setIsEditingComparison(false)
-      setComparisonSkills([])
-      setComparisonExperience(null)
-      success('Compétences et expérience mises à jour avec succès !')
+      
+      // Créer une nouvelle analyse (qui sera automatiquement sauvegardée par le backend)
+      const analysis = await compareCandidateWithJob(candidate.id!, selectedJobForComparison.id)
+      setAiAnalysis(analysis)
+      success(forceNew ? 'Analyse IA régénérée et sauvegardée avec succès !' : 'Analyse IA effectuée et sauvegardée avec succès !')
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la sauvegarde'
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'analyse IA'
       showError(errorMessage)
     } finally {
-      setIsSavingComparison(false)
+      setIsLoadingAiAnalysis(false)
     }
   }
 
-  const handleCancelComparison = () => {
-    setIsEditingComparison(false)
-    setComparisonSkills([])
-    setComparisonExperience(null)
-  }
+  // Charger l'analyse sauvegardée ou créer une nouvelle quand le modal s'ouvre
+  useEffect(() => {
+    if (showComparisonModal && selectedJobForComparison && candidate && candidate.cv_file_path && !aiAnalysis && !isLoadingAiAnalysis) {
+      // Réinitialiser l'analyse quand on change de job
+      setAiAnalysis(null)
+      handleAiAnalysis(false) // false = essayer de charger l'analyse sauvegardée d'abord
+    }
+  }, [showComparisonModal, selectedJobForComparison?.id, candidate?.id])
+  
+  // Réinitialiser l'analyse quand on ferme le modal
+  useEffect(() => {
+    if (!showComparisonModal) {
+      setAiAnalysis(null)
+    }
+  }, [showComparisonModal])
 
   const handleStatusChange = async (newStatus: string) => {
     if (!candidate) return
@@ -414,35 +432,6 @@ export default function RecruiterCandidateDetailPage() {
   const handleOpenInterviewForm = (applicationId: string, interview?: InterviewResponse, interviewType?: 'rh' | 'technique' | 'client' | 'prequalification' | 'qualification' | 'autre') => {
     if (interview) {
       setSelectedInterview(interview)
-      setSelectedInterviewerId(interview.interviewer_id || currentUserId || '')
-      
-      // Extraire les participants des notes si présents
-      const participants: string[] = []
-      const participantEmails: string[] = []
-      let preparationNotes = interview.preparation_notes || ''
-      if (interview.preparation_notes) {
-        const participantsMatch = interview.preparation_notes.match(/Participants:\s*(.+)/)
-        if (participantsMatch) {
-          const participantsStr = participantsMatch[1]
-          preparationNotes = interview.preparation_notes.replace(/Participants:.*/, '').trim()
-          participantsStr.split(',').forEach(p => {
-            const trimmed = p.trim()
-            // Vérifier si c'est un email ou un utilisateur
-            if (trimmed.includes('@')) {
-              participantEmails.push(trimmed)
-            } else {
-              // Chercher l'utilisateur par nom
-              const user = users.find(u => 
-                trimmed.includes(u.first_name) && trimmed.includes(u.last_name)
-              )
-              if (user) {
-                participants.push(user.id)
-              }
-            }
-          })
-        }
-      }
-      
       // Parser le feedback pour extraire les champs structurés si disponibles
       const feedbackData = interview.feedback || ''
       const parsedData = parseFeedbackData(feedbackData, interview.interview_type as any)
@@ -453,19 +442,17 @@ export default function RecruiterCandidateDetailPage() {
         scheduled_at: interview.scheduled_at ? new Date(interview.scheduled_at).toISOString().slice(0, 16) : '',
         scheduled_end_at: interview.scheduled_end_at ? new Date(interview.scheduled_end_at).toISOString().slice(0, 16) : '',
         location: interview.location || '',
-        preparation_notes: preparationNotes,
+        preparation_notes: interview.preparation_notes || '',
         feedback: interview.feedback || '',
         decision: (interview.decision as any) || 'en_attente',
         score: interview.score || null,
-        participants,
-        participantEmails,
         ...parsedData,
       })
     } else {
       setSelectedInterview(null)
       setInterviewForm({
         application_id: applicationId,
-        interview_type: interviewType || 'prequalification',
+        interview_type: interviewType || 'rh',
         scheduled_at: '',
         scheduled_end_at: '',
         location: '',
@@ -473,8 +460,6 @@ export default function RecruiterCandidateDetailPage() {
         feedback: '',
         decision: 'en_attente',
         score: null,
-        participants: [],
-        participantEmails: [],
         // Préqualification
         prequalification_competences_techniques: '',
         prequalification_experience: '',
@@ -489,11 +474,6 @@ export default function RecruiterCandidateDetailPage() {
         qualification_potentiel: '',
         qualification_remarques: '',
       })
-      // Réinitialiser l'interviewer à l'utilisateur connecté
-      if (currentUserId) {
-        setSelectedInterviewerId(currentUserId)
-      }
-      setParticipantSearchQuery('')
     }
     setShowInterviewForm(true)
   }
@@ -553,59 +533,12 @@ export default function RecruiterCandidateDetailPage() {
     return formData.feedback
   }
 
-  // Fonctions pour gérer les participants
-  const toggleParticipant = (userId: string) => {
-    setInterviewForm(prev => ({
-      ...prev,
-      participants: prev.participants?.includes(userId)
-        ? prev.participants.filter(id => id !== userId)
-        : [...(prev.participants || []), userId]
-    }))
-  }
-
-  const addParticipantEmail = (email: string) => {
-    const trimmedEmail = email.trim()
-    if (trimmedEmail && trimmedEmail.includes('@') && !interviewForm.participantEmails?.includes(trimmedEmail)) {
-      setInterviewForm(prev => ({
-        ...prev,
-        participantEmails: [...(prev.participantEmails || []), trimmedEmail]
-      }))
-      setParticipantSearchQuery('')
-    }
-  }
-
-  const removeParticipantEmail = (email: string) => {
-    setInterviewForm(prev => ({
-      ...prev,
-      participantEmails: prev.participantEmails?.filter(e => e !== email) || []
-    }))
-  }
-
-  // Filtrer les utilisateurs pour les participants
-  const filteredUsersForParticipants = useMemo(() => {
-    if (!participantSearchQuery.trim()) {
-      return []
-    }
-    
-    const searchLower = participantSearchQuery.toLowerCase()
-    return users.filter(user => {
-      const fullName = `${user.first_name} ${user.last_name}`.toLowerCase()
-      return fullName.includes(searchLower) ||
-             user.first_name?.toLowerCase().includes(searchLower) ||
-             user.last_name?.toLowerCase().includes(searchLower) ||
-             user.email?.toLowerCase().includes(searchLower) ||
-             user.role?.toLowerCase().includes(searchLower)
-    }).slice(0, 10) // Limiter à 10 résultats
-  }, [participantSearchQuery, users])
-
   const handleCloseInterviewForm = () => {
     setShowInterviewForm(false)
     setSelectedInterview(null)
-    setSelectedInterviewerId(currentUserId || '')
-    setParticipantSearchQuery('')
     setInterviewForm({
       application_id: '',
-      interview_type: 'prequalification',
+      interview_type: 'rh',
       scheduled_at: '',
       scheduled_end_at: '',
       location: '',
@@ -630,68 +563,19 @@ export default function RecruiterCandidateDetailPage() {
   }
 
   const handleSubmitInterview = async () => {
-    // Validation des champs obligatoires
-    if (!interviewForm.application_id) {
-      showError('Veuillez sélectionner une candidature')
-      return
-    }
-    if (!interviewForm.scheduled_at) {
-      showError('Veuillez sélectionner une date et heure de début')
-      return
-    }
-    if (!interviewForm.scheduled_end_at) {
-      showError('Veuillez sélectionner une date et heure de fin')
-      return
-    }
-    if (!selectedInterviewerId && !currentUserId) {
-      showError('Veuillez sélectionner un interviewer principal')
-      return
-    }
-    if (!interviewForm.interview_type) {
-      showError('Veuillez sélectionner un type d\'entretien')
+    if (!interviewForm.application_id || !interviewForm.scheduled_at) {
+      showError('Veuillez remplir tous les champs obligatoires')
       return
     }
 
     try {
       setIsSubmittingInterview(true)
 
-      // Préparer les participants (IDs + emails)
-      const participantList: string[] = []
-      if (interviewForm.participants && interviewForm.participants.length > 0) {
-        interviewForm.participants.forEach(id => {
-          const user = users.find(u => u.id === id)
-          if (user) {
-            participantList.push(`${user.first_name} ${user.last_name} (${user.email})`)
-          }
-        })
-      }
-      if (interviewForm.participantEmails && interviewForm.participantEmails.length > 0) {
-        interviewForm.participantEmails.forEach(email => {
-          participantList.push(email)
-        })
-      }
-
-      // Convertir les dates en format ISO si nécessaire
-      let scheduledAtISO = interviewForm.scheduled_at
-      let scheduledEndAtISO = interviewForm.scheduled_end_at || undefined
-      
-      if (scheduledAtISO && !scheduledAtISO.includes('T')) {
-        scheduledAtISO = new Date(scheduledAtISO).toISOString()
-      } else if (scheduledAtISO && scheduledAtISO.length === 16) {
-        scheduledAtISO = new Date(scheduledAtISO).toISOString()
-      }
-      
-      if (scheduledEndAtISO) {
-        if (!scheduledEndAtISO.includes('T')) {
-          scheduledEndAtISO = new Date(scheduledEndAtISO).toISOString()
-        } else if (scheduledEndAtISO.length === 16) {
-          scheduledEndAtISO = new Date(scheduledEndAtISO).toISOString()
-        }
-      }
+      // Formater le feedback selon le type d'entretien
+      const formattedFeedback = formatFeedbackData(interviewForm)
 
       if (selectedInterview) {
         // Mettre à jour l'entretien existant
-        const formattedFeedback = formatFeedbackData(interviewForm)
         if (formattedFeedback) {
           await addInterviewFeedback(selectedInterview.id, {
             feedback: formattedFeedback,
@@ -701,15 +585,10 @@ export default function RecruiterCandidateDetailPage() {
         }
         await updateInterview(selectedInterview.id, {
           interview_type: interviewForm.interview_type,
-          scheduled_at: scheduledAtISO,
-          scheduled_end_at: scheduledEndAtISO,
+          scheduled_at: interviewForm.scheduled_at,
+          scheduled_end_at: interviewForm.scheduled_end_at || undefined,
           location: interviewForm.location || undefined,
-          interviewer_id: selectedInterviewerId || currentUserId || undefined,
-          preparation_notes: interviewForm.preparation_notes 
-            ? `${interviewForm.preparation_notes}\n\nParticipants: ${participantList.length > 0 ? participantList.join(', ') : 'Aucun'}`
-            : participantList.length > 0
-              ? `Participants: ${participantList.join(', ')}`
-              : undefined,
+          preparation_notes: interviewForm.preparation_notes || undefined,
         })
         success('Entretien mis à jour avec succès')
       } else {
@@ -717,15 +596,10 @@ export default function RecruiterCandidateDetailPage() {
         const interviewData: InterviewCreate = {
           application_id: interviewForm.application_id,
           interview_type: interviewForm.interview_type,
-          scheduled_at: scheduledAtISO,
-          scheduled_end_at: scheduledEndAtISO,
+          scheduled_at: interviewForm.scheduled_at,
+          scheduled_end_at: interviewForm.scheduled_end_at || undefined,
           location: interviewForm.location || undefined,
-          interviewer_id: selectedInterviewerId || currentUserId || undefined,
-          preparation_notes: interviewForm.preparation_notes 
-            ? `${interviewForm.preparation_notes}\n\nParticipants: ${participantList.length > 0 ? participantList.join(', ') : 'Aucun'}`
-            : participantList.length > 0
-              ? `Participants: ${participantList.join(', ')}`
-              : undefined,
+          preparation_notes: interviewForm.preparation_notes || undefined,
         }
         const newInterview = await createInterview(interviewData)
         
@@ -837,7 +711,7 @@ export default function RecruiterCandidateDetailPage() {
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
           {error || 'Candidat non trouvé'}
         </div>
-        <Link href="/recruiter/candidates" className="mt-4 inline-block text-blue-600 hover:text-blue-800">
+        <Link href="/recruiter/candidates" className="mt-4 inline-block text-indigo-600 hover:text-indigo-800">
           ← Retour à la liste
         </Link>
       </div>
@@ -856,41 +730,21 @@ export default function RecruiterCandidateDetailPage() {
   ]
 
   return (
-    <div className="p-4 lg:p-8 max-w-7xl mx-auto bg-gray-50 min-h-screen">
-      {/* En-tête */}
-      <div className="mb-6 lg:mb-8">
-        <Link 
-          href="/recruiter/candidates" 
-          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Retour aux candidats
-        </Link>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
-              Profil Candidat
-            </h1>
-            <p className="text-gray-600 mt-1">Gestion complète du profil et des entretiens</p>
-          </div>
-          {!isEditing && (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto"
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              Modifier le profil
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Colonne gauche - Profil */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Carte profil */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-center mb-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      {/* Header avec fond coloré */}
+      <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-8">
+          <Link 
+            href="/recruiter/candidates" 
+            className="inline-flex items-center text-indigo-100 hover:text-white mb-6 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            <span className="font-medium">Retour aux candidats</span>
+          </Link>
+          
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
+            {/* Photo/Avatar */}
+            <div className="relative">
               {(() => {
                 const photoUrl = getCandidatePhotoUrl(candidate, API_URL)
                 if (photoUrl) {
@@ -898,7 +752,7 @@ export default function RecruiterCandidateDetailPage() {
                     <img
                       src={photoUrl}
                       alt={`${candidate.first_name} ${candidate.last_name}`}
-                      className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
+                      className="w-32 h-32 lg:w-40 lg:h-40 rounded-2xl object-cover border-4 border-white shadow-2xl"
                       onError={(e) => {
                         // Si l'image ne se charge pas, afficher l'avatar par défaut
                         const target = e.target as HTMLImageElement
@@ -906,8 +760,8 @@ export default function RecruiterCandidateDetailPage() {
                         const parent = target.parentElement
                         if (parent) {
                           const fallback = document.createElement('div')
-                          fallback.className = 'w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-4 border-white shadow-lg'
-                          fallback.innerHTML = `<svg class="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>`
+                          fallback.className = 'w-32 h-32 lg:w-40 lg:h-40 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-4 border-white shadow-2xl'
+                          fallback.innerHTML = `<svg class="w-16 h-16 lg:w-20 lg:h-20 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>`
                           parent.appendChild(fallback)
                         }
                       }}
@@ -915,249 +769,282 @@ export default function RecruiterCandidateDetailPage() {
                   )
                 }
                 return (
-                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-4 border-white shadow-lg">
-                    <User className="w-16 h-16 text-white" />
+                  <div className="w-32 h-32 lg:w-40 lg:h-40 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-4 border-white shadow-2xl">
+                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-white" />
                   </div>
                 )
               })()}
+              <div className="absolute -bottom-2 -right-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-lg ${
+                  candidate.status === 'embauché' ? 'bg-green-500 text-white' :
+                  candidate.status === 'rejeté' ? 'bg-red-500 text-white' :
+                  candidate.status === 'offre' ? 'bg-yellow-500 text-white' :
+                  candidate.status === 'shortlist' ? 'bg-blue-500 text-white' :
+                  'bg-white text-indigo-600'
+                }`}>
+                  {candidate.status.charAt(0).toUpperCase() + candidate.status.slice(1).replace('_', ' ')}
+                </span>
+              </div>
             </div>
 
-            <div className="text-center mb-4">
-              <h2 className="text-2xl font-bold text-gray-900">
-                {isEditing ? (
-                  <>
-                    <input
-                      type="text"
-                      value={formData.first_name}
-                      onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                      className="w-full text-center px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-2"
-                      placeholder="Prénom"
-                    />
-                    <input
-                      type="text"
-                      value={formData.last_name}
-                      onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                      className="w-full text-center px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Nom"
-                    />
-                  </>
-                ) : (
-                  <>
-                    {candidate.first_name} {candidate.last_name}
-                  </>
+            {/* Informations principales */}
+            <div className="flex-1">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl lg:text-4xl font-bold mb-2">
+                    {isEditing ? (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={formData.first_name}
+                          onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                          className="px-3 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg text-white placeholder-white/70 focus:ring-2 focus:ring-white/50 focus:border-white"
+                          placeholder="Prénom"
+                        />
+                        <input
+                          type="text"
+                          value={formData.last_name}
+                          onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                          className="px-3 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg text-white placeholder-white/70 focus:ring-2 focus:ring-white/50 focus:border-white"
+                          placeholder="Nom"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        {candidate.first_name} {candidate.last_name}
+                      </>
+                    )}
+                  </h1>
+                  {!isEditing && candidate.profile_title && (
+                    <p className="text-lg text-indigo-100 mb-2">{candidate.profile_title}</p>
+                  )}
+                  {!isEditing && candidate.years_of_experience !== null && candidate.years_of_experience !== undefined && (
+                    <p className="text-sm text-indigo-200">
+                      {candidate.years_of_experience} ans d&apos;expérience
+                    </p>
+                  )}
+                </div>
+                {!isEditing && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-indigo-600 rounded-xl hover:bg-indigo-50 transition-all shadow-lg hover:shadow-xl font-semibold"
+                  >
+                    <Edit className="w-5 h-5" />
+                    Modifier
+                  </button>
                 )}
-              </h2>
-              {!isEditing && candidate.profile_title && (
-                <p className="text-sm text-gray-600 mt-1">
-                  {candidate.profile_title}
-                </p>
-              )}
-              {!isEditing && candidate.years_of_experience !== null && candidate.years_of_experience !== undefined && (
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {candidate.years_of_experience} ans d&apos;expérience
-                </p>
-              )}
-            </div>
+              </div>
 
-            <div className="flex justify-center mb-4">
-              <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusBadgeColor(candidate.status)}`}>
-                {candidate.status.charAt(0).toUpperCase() + candidate.status.slice(1).replace('_', ' ')}
-              </span>
-            </div>
-
-            <div className="space-y-3 pt-4 border-t border-gray-200">
-              {isEditing ? (
-                <>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="email@example.com"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Téléphone</label>
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="+33 6 12 34 56 78"
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
+              {/* Contact rapide */}
+              {!isEditing && (
+                <div className="flex flex-wrap gap-4 mt-6">
                   {candidate.email && (
                     <a
                       href={`mailto:${candidate.email}`}
-                      className="flex items-center text-sm text-gray-700 hover:text-blue-600 transition-colors cursor-pointer"
+                      className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg hover:bg-white/20 transition-colors"
                     >
-                      <Mail className="w-4 h-4 mr-2 text-gray-400" />
-                      <span className="truncate">{candidate.email}</span>
+                      <Mail className="w-4 h-4" />
+                      <span className="text-sm">{candidate.email}</span>
                     </a>
                   )}
                   {candidate.phone && (
                     <a
                       href={`tel:${candidate.phone}`}
-                      className="flex items-center text-sm text-gray-700 hover:text-blue-600 transition-colors cursor-pointer"
+                      className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg hover:bg-white/20 transition-colors"
                     >
-                      <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                      <span>{candidate.phone}</span>
+                      <Phone className="w-4 h-4" />
+                      <span className="text-sm">{candidate.phone}</span>
                     </a>
                   )}
-                </>
+                </div>
               )}
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Statistiques rapides */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Statistiques</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Besoins attribués</span>
-                <span className="text-lg font-bold text-gray-900">{applications.length}</span>
+      {/* Statistiques rapides */}
+      <div className="max-w-7xl mx-auto px-4 lg:px-8 -mt-8 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Besoins attribués</p>
+                <p className="text-3xl font-bold text-gray-900">{applications.length}</p>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Entretiens</span>
-                <span className="text-lg font-bold text-gray-900">{interviews.length}</span>
+              <div className="p-3 bg-indigo-100 rounded-lg">
+                <Briefcase className="w-6 h-6 text-indigo-600" />
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Entretiens avec feedback</span>
-                <span className="text-lg font-bold text-gray-900">
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Total entretiens</p>
+                <p className="text-3xl font-bold text-gray-900">{interviews.length}</p>
+              </div>
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <MessageSquare className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Avec feedback</p>
+                <p className="text-3xl font-bold text-gray-900">
                   {interviews.filter(i => i.feedback).length}
-                </span>
+                </p>
+              </div>
+              <div className="p-3 bg-green-100 rounded-lg">
+                <FileCheck className="w-6 h-6 text-green-600" />
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Colonne droite - Contenu principal */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Système d'onglets */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="border-b border-gray-200">
-              <nav className="flex -mb-px">
-                <button
-                  onClick={() => setActiveTab('profil')}
-                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-                    activeTab === 'profil'
-                      ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <User className="w-4 h-4" />
-                    <span>Profil</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('postes')}
-                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-                    activeTab === 'postes'
-                      ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <Briefcase className="w-4 h-4" />
-                    <span>Postes ({applications.length})</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('entretiens')}
-                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
-                    activeTab === 'entretiens'
-                      ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <MessageSquare className="w-4 h-4" />
-                    <span>Entretiens ({interviews.length})</span>
-                  </div>
-                </button>
-              </nav>
-            </div>
+      {/* Contenu principal */}
+      <div className="max-w-7xl mx-auto px-4 lg:px-8 pb-8">
+        {/* Système d'onglets moderne */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden mb-6">
+          <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+            <nav className="flex -mb-px">
+              <button
+                onClick={() => setActiveTab('profil')}
+                className={`flex-1 px-6 py-5 text-sm font-semibold transition-all relative ${
+                  activeTab === 'profil'
+                    ? 'text-indigo-600 bg-white'
+                    : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <User className={`w-5 h-5 ${activeTab === 'profil' ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  <span>Profil</span>
+                </div>
+                {activeTab === 'profil' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-600"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('postes')}
+                className={`flex-1 px-6 py-5 text-sm font-semibold transition-all relative ${
+                  activeTab === 'postes'
+                    ? 'text-indigo-600 bg-white'
+                    : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Briefcase className={`w-5 h-5 ${activeTab === 'postes' ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  <span>Postes</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    activeTab === 'postes' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {applications.length}
+                  </span>
+                </div>
+                {activeTab === 'postes' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-600"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('entretiens')}
+                className={`flex-1 px-6 py-5 text-sm font-semibold transition-all relative ${
+                  activeTab === 'entretiens'
+                    ? 'text-indigo-600 bg-white'
+                    : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <MessageSquare className={`w-5 h-5 ${activeTab === 'entretiens' ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  <span>Entretiens</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    activeTab === 'entretiens' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {interviews.length}
+                  </span>
+                </div>
+                {activeTab === 'entretiens' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-600"></div>
+                )}
+              </button>
+            </nav>
+          </div>
 
-            {/* Contenu des onglets */}
-            <div className="p-6">
-              {/* Onglet Profil */}
-              {activeTab === 'profil' && (
-                <div className="space-y-6">
-                  {/* Informations détaillées */}
-                  <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Briefcase className="w-5 h-5 mr-2" />
-              Informations détaillées
-            </h2>
+          {/* Contenu des onglets */}
+          <div className="p-6 lg:p-8">
+            {/* Onglet Profil */}
+            {activeTab === 'profil' && (
+              <div className="space-y-6">
+                {/* Informations détaillées */}
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-100">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                    <User className="w-6 h-6 mr-3 text-indigo-600" />
+                    Informations personnelles
+                  </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Prénom</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                ) : (
-                  <p className="text-sm text-gray-900">{candidate.first_name}</p>
-                )}
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Prénom</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={formData.first_name}
+                          onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        />
+                      ) : (
+                        <p className="text-sm font-medium text-gray-900">{candidate.first_name}</p>
+                      )}
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                ) : (
-                  <p className="text-sm text-gray-900">{candidate.last_name}</p>
-                )}
-              </div>
+                    <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Nom</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={formData.last_name}
+                          onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        />
+                      ) : (
+                        <p className="text-sm font-medium text-gray-900">{candidate.last_name}</p>
+                      )}
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <Mail className="w-4 h-4 mr-1" />
-                  Email
-                </label>
-                {isEditing ? (
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                ) : (
-                  <p className="text-sm text-gray-900">{candidate.email || '-'}</p>
-                )}
-              </div>
+                    <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center">
+                        <Mail className="w-3 h-3 mr-1" />
+                        Email
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        />
+                      ) : (
+                        <p className="text-sm font-medium text-gray-900">{candidate.email || '-'}</p>
+                      )}
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <Phone className="w-4 h-4 mr-1" />
-                  Téléphone
-                </label>
-                {isEditing ? (
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                ) : (
-                  <p className="text-sm text-gray-900">{candidate.phone || '-'}</p>
-                )}
-              </div>
+                    <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center">
+                        <Phone className="w-3 h-3 mr-1" />
+                        Téléphone
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="tel"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        />
+                      ) : (
+                        <p className="text-sm font-medium text-gray-900">{candidate.phone || '-'}</p>
+                      )}
+                    </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Titre du profil</label>
@@ -1167,7 +1054,7 @@ export default function RecruiterCandidateDetailPage() {
                     value={formData.profile_title || ''}
                     onChange={(e) => setFormData({ ...formData, profile_title: e.target.value })}
                     placeholder="ex: Développeur Fullstack, Designer UX..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 ) : (
                   <p className="text-sm text-gray-900">{candidate.profile_title || '-'}</p>
@@ -1183,7 +1070,7 @@ export default function RecruiterCandidateDetailPage() {
                     value={formData.years_of_experience || ''}
                     onChange={(e) => setFormData({ ...formData, years_of_experience: e.target.value ? parseInt(e.target.value) : undefined })}
                     placeholder="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 ) : (
                   <p className="text-sm text-gray-900">
@@ -1202,7 +1089,7 @@ export default function RecruiterCandidateDetailPage() {
                     value={formData.source}
                     onChange={(e) => setFormData({ ...formData, source: e.target.value })}
                     placeholder="LinkedIn, APEC, etc."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 ) : (
                   <p className="text-sm text-gray-900">{candidate.source || '-'}</p>
@@ -1225,14 +1112,14 @@ export default function RecruiterCandidateDetailPage() {
             </div>
           </div>
 
-          {/* Tags et Compétences */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Tags */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Tag className="w-5 h-5 mr-2" />
-                Tags & Mots-clés
-              </h2>
+                {/* Tags et Compétences */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                  {/* Tags */}
+                  <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+                    <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                      <Tag className="w-5 h-5 mr-2 text-indigo-600" />
+                      Tags & Mots-clés
+                    </h2>
               
               {isEditing ? (
                 <div className="space-y-4">
@@ -1241,12 +1128,12 @@ export default function RecruiterCandidateDetailPage() {
                       formData.tags.map((tag, idx) => (
                         <span
                           key={idx}
-                          className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
+                          className="inline-flex items-center px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium"
                         >
                           {tag}
                           <button
                             onClick={() => handleRemoveTag(tag)}
-                            className="ml-2 text-blue-600 hover:text-blue-800"
+                            className="ml-2 text-indigo-600 hover:text-indigo-800"
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -1263,11 +1150,11 @@ export default function RecruiterCandidateDetailPage() {
                       onChange={(e) => setNewTag(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
                       placeholder="Ajouter un tag"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     <button
                       onClick={handleAddTag}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
@@ -1280,7 +1167,7 @@ export default function RecruiterCandidateDetailPage() {
                       {candidate.tags.map((tag, idx) => (
                         <span
                           key={idx}
-                          className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
+                          className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium"
                         >
                           {tag}
                         </span>
@@ -1293,12 +1180,12 @@ export default function RecruiterCandidateDetailPage() {
               )}
             </div>
 
-            {/* Compétences */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Award className="w-5 h-5 mr-2" />
-                Compétences
-              </h2>
+                {/* Compétences */}
+                <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow">
+                  <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                    <Award className="w-5 h-5 mr-2 text-indigo-600" />
+                    Compétences
+                  </h2>
               
               {isEditing ? (
                 <div className="space-y-4">
@@ -1329,7 +1216,7 @@ export default function RecruiterCandidateDetailPage() {
                       onChange={(e) => setNewSkill(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
                       placeholder="Ajouter une compétence"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     <button
                       onClick={handleAddSkill}
@@ -1371,46 +1258,179 @@ export default function RecruiterCandidateDetailPage() {
             </div>
           </div>
 
-                  {/* Attribution à un besoin */}
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                      <Briefcase className="w-5 h-5 mr-2" />
-                      Attribution à un besoin
-                    </h2>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Attribuer à un nouveau besoin
-                      </label>
-                      <div className="flex gap-2">
-                        <select
-                          value={selectedJobId}
-                          onChange={(e) => setSelectedJobId(e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">-- Sélectionner un besoin --</option>
-                          {jobs
-                            .filter(job => !applications.some(app => app.job_id === job.id))
-                            .map((job) => (
-                              <option key={job.id} value={job.id}>
-                                {job.title}
-                                {job.department && ` - ${job.department}`}
-                              </option>
-                            ))}
-                        </select>
-                        <button
-                          onClick={handleAssignToJob}
-                          disabled={!selectedJobId || isAssigning}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {isAssigning ? 'Attribution...' : 'Attribuer'}
-                        </button>
+          {/* Attribution à un besoin */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Briefcase className="w-5 h-5 mr-2" />
+              Attribution à un besoin
+            </h2>
+            
+            {applications.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Besoins attribués</h3>
+                <div className="space-y-2">
+                  {applications.map((app) => {
+                    const job = jobs.find(j => j.id === app.job_id)
+                    return (
+                      <div key={app.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">
+                            {job ? job.title : 'Besoin inconnu'}
+                            {job?.department && (
+                              <span className="text-gray-500 ml-2">- {job.department}</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Statut: {app.status}
+                          </p>
+                        </div>
+                        {job && (
+                          <Link
+                            href={`/recruiter/jobs/${job.id}`}
+                            className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                          >
+                            Voir le besoin
+                          </Link>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Le candidat sera attribué au besoin sélectionné avec le statut "Sourcé"
-                      </p>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Attribuer à un nouveau besoin
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={selectedJobId}
+                  onChange={(e) => setSelectedJobId(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="">-- Sélectionner un besoin --</option>
+                  {jobs
+                    .filter(job => !applications.some(app => app.job_id === job.id))
+                    .map((job) => (
+                      <option key={job.id} value={job.id}>
+                        {job.title}
+                        {job.department && ` - ${job.department}`}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={handleAssignToJob}
+                  disabled={!selectedJobId || isAssigning}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isAssigning ? 'Attribution...' : 'Attribuer'}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Le candidat sera attribué au besoin sélectionné avec le statut "Sourcé"
+              </p>
+            </div>
+          </div>
+
+          {/* Notes internes */}
+          {activeTab === 'profil' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Notes internes</h2>
+              {isEditing ? (
+                <textarea
+                  value={formData.notes || ''}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Notes internes sur le candidat..."
+                />
+              ) : (
+                <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                  {candidate.notes || 'Aucune note'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Documents */}
+          {activeTab === 'profil' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <FileText className="w-5 h-5 mr-2" />
+                Documents
+              </h2>
+              
+              <div className="space-y-4">
+                {candidate.cv_file_path ? (
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-8 h-8 text-indigo-600" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">CV</p>
+                        <p className="text-xs text-gray-500">Document disponible</p>
+                      </div>
                     </div>
+                    <a
+                      href={`${API_URL}/candidates/${candidateId}/cv`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Voir le CV
+                    </a>
                   </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                    <p className="text-sm">Aucun CV uploadé</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Statut */}
+          {activeTab === 'profil' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Statut actuel</h2>
+              <select
+                value={candidate.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                {statusOptions.map(status => (
+                  <option key={status} value={status}>
+                    {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Boutons d'action en mode édition */}
+          {activeTab === 'profil' && isEditing && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="flex-1 flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSaving ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+                <button
+                  onClick={handleCancel}
+                  disabled={isSaving}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          )}
                 </div>
               )}
 
@@ -1433,7 +1453,7 @@ export default function RecruiterCandidateDetailPage() {
                       <p className="text-gray-600 mb-4">Aucun poste attribué à ce candidat</p>
                       <button
                         onClick={() => setActiveTab('profil')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                       >
                         Attribuer un poste
                       </button>
@@ -1445,43 +1465,39 @@ export default function RecruiterCandidateDetailPage() {
                         if (!job) return null
                         
                         const appInterviews = interviews.filter(i => i.application_id === app.id)
-                        const candidateSkills = Array.isArray(candidate.skills) 
-                          ? candidate.skills 
-                          : (typeof candidate.skills === 'string' ? candidate.skills.split(',').map(s => s.trim().toLowerCase()) : [])
+                        const jobAnalysis = jobAnalyses[app.job_id]
+                        const isLoadingAnalysis = loadingJobAnalyses[app.job_id]
                         
-                        const jobRequiredSkills = Array.isArray(job.competences_techniques_obligatoires)
-                          ? job.competences_techniques_obligatoires.map(s => s.toLowerCase())
-                          : []
-                        const jobPreferredSkills = Array.isArray(job.competences_techniques_souhaitees)
-                          ? job.competences_techniques_souhaitees.map(s => s.toLowerCase())
-                          : []
-                        
-                        const matchingRequiredSkills = jobRequiredSkills.filter(skill => 
-                          candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                        )
-                        const matchingPreferredSkills = jobPreferredSkills.filter(skill => 
-                          candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                        )
-                        
-                        const experienceMatch = job.experience_requise 
-                          ? (candidate.years_of_experience || 0) >= job.experience_requise
-                          : null
-                        
-                        const matchScore = jobRequiredSkills.length > 0 
-                          ? Math.round((matchingRequiredSkills.length / jobRequiredSkills.length) * 100)
-                          : 0
+                        // Utiliser l'analyse IA si disponible
+                        const overallScore = jobAnalysis?.overall_score
+                        const hasAiAnalysis = !!jobAnalysis
 
                         return (
                           <div
                             key={app.id}
-                            className="bg-gradient-to-br from-white to-gray-50 rounded-xl border-2 border-gray-200 hover:border-blue-300 shadow-lg hover:shadow-xl transition-all overflow-hidden"
+                            className={`bg-gradient-to-br rounded-xl border-2 shadow-lg hover:shadow-xl transition-all overflow-hidden ${
+                              hasAiAnalysis 
+                                ? overallScore && overallScore >= 80 
+                                  ? 'from-green-50 to-white border-green-200 hover:border-green-300'
+                                  : overallScore && overallScore >= 50
+                                  ? 'from-yellow-50 to-white border-yellow-200 hover:border-yellow-300'
+                                  : overallScore
+                                  ? 'from-red-50 to-white border-red-200 hover:border-red-300'
+                                  : 'from-white to-gray-50 border-gray-200 hover:border-indigo-300'
+                                : 'from-white to-gray-50 border-gray-200 hover:border-indigo-300'
+                            }`}
                           >
                             <div className="p-6">
                               <div className="flex items-start justify-between mb-4">
                                 <div className="flex-1">
-                                  <h3 className="text-lg font-bold text-gray-900 mb-1">
-                                    {job.title}
-                                  </h3>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="text-lg font-bold text-gray-900">
+                                      {job.title}
+                                    </h3>
+                                    {hasAiAnalysis && (
+                                      <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0" title="Analyse IA disponible" />
+                                    )}
+                                  </div>
                                   {job.department && (
                                     <p className="text-sm text-gray-600">{job.department}</p>
                                   )}
@@ -1497,58 +1513,156 @@ export default function RecruiterCandidateDetailPage() {
                                 </span>
                               </div>
 
-                              {/* Score de correspondance */}
-                              <div className="mb-4">
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-sm font-medium text-gray-700">Correspondance</span>
-                                  <span className={`text-lg font-bold ${
-                                    matchScore >= 80 ? 'text-green-600' :
-                                    matchScore >= 50 ? 'text-yellow-600' :
-                                    'text-red-600'
-                                  }`}>
-                                    {matchScore}%
-                                  </span>
+                              {/* Score de correspondance IA */}
+                              {isLoadingAnalysis ? (
+                                <div className="mb-4 flex items-center justify-center py-4">
+                                  <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                                  <span className="ml-2 text-sm text-gray-600">Chargement de l'analyse IA...</span>
                                 </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                  <div
-                                    className={`h-2.5 rounded-full transition-all ${
-                                      matchScore >= 80 ? 'bg-green-600' :
-                                      matchScore >= 50 ? 'bg-yellow-600' :
-                                      'bg-red-600'
-                                    }`}
-                                    style={{ width: `${matchScore}%` }}
-                                  />
+                              ) : hasAiAnalysis && jobAnalysis && overallScore !== undefined ? (
+                                <div className="mb-4 space-y-3">
+                                  {/* Score global IA */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-purple-600" />
+                                        <span className="text-sm font-medium text-gray-700">Score IA global</span>
+                                      </div>
+                                      <span className={`text-2xl font-bold ${
+                                        overallScore >= 80 ? 'text-green-600' :
+                                        overallScore >= 50 ? 'text-yellow-600' :
+                                        'text-red-600'
+                                      }`}>
+                                        {overallScore}%
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-3">
+                                      <div
+                                        className={`h-3 rounded-full transition-all ${
+                                          overallScore >= 80 ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                                          overallScore >= 50 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
+                                          'bg-gradient-to-r from-red-500 to-red-600'
+                                        }`}
+                                        style={{ width: `${overallScore}%` }}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Scores par catégorie */}
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-white/60 rounded-lg p-2 border border-gray-200">
+                                      <div className="text-xs text-gray-500 mb-1">Compétences</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {jobAnalysis.technical_skills_match_score}%
+                                      </div>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-2 border border-gray-200">
+                                      <div className="text-xs text-gray-500 mb-1">Expérience</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {jobAnalysis.experience_match_score}%
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Points forts (premiers 2) */}
+                                  {jobAnalysis.strengths && jobAnalysis.strengths.length > 0 && (
+                                    <div className="bg-green-50 rounded-lg p-2 border border-green-200">
+                                      <div className="text-xs font-semibold text-green-900 mb-1 flex items-center gap-1">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Points forts
+                                      </div>
+                                      <ul className="text-xs text-green-800 space-y-0.5">
+                                        {jobAnalysis.strengths.slice(0, 2).map((strength, idx) => (
+                                          <li key={idx} className="flex items-start gap-1">
+                                            <span className="text-green-600 mt-0.5">•</span>
+                                            <span className="line-clamp-1">{strength}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
+                              ) : (
+                                <div className="mb-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-700">Analyse IA non disponible</span>
+                                    {candidate?.cv_file_path && (
+                                      <button
+                                        onClick={async () => {
+                                          if (!candidate || !candidate.cv_file_path) {
+                                            showError('Le candidat doit avoir un CV pour l\'analyse IA')
+                                            return
+                                          }
+                                          try {
+                                            setLoadingJobAnalyses(prev => ({ ...prev, [app.job_id]: true }))
+                                            const analysis = await compareCandidateWithJob(candidate.id!, app.job_id)
+                                            setJobAnalyses(prev => ({ ...prev, [app.job_id]: analysis }))
+                                            success('Analyse IA générée avec succès !')
+                                          } catch (err) {
+                                            showError(err instanceof Error ? err.message : 'Erreur lors de la génération de l\'analyse IA')
+                                          } finally {
+                                            setLoadingJobAnalyses(prev => ({ ...prev, [app.job_id]: false }))
+                                          }
+                                        }}
+                                        disabled={!candidate?.cv_file_path || isLoadingAnalysis}
+                                        className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                      >
+                                        <Sparkles className="w-3 h-3" />
+                                        Générer
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div className="h-2.5 rounded-full bg-gray-400" style={{ width: '0%' }} />
+                                  </div>
+                                </div>
+                              )}
 
                               {/* Statistiques rapides */}
                               <div className="grid grid-cols-3 gap-3 mb-4">
-                                <div className="text-center p-2 bg-white rounded-lg border border-gray-200">
-                                  <div className="text-xs text-gray-500">Compétences</div>
-                                  <div className="text-sm font-bold text-gray-900">
-                                    {matchingRequiredSkills.length}/{jobRequiredSkills.length}
-                                  </div>
-                                </div>
-                                <div className="text-center p-2 bg-white rounded-lg border border-gray-200">
-                                  <div className="text-xs text-gray-500">Entretiens</div>
-                                  <div className="text-sm font-bold text-gray-900">
-                                    {appInterviews.length}
-                                  </div>
-                                </div>
-                                <div className="text-center p-2 bg-white rounded-lg border border-gray-200">
-                                  <div className="text-xs text-gray-500">Expérience</div>
-                                  <div className="text-sm font-bold text-gray-900">
-                                    {experienceMatch !== null ? (
-                                      experienceMatch ? (
-                                        <CheckCircle2 className="w-4 h-4 text-green-600 mx-auto" />
-                                      ) : (
-                                        <XCircle className="w-4 h-4 text-red-600 mx-auto" />
-                                      )
-                                    ) : (
-                                      <span className="text-gray-400">-</span>
-                                    )}
-                                  </div>
-                                </div>
+                                {hasAiAnalysis && jobAnalysis ? (
+                                  <>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Compétences</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {jobAnalysis.technical_skills_match_score}%
+                                      </div>
+                                    </div>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Entretiens</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {appInterviews.length}
+                                      </div>
+                                    </div>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Expérience</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {jobAnalysis.experience_match_score}%
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Entretiens</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {appInterviews.length}
+                                      </div>
+                                    </div>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Statut</div>
+                                      <div className="text-xs font-bold text-gray-900 capitalize">
+                                        {app.status}
+                                      </div>
+                                    </div>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Date</div>
+                                      <div className="text-xs font-bold text-gray-900">
+                                        {new Date(app.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
                               </div>
 
                               {/* Actions */}
@@ -1558,10 +1672,10 @@ export default function RecruiterCandidateDetailPage() {
                                     setSelectedJobForComparison(job)
                                     setShowComparisonModal(true)
                                   }}
-                                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
                                 >
                                   <BarChart3 className="w-4 h-4" />
-                                  Voir le comparatif
+                                  {hasAiAnalysis ? 'Voir l\'analyse IA' : 'Voir le comparatif'}
                                 </button>
                                 <Link
                                   href={`/recruiter/jobs/${job.id}`}
@@ -1637,7 +1751,7 @@ export default function RecruiterCandidateDetailPage() {
 
                   {isLoadingInterviews ? (
                     <div className="text-center py-8 text-gray-500">
-                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
                       <p className="mt-2 text-sm">Chargement des entretiens...</p>
                     </div>
                   ) : applications.length === 0 ? (
@@ -1655,7 +1769,7 @@ export default function RecruiterCandidateDetailPage() {
                       </p>
                       <button
                         onClick={() => handleOpenInterviewForm(applications[0].id)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                       >
                         <Plus className="w-4 h-4" />
                         Créer le premier entretien
@@ -1775,11 +1889,11 @@ export default function RecruiterCandidateDetailPage() {
                                       </div>
                                       <div className="space-y-3 pl-4 border-l-2 border-gray-200">
                                         {typeInterviews.map((interview) => (
-                                  <div key={interview.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                          <div key={interview.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                                     <div className="flex items-start justify-between mb-3">
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-2">
-                                          <span className="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                                          <span className="px-2.5 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium">
                                             {getInterviewTypeLabel(interview.interview_type)}
                                           </span>
                                           {getDecisionBadge(interview.decision)}
@@ -1820,7 +1934,7 @@ export default function RecruiterCandidateDetailPage() {
                                       <div className="flex items-center gap-2">
                                         <button
                                           onClick={() => handleOpenInterviewForm(app.id, interview)}
-                                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
                                           title="Modifier"
                                         >
                                           <Edit className="w-4 h-4" />
@@ -1844,7 +1958,7 @@ export default function RecruiterCandidateDetailPage() {
 
                                     {/* Compte rendu modifiable */}
                                     {editingInterviewId === interview.id ? (
-                                      <div className="space-y-4 p-4 bg-white rounded-lg border-2 border-blue-300">
+                                      <div className="space-y-4 p-4 bg-white rounded-lg border-2 border-indigo-300">
                                         {/* Formulaire pour préqualification */}
                                         {interview.interview_type === 'prequalification' && (
                                           <>
@@ -1859,7 +1973,7 @@ export default function RecruiterCandidateDetailPage() {
                                                   prequalification_competences_techniques: e.target.value
                                                 })}
                                                 rows={3}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Évaluez les compétences techniques..."
                                               />
                                             </div>
@@ -1874,7 +1988,7 @@ export default function RecruiterCandidateDetailPage() {
                                                   prequalification_experience: e.target.value
                                                 })}
                                                 rows={2}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Évaluez l'expérience..."
                                               />
                                             </div>
@@ -1889,7 +2003,7 @@ export default function RecruiterCandidateDetailPage() {
                                                   prequalification_motivation: e.target.value
                                                 })}
                                                 rows={2}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Quelle est la motivation du candidat ?"
                                               />
                                             </div>
@@ -1905,7 +2019,7 @@ export default function RecruiterCandidateDetailPage() {
                                                     ...editingInterviewData!,
                                                     prequalification_salaire: e.target.value
                                                   })}
-                                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                   placeholder="Montant attendu"
                                                 />
                                               </div>
@@ -1920,7 +2034,7 @@ export default function RecruiterCandidateDetailPage() {
                                                     ...editingInterviewData!,
                                                     prequalification_disponibilite: e.target.value
                                                   })}
-                                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                   placeholder="Date de disponibilité"
                                                 />
                                               </div>
@@ -1936,7 +2050,7 @@ export default function RecruiterCandidateDetailPage() {
                                                   prequalification_remarques: e.target.value
                                                 })}
                                                 rows={2}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Remarques supplémentaires..."
                                               />
                                             </div>
@@ -1957,7 +2071,7 @@ export default function RecruiterCandidateDetailPage() {
                                                   qualification_competences_techniques: e.target.value
                                                 })}
                                                 rows={3}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Évaluation détaillée des compétences techniques..."
                                               />
                                             </div>
@@ -1972,7 +2086,7 @@ export default function RecruiterCandidateDetailPage() {
                                                   qualification_competences_comportementales: e.target.value
                                                 })}
                                                 rows={3}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Évaluation des compétences comportementales..."
                                               />
                                             </div>
@@ -1987,7 +2101,7 @@ export default function RecruiterCandidateDetailPage() {
                                                   qualification_culture_entreprise: e.target.value
                                                 })}
                                                 rows={2}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Le candidat correspond-il à la culture de l'entreprise ?"
                                               />
                                             </div>
@@ -2002,7 +2116,7 @@ export default function RecruiterCandidateDetailPage() {
                                                   qualification_potentiel: e.target.value
                                                 })}
                                                 rows={2}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Quel est le potentiel du candidat ?"
                                               />
                                             </div>
@@ -2017,7 +2131,7 @@ export default function RecruiterCandidateDetailPage() {
                                                   qualification_remarques: e.target.value
                                                 })}
                                                 rows={2}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Remarques supplémentaires..."
                                               />
                                             </div>
@@ -2037,7 +2151,7 @@ export default function RecruiterCandidateDetailPage() {
                                                 feedback: e.target.value
                                               })}
                                               rows={6}
-                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                               placeholder="Décrivez le déroulement de l'entretien..."
                                             />
                                           </div>
@@ -2054,7 +2168,7 @@ export default function RecruiterCandidateDetailPage() {
                                                 ...editingInterviewData!,
                                                 decision: e.target.value as any
                                               })}
-                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                             >
                                               <option value="en_attente">En attente</option>
                                               <option value="positif">Positif</option>
@@ -2074,7 +2188,7 @@ export default function RecruiterCandidateDetailPage() {
                                                 ...editingInterviewData!,
                                                 score: e.target.value ? parseInt(e.target.value) : null
                                               })}
-                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                               placeholder="0-10"
                                             />
                                           </div>
@@ -2150,7 +2264,7 @@ export default function RecruiterCandidateDetailPage() {
                                               (interview.interview_type !== 'prequalification' && 
                                                interview.interview_type !== 'qualification' && 
                                                !editingInterviewData?.feedback)}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2"
+                                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2"
                                           >
                                             {isSavingInterviewEdit ? (
                                               <>
@@ -2208,7 +2322,7 @@ export default function RecruiterCandidateDetailPage() {
                                                         qualification_remarques: '',
                                                       })
                                                     }}
-                                                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+                                                    className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1.5"
                                                   >
                                                     <Edit className="w-3.5 h-3.5" />
                                                     Modifier
@@ -2303,7 +2417,7 @@ export default function RecruiterCandidateDetailPage() {
                                                         qualification_remarques: feedbackContent?.remarques || '',
                                                       })
                                                     }}
-                                                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+                                                    className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1.5"
                                                   >
                                                     <Edit className="w-3.5 h-3.5" />
                                                     Modifier
@@ -2388,7 +2502,7 @@ export default function RecruiterCandidateDetailPage() {
                                                         qualification_remarques: '',
                                                       })
                                                     }}
-                                                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+                                                    className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1.5"
                                                   >
                                                     <Edit className="w-3.5 h-3.5" />
                                                     Modifier
@@ -2421,8 +2535,8 @@ export default function RecruiterCandidateDetailPage() {
                                         })()}
                                       </div>
                                     )}
-                                  </div>
-                                ))}
+                                          </div>
+                                        ))}
                                       </div>
                                     </div>
                                   ))
@@ -2440,110 +2554,10 @@ export default function RecruiterCandidateDetailPage() {
                   )}
                 </div>
               )}
-            </div>
           </div>
-
-          {/* Notes internes */}
-          {activeTab === 'profil' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Notes internes</h2>
-              {isEditing ? (
-                <textarea
-                  value={formData.notes || ''}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={6}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Notes internes sur le candidat..."
-                />
-              ) : (
-                <p className="text-sm text-gray-900 whitespace-pre-wrap">
-                  {candidate.notes || 'Aucune note'}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Documents */}
-          {activeTab === 'profil' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <FileText className="w-5 h-5 mr-2" />
-                Documents
-              </h2>
-              
-              <div className="space-y-4">
-                {candidate.cv_file_path ? (
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-8 h-8 text-blue-600" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">CV</p>
-                        <p className="text-xs text-gray-500">Document disponible</p>
-                      </div>
-                    </div>
-                    <a
-                      href={`${API_URL}/candidates/${candidateId}/cv`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                    >
-                      <Eye className="w-4 h-4" />
-                      Voir le CV
-                    </a>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                    <p className="text-sm">Aucun CV uploadé</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Statut */}
-          {activeTab === 'profil' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Statut actuel</h2>
-              <select
-                value={candidate.status}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {statusOptions.map(status => (
-                  <option key={status} value={status}>
-                    {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Boutons d'action en mode édition */}
-          {activeTab === 'profil' && isEditing && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="flex-1 flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? 'Enregistrement...' : 'Enregistrer'}
-                </button>
-                <button
-                  onClick={handleCancel}
-                  disabled={isSaving}
-                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
-                >
-                  Annuler
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
-
+      
       {/* Modal de création/édition d'entretien */}
       {showInterviewForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -2560,356 +2574,99 @@ export default function RecruiterCandidateDetailPage() {
               </button>
             </div>
             
-            <form 
-              id="interview-form"
-              onSubmit={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                handleSubmitInterview()
-              }} 
-              className="p-6 space-y-6 max-h-[calc(100vh-250px)] overflow-y-auto"
-              noValidate
-            >
-              {/* Section 1: Candidat et Candidature */}
-              <div className="bg-gray-50 rounded-lg p-5 border border-gray-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <User className="w-5 h-5 text-blue-600" />
-                  <label className="text-base font-semibold text-gray-900">
-                    Candidat / Candidature
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                </div>
-                {candidate && (
-                  <div className="mb-4">
-                    <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="w-5 h-5 text-blue-600" />
-                        <p className="text-sm font-semibold text-blue-900">
-                          Candidat sélectionné : {candidate.first_name} {candidate.last_name}
-                        </p>
-                      </div>
-                      {candidate.profile_title && (
-                        <p className="text-sm text-blue-700 ml-7">{candidate.profile_title}</p>
-                      )}
-                    </div>
-                    
-                    {applications.length > 0 ? (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-3">
-                          Sélectionner une candidature
-                          <span className="text-red-500 ml-1">*</span>
-                          {!interviewForm.application_id && (
-                            <span className="ml-2 text-xs text-red-600 font-normal">
-                              (Veuillez sélectionner une candidature ci-dessous)
-                            </span>
-                          )}
-                        </label>
-                        <div className="border-2 border-gray-200 rounded-lg max-h-48 overflow-y-auto">
-                          {applications.map((app) => {
-                            const job = jobs.find(j => j.id === app.job_id)
-                            return (
-                              <button
-                                key={app.id}
-                                type="button"
-                                onClick={() => {
-                                  setInterviewForm({ ...interviewForm, application_id: app.id })
-                                }}
-                                className={`w-full text-left p-4 hover:bg-blue-50 transition-all border-b border-gray-100 last:border-b-0 ${
-                                  interviewForm.application_id === app.id 
-                                    ? 'bg-blue-100 border-l-4 border-blue-600 shadow-sm' 
-                                    : 'hover:border-l-2 hover:border-blue-300'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <Briefcase className={`w-4 h-4 ${interviewForm.application_id === app.id ? 'text-blue-600' : 'text-gray-400'}`} />
-                                  <div className="font-semibold text-gray-900">{job ? job.title : 'Besoin inconnu'}</div>
-                                  {interviewForm.application_id === app.id && (
-                                    <CheckCircle2 className="w-4 h-4 text-blue-600 ml-auto" />
-                                  )}
-                                </div>
-                                <div className="text-xs text-gray-600 mt-2 ml-6">
-                                  {job?.department && `${job.department} • `}Statut: <span className="font-medium">{app.status}</span> • {app.is_in_shortlist ? '✓ En shortlist' : 'Non shortlist'}
-                                </div>
-                              </button>
-                            )
-                          })}
-                        </div>
-                        {interviewForm.application_id && (
-                          <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg">
-                            <p className="text-xs text-green-700">
-                              ✓ Candidature sélectionnée
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <p className="text-sm text-yellow-800">
-                          Ce candidat n'a pas encore de candidature. Veuillez d'abord attribuer le candidat à un besoin.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Section 2: Type et Horaires */}
-              <div className="bg-gray-50 rounded-lg p-5 border border-gray-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <Clock className="w-5 h-5 text-blue-600" />
-                  <label className="text-base font-semibold text-gray-900">Type et Horaires</label>
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Type d'entretien
-                    <span className="text-red-500 ml-1">*</span>
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Besoin concerné *
                   </label>
                   <select
-                    required
-                    value={interviewForm.interview_type}
-                    onChange={(e) => setInterviewForm({ ...interviewForm, interview_type: e.target.value as any })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white font-medium"
+                    value={interviewForm.application_id}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, application_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    disabled={!!selectedInterview}
                   >
-                    <option value="prequalification">📋 Préqualification</option>
-                    <option value="qualification">✅ Qualification</option>
-                    <option value="rh">👔 Entretien RH</option>
-                    <option value="technique">💻 Entretien Technique</option>
-                    <option value="client">🤝 Entretien Client</option>
-                    <option value="autre">📝 Autre</option>
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      <Clock className="w-4 h-4 inline mr-1" />
-                      Heure de début
-                      <span className="text-red-500 ml-1">*</span>
-                    </label>
-                    <input
-                      type="datetime-local"
-                      required
-                      value={interviewForm.scheduled_at}
-                      onChange={(e) => {
-                        setInterviewForm({ ...interviewForm, scheduled_at: e.target.value })
-                        // Si pas d'heure de fin, définir automatiquement 1h après
-                        if (!interviewForm.scheduled_end_at && e.target.value) {
-                          const startDate = new Date(e.target.value)
-                          startDate.setHours(startDate.getHours() + 1)
-                          setInterviewForm(prev => ({
-                            ...prev,
-                            scheduled_at: e.target.value,
-                            scheduled_end_at: startDate.toISOString().slice(0, 16)
-                          }))
-                        }
-                      }}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      <Clock className="w-4 h-4 inline mr-1" />
-                      Heure de fin
-                      <span className="text-red-500 ml-1">*</span>
-                    </label>
-                    <input
-                      type="datetime-local"
-                      required
-                      value={interviewForm.scheduled_end_at || ''}
-                      onChange={(e) => setInterviewForm({ ...interviewForm, scheduled_end_at: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 3: Interviewer et Participants */}
-              <div className="bg-gray-50 rounded-lg p-5 border border-gray-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <Users className="w-5 h-5 text-blue-600" />
-                  <label className="text-base font-semibold text-gray-900">Interviewer et Participants</label>
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Interviewer principal
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <select
-                    required
-                    value={selectedInterviewerId || currentUserId || ''}
-                    onChange={(e) => {
-                      setSelectedInterviewerId(e.target.value)
-                    }}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                  >
-                    <option value="">Sélectionner un interviewer</option>
-                    {currentUserId && users.find(u => u.id === currentUserId) && (
-                      <option value={currentUserId}>
-                        {users.find(u => u.id === currentUserId)?.first_name} {users.find(u => u.id === currentUserId)?.last_name} ({users.find(u => u.id === currentUserId)?.role}) - Vous
-                      </option>
-                    )}
-                    {users
-                      .filter(u => u.id !== currentUserId)
-                      .map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.first_name} {user.last_name} ({user.role})
+                    <option value="">-- Sélectionner un besoin --</option>
+                    {applications.map((app) => {
+                      const job = jobs.find(j => j.id === app.job_id)
+                      return (
+                        <option key={app.id} value={app.id}>
+                          {job ? job.title : 'Besoin inconnu'}
+                          {job?.department && ` - ${job.department}`}
                         </option>
-                      ))}
+                      )
+                    })}
                   </select>
-                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                    <span className="text-blue-600">ℹ️</span>
-                    Par défaut, vous êtes sélectionné comme interviewer principal. Vous pouvez changer si nécessaire.
-                  </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    Participants additionnels
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Type d&apos;entretien *
                   </label>
-                  
-                  {/* Recherche de participants */}
-                  <div className="mb-3">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        value={participantSearchQuery}
-                        onChange={(e) => setParticipantSearchQuery(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && participantSearchQuery.includes('@')) {
-                            e.preventDefault()
-                            addParticipantEmail(participantSearchQuery)
-                          }
-                        }}
-                        placeholder="Rechercher par nom, prénom, email ou entrer un email..."
-                        className="w-full pl-11 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                      />
-                    </div>
-                    {participantSearchQuery && participantSearchQuery.includes('@') && !interviewForm.participantEmails?.includes(participantSearchQuery.trim()) && (
-                      <button
-                        type="button"
-                        onClick={() => addParticipantEmail(participantSearchQuery)}
-                        className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Ajouter l'email "{participantSearchQuery}"
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Liste des utilisateurs filtrés */}
-                  {filteredUsersForParticipants.length > 0 && (
-                    <div className="border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto mb-3">
-                      <div className="space-y-2">
-                        {filteredUsersForParticipants.map((user) => (
-                          <div
-                            key={user.id}
-                            onClick={() => toggleParticipant(user.id)}
-                            className={`flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-all ${
-                              interviewForm.participants?.includes(user.id)
-                                ? 'bg-blue-50 border-2 border-blue-300'
-                                : 'border-2 border-transparent'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={interviewForm.participants?.includes(user.id) || false}
-                              onChange={() => toggleParticipant(user.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 pointer-events-none"
-                            />
-                            <div className="flex-1 pointer-events-none">
-                              <div className="font-medium text-gray-900">
-                                {user.first_name} {user.last_name}
-                              </div>
-                              <div className="text-xs text-gray-500">{user.email} • {user.role}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Participants sélectionnés */}
-                  {(interviewForm.participants && interviewForm.participants.length > 0) || (interviewForm.participantEmails && interviewForm.participantEmails.length > 0) ? (
-                    <div className="mt-2">
-                      <p className="text-xs text-gray-600 mb-2">Participants sélectionnés :</p>
-                      <div className="flex flex-wrap gap-2">
-                        {interviewForm.participants?.map((userId) => {
-                          const user = users.find(u => u.id === userId)
-                          return user ? (
-                            <span
-                              key={userId}
-                              className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                            >
-                              {user.first_name} {user.last_name} ({user.role})
-                              <button
-                                type="button"
-                                onClick={() => toggleParticipant(userId)}
-                                className="hover:text-blue-900"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </span>
-                          ) : null
-                        })}
-                        {interviewForm.participantEmails?.map((email) => (
-                          <span
-                            key={email}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
-                          >
-                            {email}
-                            <button
-                              type="button"
-                              onClick={() => removeParticipantEmail(email)}
-                              className="hover:text-green-900"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-500 italic">Aucun participant sélectionné</p>
-                  )}
+                  <select
+                    value={interviewForm.interview_type}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, interview_type: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="rh">Entretien RH</option>
+                    <option value="technique">Entretien Technique</option>
+                    <option value="client">Entretien Client</option>
+                    <option value="prequalification">Préqualification</option>
+                    <option value="qualification">Qualification</option>
+                    <option value="autre">Autre</option>
+                  </select>
                 </div>
-              </div>
 
-              {/* Section 4: Lieu et Notes */}
-              <div className="bg-gray-50 rounded-lg p-5 border border-gray-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <MapPin className="w-5 h-5 text-blue-600" />
-                  <label className="text-base font-semibold text-gray-900">Lieu et Notes</label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date et heure *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={interviewForm.scheduled_at}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, scheduled_at: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    required
+                  />
                 </div>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Lieu / Lien visioconférence
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date et heure de fin
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={interviewForm.scheduled_end_at}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, scheduled_end_at: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Lieu ou lien visioconférence
                   </label>
                   <input
                     type="text"
-                    value={interviewForm.location || ''}
+                    value={interviewForm.location}
                     onChange={(e) => setInterviewForm({ ...interviewForm, location: e.target.value })}
-                    placeholder="Lieu physique ou lien Zoom/Teams"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    placeholder="Bureau 205 ou https://meet.google.com/..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Notes de préparation
-                  </label>
-                  <textarea
-                    value={interviewForm.preparation_notes || ''}
-                    onChange={(e) => setInterviewForm({ ...interviewForm, preparation_notes: e.target.value })}
-                    rows={4}
-                    placeholder="Notes pour préparer l'entretien..."
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white resize-none"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes de préparation
+                </label>
+                <textarea
+                  value={interviewForm.preparation_notes}
+                  onChange={(e) => setInterviewForm({ ...interviewForm, preparation_notes: e.target.value })}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Points à aborder, questions à poser..."
+                />
               </div>
 
               {/* Comparatif Besoin vs Candidat */}
@@ -2948,13 +2705,13 @@ export default function RecruiterCandidateDetailPage() {
                       Comparatif Besoin vs Candidat
                     </h3>
                     
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4">
                       <div className="flex items-start gap-3">
-                        <Briefcase className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <Briefcase className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" />
                         <div className="flex-1">
-                          <p className="font-medium text-blue-900 mb-1">{selectedJob.title}</p>
+                          <p className="font-medium text-indigo-900 mb-1">{selectedJob.title}</p>
                           {selectedJob.department && (
-                            <p className="text-sm text-blue-700">{selectedJob.department}</p>
+                            <p className="text-sm text-indigo-700">{selectedJob.department}</p>
                           )}
                         </div>
                       </div>
@@ -3117,277 +2874,90 @@ export default function RecruiterCandidateDetailPage() {
                   Compte rendu d&apos;entretien
                 </h3>
 
-                {/* Formulaire pour préqualification */}
-                {interviewForm.interview_type === 'prequalification' && (
-                  <div className="space-y-4">
-                    <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-4">
-                      <p className="text-sm text-blue-800">
-                        <strong>Préqualification :</strong> Évaluation initiale du candidat pour vérifier les critères essentiels
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Compétences techniques *
-                      </label>
-                      <textarea
-                        value={interviewForm.prequalification_competences_techniques}
-                        onChange={(e) => setInterviewForm({ ...interviewForm, prequalification_competences_techniques: e.target.value })}
-                        rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Évaluez les compétences techniques du candidat par rapport aux exigences du poste. Mentionnez les compétences maîtrisées et celles à développer..."
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Expérience *
-                      </label>
-                      <textarea
-                        value={interviewForm.prequalification_experience}
-                        onChange={(e) => setInterviewForm({ ...interviewForm, prequalification_experience: e.target.value })}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Évaluez l'expérience du candidat. Correspond-elle aux exigences du poste ? Y a-t-il des expériences pertinentes à noter ?"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Motivation *
-                      </label>
-                      <textarea
-                        value={interviewForm.prequalification_motivation}
-                        onChange={(e) => setInterviewForm({ ...interviewForm, prequalification_motivation: e.target.value })}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Quelle est la motivation du candidat pour ce poste ? Pourquoi souhaite-t-il rejoindre l'entreprise ?"
-                        required
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Prétentions salariales
-                        </label>
-                        <input
-                          type="text"
-                          value={interviewForm.prequalification_salaire}
-                          onChange={(e) => setInterviewForm({ ...interviewForm, prequalification_salaire: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="Montant attendu par le candidat"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Disponibilité
-                        </label>
-                        <input
-                          type="text"
-                          value={interviewForm.prequalification_disponibilite}
-                          onChange={(e) => setInterviewForm({ ...interviewForm, prequalification_disponibilite: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="Date de disponibilité du candidat"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Remarques complémentaires
-                      </label>
-                      <textarea
-                        value={interviewForm.prequalification_remarques}
-                        onChange={(e) => setInterviewForm({ ...interviewForm, prequalification_remarques: e.target.value })}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Toute autre information pertinente pour la préqualification..."
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Formulaire pour qualification */}
-                {interviewForm.interview_type === 'qualification' && (
-                  <div className="space-y-4">
-                    <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-4">
-                      <p className="text-sm text-green-800">
-                        <strong>Qualification :</strong> Évaluation approfondie du candidat pour valider son adéquation complète au poste
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Compétences techniques approfondies *
-                      </label>
-                      <textarea
-                        value={interviewForm.qualification_competences_techniques}
-                        onChange={(e) => setInterviewForm({ ...interviewForm, qualification_competences_techniques: e.target.value })}
-                        rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Évaluation détaillée des compétences techniques. Niveau de maîtrise, projets réalisés, certifications, etc."
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Compétences comportementales (Soft Skills) *
-                      </label>
-                      <textarea
-                        value={interviewForm.qualification_competences_comportementales}
-                        onChange={(e) => setInterviewForm({ ...interviewForm, qualification_competences_comportementales: e.target.value })}
-                        rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Évaluation des compétences comportementales : communication, travail en équipe, leadership, adaptabilité, résolution de problèmes..."
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Adéquation culture d&apos;entreprise *
-                      </label>
-                      <textarea
-                        value={interviewForm.qualification_culture_entreprise}
-                        onChange={(e) => setInterviewForm({ ...interviewForm, qualification_culture_entreprise: e.target.value })}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Le candidat correspond-il à la culture de l'entreprise ? Valeurs partagées, style de travail, intégration..."
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Potentiel et évolution *
-                      </label>
-                      <textarea
-                        value={interviewForm.qualification_potentiel}
-                        onChange={(e) => setInterviewForm({ ...interviewForm, qualification_potentiel: e.target.value })}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Quel est le potentiel du candidat ? Capacité d'évolution, perspectives de développement, capacité à prendre des responsabilités..."
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Remarques complémentaires
-                      </label>
-                      <textarea
-                        value={interviewForm.qualification_remarques}
-                        onChange={(e) => setInterviewForm({ ...interviewForm, qualification_remarques: e.target.value })}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Toute autre information pertinente pour la qualification..."
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Formulaire générique pour les autres types d'entretien */}
-                {interviewForm.interview_type !== 'prequalification' && interviewForm.interview_type !== 'qualification' && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Feedback *
-                      </label>
-                      <textarea
-                        value={interviewForm.feedback}
-                        onChange={(e) => setInterviewForm({ ...interviewForm, feedback: e.target.value })}
-                        rows={6}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Décrivez le déroulement de l'entretien, les points forts et faibles du candidat, votre impression générale..."
-                        required
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Décision *
+                      Feedback *
                     </label>
-                    <select
-                      value={interviewForm.decision}
-                      onChange={(e) => setInterviewForm({ ...interviewForm, decision: e.target.value as any })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="en_attente">En attente</option>
-                      <option value="positif">Positif</option>
-                      <option value="négatif">Négatif</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Score (sur 10)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={interviewForm.score || ''}
-                      onChange={(e) => setInterviewForm({ ...interviewForm, score: e.target.value ? parseInt(e.target.value) : null })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="0-10"
+                    <textarea
+                      value={interviewForm.feedback}
+                      onChange={(e) => setInterviewForm({ ...interviewForm, feedback: e.target.value })}
+                      rows={6}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Décrivez le déroulement de l'entretien, les points forts et faibles du candidat, votre impression générale. Vous pouvez vous référer au comparatif ci-dessus pour structurer votre feedback..."
+                      required
                     />
                   </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Décision *
+                      </label>
+                      <select
+                        value={interviewForm.decision}
+                        onChange={(e) => setInterviewForm({ ...interviewForm, decision: e.target.value as any })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      >
+                        <option value="en_attente">En attente</option>
+                        <option value="positif">Positif</option>
+                        <option value="négatif">Négatif</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Score (sur 10)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        value={interviewForm.score || ''}
+                        onChange={(e) => setInterviewForm({ ...interviewForm, score: e.target.value ? parseInt(e.target.value) : null })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="0-10"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Footer avec boutons */}
-              <div className="flex justify-between items-center pt-6 border-t-2 border-gray-200 -mx-6 px-6 pb-6 mt-6">
-                <div className="text-sm text-gray-600">
-                  <span className="text-red-500">*</span> Champs obligatoires
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleCloseInterviewForm()
-                    }}
-                    className="px-6 py-3 border-2 border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700 transition-colors"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    form="interview-form"
-                    disabled={isSubmittingInterview}
-                    style={{ zIndex: 9999, position: 'relative', pointerEvents: 'auto' }}
-                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 flex items-center gap-2"
-                    title={
-                      !interviewForm.application_id ? 'Sélectionnez une candidature' :
-                      !interviewForm.scheduled_at ? 'Sélectionnez une date et heure de début' :
-                      !interviewForm.scheduled_end_at ? 'Sélectionnez une date et heure de fin' :
-                      !(selectedInterviewerId || currentUserId) ? 'Sélectionnez un interviewer principal' :
-                      !interviewForm.interview_type ? 'Sélectionnez un type d\'entretien' :
-                      'Planifier l\'entretien'
-                    }
-                  >
-                    {isSubmittingInterview ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Planification...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-5 h-5" />
-                        {selectedInterview ? 'Mettre à jour' : 'Planifier l\'entretien'}
-                      </>
-                    )}
-                  </button>
-                </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={handleCloseInterviewForm}
+                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleSubmitInterview}
+                  disabled={
+                    isSubmittingInterview || 
+                    !interviewForm.application_id || 
+                    !interviewForm.scheduled_at ||
+                    // Pour la mise à jour, on exige le feedback selon le type
+                    (selectedInterview && (
+                      (interviewForm.interview_type === 'prequalification' && 
+                        (!interviewForm.prequalification_competences_techniques || 
+                         !interviewForm.prequalification_experience || 
+                         !interviewForm.prequalification_motivation)) ||
+                      (interviewForm.interview_type === 'qualification' && 
+                        (!interviewForm.qualification_competences_techniques || 
+                         !interviewForm.qualification_competences_comportementales || 
+                         !interviewForm.qualification_culture_entreprise || 
+                         !interviewForm.qualification_potentiel)) ||
+                      (interviewForm.interview_type !== 'prequalification' && 
+                       interviewForm.interview_type !== 'qualification' && 
+                       !interviewForm.feedback)
+                    ))
+                  }
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmittingInterview ? 'Enregistrement...' : selectedInterview ? 'Mettre à jour' : 'Créer l\'entretien'}
+                </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -3397,43 +2967,40 @@ export default function RecruiterCandidateDetailPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full my-2 sm:my-4 md:my-8 max-h-[95vh] flex flex-col">
             {/* Header fixe */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-t-xl flex-shrink-0">
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-t-xl flex-shrink-0">
               <div className="flex-1 min-w-0">
                 <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-1 flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
                   <span className="truncate">Comparatif Besoin vs Candidat</span>
                 </h2>
-                <p className="text-blue-100 text-xs sm:text-sm line-clamp-2">
-                  {isEditingComparison 
-                    ? 'Modifiez les compétences et l\'expérience pour améliorer la correspondance'
-                    : 'Analyse détaillée de la correspondance entre le poste et le profil'}
+                <p className="text-indigo-100 text-xs sm:text-sm line-clamp-2">
+                  Analyse détaillée de la correspondance entre le poste et le profil par IA
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {!isEditingComparison ? (
-                  <button
-                    onClick={() => {
-                      // Initialiser les états d'édition avec les valeurs actuelles
-                      const currentSkills = Array.isArray(candidate.skills) 
-                        ? candidate.skills 
-                        : (typeof candidate.skills === 'string' ? candidate.skills.split(',').map(s => s.trim()) : [])
-                      setComparisonSkills(currentSkills)
-                      setComparisonExperience(candidate.years_of_experience)
-                      setIsEditingComparison(true)
-                    }}
-                    className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors font-medium text-xs sm:text-sm"
-                  >
-                    <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">Modifier</span>
-                  </button>
-                ) : null}
+                <button
+                  onClick={handleAiAnalysis}
+                  disabled={isLoadingAiAnalysis || !candidate.cv_file_path}
+                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg transition-colors font-medium text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={!candidate.cv_file_path ? 'Le candidat doit avoir un CV pour l\'analyse IA' : 'Analyser avec l\'IA'}
+                >
+                  {isLoadingAiAnalysis ? (
+                    <>
+                      <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+                      <span className="hidden sm:inline">Analyse...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Analyse IA</span>
+                    </>
+                  )}
+                </button>
                 <button
                   onClick={() => {
                     setShowComparisonModal(false)
                     setSelectedJobForComparison(null)
-                    setIsEditingComparison(false)
-                    setComparisonSkills([])
-                    setComparisonExperience(null)
+                    setAiAnalysis(null)
                   }}
                   className="text-white hover:text-gray-200 transition-colors p-1.5 sm:p-2 hover:bg-white/10 rounded-lg flex-shrink-0"
                 >
@@ -3445,9 +3012,9 @@ export default function RecruiterCandidateDetailPage() {
             {/* Contenu scrollable */}
             <div className="overflow-y-auto flex-1 px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
               {/* En-tête du poste */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-4 sm:p-5 md:p-6">
+              <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-200 rounded-xl p-4 sm:p-5 md:p-6">
                 <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="bg-blue-600 rounded-lg p-2 sm:p-3 flex-shrink-0">
+                  <div className="bg-indigo-600 rounded-lg p-2 sm:p-3 flex-shrink-0">
                     <Briefcase className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -3467,702 +3034,204 @@ export default function RecruiterCandidateDetailPage() {
                 </div>
               </div>
 
-              {/* Score global de correspondance */}
-              {(() => {
-                // Utiliser les compétences en mode édition si on est en train d'éditer
-                const skillsToUse = isEditingComparison && comparisonSkills.length > 0
-                  ? comparisonSkills.map(s => s.toLowerCase())
-                  : (Array.isArray(candidate.skills) 
-                      ? candidate.skills.map(s => s.toLowerCase())
-                      : (typeof candidate.skills === 'string' ? candidate.skills.split(',').map(s => s.trim().toLowerCase()) : []))
-                
-                const candidateSkills = skillsToUse
-                const experienceToUse = isEditingComparison && comparisonExperience !== null
-                  ? comparisonExperience
-                  : (candidate.years_of_experience || 0)
-                
-                const jobRequiredSkills = Array.isArray(selectedJobForComparison.competences_techniques_obligatoires)
-                  ? selectedJobForComparison.competences_techniques_obligatoires.map(s => s.toLowerCase())
-                  : []
-                const jobPreferredSkills = Array.isArray(selectedJobForComparison.competences_techniques_souhaitees)
-                  ? selectedJobForComparison.competences_techniques_souhaitees.map(s => s.toLowerCase())
-                  : []
-                
-                const matchingRequiredSkills = jobRequiredSkills.filter(skill => 
-                  candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                )
-                const matchingPreferredSkills = jobPreferredSkills.filter(skill => 
-                  candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                )
-                
-                const experienceMatch = selectedJobForComparison.experience_requise 
-                  ? experienceToUse >= selectedJobForComparison.experience_requise
-                  : null
-                
-                // Calcul du score pour le niveau de formation
-                const educationMatch = selectedJobForComparison.niveau_formation 
-                  ? (candidate.profile_title?.toLowerCase().includes(selectedJobForComparison.niveau_formation.toLowerCase()) || false)
-                  : null
-                const educationScore = educationMatch !== null ? (educationMatch ? 100 : 0) : null
-                
-                // Calcul du score pour les langues
-                const requiredLanguages = selectedJobForComparison.langues_requises 
-                  ? selectedJobForComparison.langues_requises.toLowerCase().split(',').map(l => l.trim())
-                  : []
-                // Pour simplifier, on vérifie si les langues requises sont mentionnées dans les notes ou le profil
-                const candidateText = `${candidate.notes || ''} ${candidate.profile_title || ''}`.toLowerCase()
-                const matchingLanguages = requiredLanguages.filter(lang => 
-                  candidateText.includes(lang.split(' ')[0]) // Vérifie au moins le nom de la langue
-                )
-                const languageScore = requiredLanguages.length > 0
-                  ? Math.round((matchingLanguages.length / requiredLanguages.length) * 100)
-                  : null
-                
-                const requiredScore = jobRequiredSkills.length > 0 
-                  ? Math.round((matchingRequiredSkills.length / jobRequiredSkills.length) * 100)
-                  : 0
-                const preferredScore = jobPreferredSkills.length > 0
-                  ? Math.round((matchingPreferredSkills.length / jobPreferredSkills.length) * 100)
-                  : 0
-                
-                // Calcul du score global avec pondération
-                // Compétences obligatoires: 40%, Compétences souhaitées: 20%, Expérience: 15%, Formation: 15%, Langues: 10%
-                let overallScore = 0
-                let totalWeight = 0
-                
-                if (jobRequiredSkills.length > 0) {
-                  overallScore += requiredScore * 0.4
-                  totalWeight += 0.4
-                }
-                if (jobPreferredSkills.length > 0) {
-                  overallScore += preferredScore * 0.2
-                  totalWeight += 0.2
-                }
-                if (experienceMatch !== null) {
-                  overallScore += (experienceMatch ? 100 : 0) * 0.15
-                  totalWeight += 0.15
-                }
-                if (educationScore !== null) {
-                  overallScore += educationScore * 0.15
-                  totalWeight += 0.15
-                }
-                if (languageScore !== null) {
-                  overallScore += languageScore * 0.1
-                  totalWeight += 0.1
-                }
-                
-                // Normaliser le score si certains critères ne sont pas définis
-                overallScore = totalWeight > 0 ? Math.round(overallScore / totalWeight) : 0
-                
-                // Comparaison salariale
-                const jobBudget = selectedJobForComparison.budget || selectedJobForComparison.salaire_maximum || selectedJobForComparison.salaire_minimum
-                const jobMinSalary = selectedJobForComparison.salaire_minimum
-                const jobMaxSalary = selectedJobForComparison.salaire_maximum
-                const salaryMatch = jobBudget ? {
-                  budget: jobBudget,
-                  minSalary: jobMinSalary,
-                  maxSalary: jobMaxSalary,
-                  candidateSalary: null, // Le candidat n'a pas de champ salaire pour l'instant
-                  isWithinRange: null
-                } : null
-
-                return (
-                  <>
-                    {/* Score global */}
-                    <div className="bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-xl p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h3 className="text-lg font-bold text-gray-900 mb-1">Score global de correspondance</h3>
-                          <p className="text-sm text-gray-600">Évaluation complète de l'adéquation</p>
-                        </div>
-                        <div className={`text-5xl font-bold ${
-                          overallScore >= 80 ? 'text-green-600' :
-                          overallScore >= 50 ? 'text-yellow-600' :
-                          'text-red-600'
-                        }`}>
-                          {overallScore}%
-                        </div>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
-                        <div
-                          className={`h-4 rounded-full transition-all ${
-                            overallScore >= 80 ? 'bg-gradient-to-r from-green-500 to-green-600' :
-                            overallScore >= 50 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
-                            'bg-gradient-to-r from-red-500 to-red-600'
-                          }`}
-                          style={{ width: `${overallScore}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-gray-600">
-                        <span>0%</span>
-                        <span className="font-medium">Correspondance parfaite</span>
-                        <span>100%</span>
+              {/* Analyse IA uniquement */}
+              {isLoadingAiAnalysis ? (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-4 sm:p-6">
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+                    <span className="ml-3 text-purple-700 font-medium">Analyse IA en cours...</span>
+                  </div>
+                </div>
+              ) : aiAnalysis ? (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-4 sm:p-6">
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Sparkles className="w-6 h-6 text-purple-600" />
+                      <h3 className="text-xl font-bold text-gray-900">Analyse IA approfondie</h3>
+                      <div className={`ml-auto text-3xl font-bold ${
+                        aiAnalysis.overall_score >= 80 ? 'text-green-600' :
+                        aiAnalysis.overall_score >= 50 ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {aiAnalysis.overall_score}%
                       </div>
                     </div>
 
-                    {/* Détails par catégorie */}
+                    {/* Évaluation globale */}
+                    <div className="bg-white rounded-lg p-4 border border-purple-100">
+                      <h4 className="font-semibold text-gray-900 mb-2">Évaluation globale</h4>
+                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                        {aiAnalysis.overall_assessment}
+                      </p>
+                    </div>
+
+                    {/* Analyses détaillées */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-white rounded-lg p-4 border border-purple-100">
+                        <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                          <Award className="w-4 h-4 text-purple-600" />
+                          Compétences techniques
+                        </h4>
+                        <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.technical_score}%</p>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                          {aiAnalysis.technical_skills_analysis}
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-lg p-4 border border-purple-100">
+                        <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                          <Briefcase className="w-4 h-4 text-purple-600" />
+                          Expérience
+                        </h4>
+                        <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.experience_score}%</p>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                          {aiAnalysis.experience_analysis}
+                        </p>
+                      </div>
+
+                      {aiAnalysis.soft_skills_analysis && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-100">
+                          <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                            <Users className="w-4 h-4 text-purple-600" />
+                            Compétences comportementales
+                          </h4>
+                          <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.soft_skills_score || 'N/A'}%</p>
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                            {aiAnalysis.soft_skills_analysis}
+                          </p>
+                        </div>
+                      )}
+
+                      {aiAnalysis.education_analysis && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-100">
+                          <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                            <FileCheck className="w-4 h-4 text-purple-600" />
+                            Formation
+                          </h4>
+                          <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.education_score || 'N/A'}%</p>
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                            {aiAnalysis.education_analysis}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Points forts et faibles */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                        <h4 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5" />
+                          Points forts
+                        </h4>
+                        <ul className="space-y-2">
+                          {aiAnalysis.strengths.map((strength, idx) => (
+                            <li key={idx} className="text-sm text-green-800 flex items-start gap-2">
+                              <span className="text-green-600 mt-1">•</span>
+                              <span>{strength}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                        <h4 className="font-semibold text-red-900 mb-3 flex items-center gap-2">
+                          <XCircle className="w-5 h-5" />
+                          Points à améliorer
+                        </h4>
+                        <ul className="space-y-2">
+                          {aiAnalysis.weaknesses.map((weakness, idx) => (
+                            <li key={idx} className="text-sm text-red-800 flex items-start gap-2">
+                              <span className="text-red-600 mt-1">•</span>
+                              <span>{weakness}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Compétences */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-700">Compétences obligatoires</span>
-                          <span className={`text-lg font-bold ${
-                            requiredScore >= 80 ? 'text-green-600' :
-                            requiredScore >= 50 ? 'text-yellow-600' :
-                            'text-red-600'
-                          }`}>
-                            {requiredScore}%
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          {matchingRequiredSkills.length}/{jobRequiredSkills.length} correspondances
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                          <div
-                            className={`h-2 rounded-full ${
-                              requiredScore >= 80 ? 'bg-green-500' :
-                              requiredScore >= 50 ? 'bg-yellow-500' :
-                              'bg-red-500'
-                            }`}
-                            style={{ width: `${requiredScore}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-700">Compétences souhaitées</span>
-                          <span className={`text-lg font-bold ${
-                            preferredScore >= 50 ? 'text-blue-600' : 'text-gray-600'
-                          }`}>
-                            {preferredScore}%
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          {matchingPreferredSkills.length}/{jobPreferredSkills.length} correspondances
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                          <div
-                            className={`h-2 rounded-full ${
-                              preferredScore >= 50 ? 'bg-blue-500' : 'bg-gray-400'
-                            }`}
-                            style={{ width: `${preferredScore}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-700">Expérience</span>
-                          {experienceMatch !== null && (
-                            <div className={`flex items-center gap-1 ${
-                              experienceMatch ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {experienceMatch ? (
-                                <>
-                                  <CheckCircle2 className="w-5 h-5" />
-                                  <span className="text-sm font-bold">OK</span>
-                                </>
-                              ) : (
-                                <>
-                                  <XCircle className="w-5 h-5" />
-                                  <span className="text-sm font-bold">Insuffisant</span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          {selectedJobForComparison.experience_requise 
-                            ? `Requis: ${selectedJobForComparison.experience_requise} ans`
-                            : 'Non spécifié'}
-                        </div>
-                        {isEditingComparison ? (
-                          <div className="mt-2">
-                            <input
-                              type="number"
-                              min="0"
-                              value={comparisonExperience || ''}
-                              onChange={(e) => setComparisonExperience(e.target.value ? parseInt(e.target.value) : null)}
-                              className="w-full px-2 py-1 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
-                              placeholder="Années"
-                            />
-                          </div>
-                        ) : (
-                          <div className="text-xs text-gray-600 mt-1">
-                            Candidat: {experienceToUse} ans
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Compétences techniques obligatoires */}
-                    {jobRequiredSkills.length > 0 && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <Award className="w-5 h-5 text-blue-600" />
-                            Compétences techniques obligatoires
-                          </h3>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                              matchingRequiredSkills.length === jobRequiredSkills.length
-                                ? 'bg-green-100 text-green-800'
-                                : matchingRequiredSkills.length > 0
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {matchingRequiredSkills.length}/{jobRequiredSkills.length}
-                            </span>
-                            {isEditingComparison && matchingRequiredSkills.length < jobRequiredSkills.length && (
-                              <button
-                                onClick={() => {
-                                  // Ajouter toutes les compétences manquantes
-                                  const missingSkills = jobRequiredSkills.filter(skill => 
-                                    !candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                                  )
-                                  const newSkills = [...new Set([...comparisonSkills, ...missingSkills])]
-                                  setComparisonSkills(newSkills)
-                                }}
-                                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
-                              >
-                                <Plus className="w-3 h-3 inline mr-1" />
-                                Ajouter manquantes
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {jobRequiredSkills.map((skill, idx) => {
-                            const matches = candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                            return (
-                              <div
-                                key={idx}
-                                className={`flex items-center justify-between p-3 rounded-lg border-2 ${
-                                  matches
-                                    ? 'bg-green-50 border-green-300'
-                                    : 'bg-red-50 border-red-300'
-                                }`}
-                              >
-                                <span className={`font-medium ${
-                                  matches ? 'text-green-900' : 'text-red-900'
-                                }`}>
-                                  {skill}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  {isEditingComparison && !matches && (
-                                    <button
-                                      onClick={() => {
-                                        const newSkills = [...new Set([...comparisonSkills, skill])]
-                                        setComparisonSkills(newSkills)
-                                      }}
-                                      className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
-                                      title="Ajouter cette compétence"
-                                    >
-                                      <Plus className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                  {matches ? (
-                                    <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
-                                  ) : (
-                                    <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Compétences techniques souhaitées */}
-                    {jobPreferredSkills.length > 0 && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <Star className="w-5 h-5 text-blue-600" />
-                            Compétences techniques souhaitées
-                          </h3>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                              matchingPreferredSkills.length > 0
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              {matchingPreferredSkills.length}/{jobPreferredSkills.length}
-                            </span>
-                            {isEditingComparison && matchingPreferredSkills.length < jobPreferredSkills.length && (
-                              <button
-                                onClick={() => {
-                                  // Ajouter toutes les compétences souhaitées manquantes
-                                  const missingSkills = jobPreferredSkills.filter(skill => 
-                                    !candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                                  )
-                                  const newSkills = [...new Set([...comparisonSkills, ...missingSkills])]
-                                  setComparisonSkills(newSkills)
-                                }}
-                                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
-                              >
-                                <Plus className="w-3 h-3 inline mr-1" />
-                                Ajouter manquantes
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {jobPreferredSkills.map((skill, idx) => {
-                            const matches = candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                            return (
-                              <div
-                                key={idx}
-                                className={`flex items-center justify-between p-3 rounded-lg border-2 ${
-                                  matches
-                                    ? 'bg-blue-50 border-blue-300'
-                                    : 'bg-gray-50 border-gray-300'
-                                }`}
-                              >
-                                <span className={`font-medium ${
-                                  matches ? 'text-blue-900' : 'text-gray-700'
-                                }`}>
-                                  {skill}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  {isEditingComparison && !matches && (
-                                    <button
-                                      onClick={() => {
-                                        const newSkills = [...new Set([...comparisonSkills, skill])]
-                                        setComparisonSkills(newSkills)
-                                      }}
-                                      className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
-                                      title="Ajouter cette compétence"
-                                    >
-                                      <Plus className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                  {matches ? (
-                                    <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                                  ) : (
-                                    <span className="text-gray-400 text-sm">—</span>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Expérience */}
-                    {selectedJobForComparison.experience_requise !== null && selectedJobForComparison.experience_requise !== undefined && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                          <Clock className="w-5 h-5 text-blue-600" />
-                          Expérience requise
-                        </h3>
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-4 mb-3">
-                              <div className="flex-1">
-                                <p className="text-sm text-gray-600 mb-1">Requis</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                  {selectedJobForComparison.experience_requise} ans
-                                </p>
-                              </div>
-                              <div className="w-px h-12 bg-gray-300" />
-                              <div className="flex-1">
-                                <p className="text-sm text-gray-600 mb-1">Candidat</p>
-                                {isEditingComparison ? (
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={comparisonExperience || ''}
-                                    onChange={(e) => setComparisonExperience(e.target.value ? parseInt(e.target.value) : null)}
-                                    className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold"
-                                  />
-                                ) : (
-                                  <p className={`text-2xl font-bold ${
-                                    experienceMatch ? 'text-green-600' : 'text-red-600'
-                                  }`}>
-                                    {experienceToUse} ans
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          {experienceMatch !== null && !isEditingComparison && (
-                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-                              experienceMatch ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                              {experienceMatch ? (
-                                <>
-                                  <TrendingUp className="w-5 h-5" />
-                                  <span className="font-semibold">Correspond</span>
-                                </>
-                              ) : (
-                                <>
-                                  <TrendingDown className="w-5 h-5" />
-                                  <span className="font-semibold">Insuffisant</span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Formation */}
-                    {selectedJobForComparison.niveau_formation && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-4 sm:p-5 md:p-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <FileCheck className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
-                            <span>Niveau de formation</span>
-                          </h3>
-                          {educationScore !== null && (
-                            <div className={`flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold ${
-                              educationMatch
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {educationMatch ? (
-                                <>
-                                  <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                  <span>Correspond</span>
-                                </>
-                              ) : (
-                                <>
-                                  <XCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                                  <span>Non correspond</span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-sm sm:text-base text-gray-700 break-words">
-                            <span className="font-semibold">Requis:</span> {selectedJobForComparison.niveau_formation}
-                          </p>
-                          {candidate.profile_title && (
-                            <p className="text-xs sm:text-sm text-gray-600">
-                              <span className="font-semibold">Candidat:</span> {candidate.profile_title}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Langues */}
-                    {selectedJobForComparison.langues_requises && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-4 sm:p-5 md:p-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
-                            <span>Langues requises</span>
-                          </h3>
-                          {languageScore !== null && (
-                            <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold ${
-                              languageScore >= 80
-                                ? 'bg-green-100 text-green-800'
-                                : languageScore >= 50
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {languageScore}%
-                            </span>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-sm sm:text-base text-gray-700 break-words">
-                            <span className="font-semibold">Requis:</span> {selectedJobForComparison.langues_requises}
-                          </p>
-                          {requiredLanguages.length > 0 && (
-                            <div className="text-xs sm:text-sm text-gray-600">
-                              {matchingLanguages.length}/{requiredLanguages.length} langues correspondantes
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Comparaison salariale */}
-                    {salaryMatch && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-4 sm:p-5 md:p-6">
-                        <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                          <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
-                          <span>Budget et rémunération</span>
-                        </h3>
-                        <div className="space-y-4">
-                          {salaryMatch.budget && (
-                            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3 sm:p-4">
-                              <p className="text-xs sm:text-sm text-gray-600 mb-1">Budget prévu</p>
-                              <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-900">
-                                {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', minimumFractionDigits: 0 }).format(salaryMatch.budget)}
-                              </p>
-                            </div>
-                          )}
-                          {(salaryMatch.minSalary || salaryMatch.maxSalary) && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                              {salaryMatch.minSalary && (
-                                <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-3">
-                                  <p className="text-xs sm:text-sm text-gray-600 mb-1">Salaire minimum</p>
-                                  <p className="text-base sm:text-lg font-bold text-gray-900">
-                                    {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', minimumFractionDigits: 0 }).format(salaryMatch.minSalary)}
-                                  </p>
-                                </div>
-                              )}
-                              {salaryMatch.maxSalary && (
-                                <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-3">
-                                  <p className="text-xs sm:text-sm text-gray-600 mb-1">Salaire maximum</p>
-                                  <p className="text-base sm:text-lg font-bold text-gray-900">
-                                    {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', minimumFractionDigits: 0 }).format(salaryMatch.maxSalary)}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {!salaryMatch.candidateSalary && (
-                            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-3">
-                              <p className="text-xs sm:text-sm text-yellow-800 flex items-center gap-1">
-                                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                                <span>Les prétentions salariales du candidat ne sont pas renseignées</span>
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Compétences complètes du candidat */}
-                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-xl p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                          <User className="w-5 h-5 text-blue-600" />
-                          Compétences complètes du candidat
-                        </h3>
-                        {isEditingComparison && (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              placeholder="Ajouter une compétence"
-                              onKeyPress={(e) => {
-                                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                                  const newSkill = e.currentTarget.value.trim()
-                                  if (!comparisonSkills.some(s => s.toLowerCase() === newSkill.toLowerCase())) {
-                                    setComparisonSkills([...comparisonSkills, newSkill])
-                                    e.currentTarget.value = ''
-                                  }
-                                }
-                              }}
-                              className="px-3 py-1.5 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                            />
-                            <button
-                              onClick={(e) => {
-                                const input = e.currentTarget.previousElementSibling as HTMLInputElement
-                                if (input && input.value.trim()) {
-                                  const newSkill = input.value.trim()
-                                  if (!comparisonSkills.some(s => s.toLowerCase() === newSkill.toLowerCase())) {
-                                    setComparisonSkills([...comparisonSkills, newSkill])
-                                    input.value = ''
-                                  }
-                                }
-                              }}
-                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(isEditingComparison ? comparisonSkills : candidateSkills).map((skill, idx) => {
-                          const skillLower = skill.toLowerCase()
-                          const isRequired = jobRequiredSkills.some(rs => 
-                            skillLower.includes(rs) || rs.includes(skillLower)
-                          )
-                          const isPreferred = jobPreferredSkills.some(ps => 
-                            skillLower.includes(ps) || ps.includes(skillLower)
-                          )
-                          
-                          return (
-                            <span
-                              key={idx}
-                              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium ${
-                                isRequired
-                                  ? 'bg-green-100 text-green-800 border-2 border-green-300'
-                                  : isPreferred
-                                  ? 'bg-blue-100 text-blue-800 border-2 border-blue-300'
-                                  : 'bg-white text-gray-700 border-2 border-gray-300'
-                              }`}
-                            >
+                      <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <h4 className="font-semibold text-blue-900 mb-2 text-sm">Correspondances</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiAnalysis.matching_skills.map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
                               {skill}
-                              {isRequired && <CheckCircle2 className="w-3 h-3" />}
-                              {isPreferred && !isRequired && <Star className="w-3 h-3 fill-blue-600 text-blue-600" />}
-                              {isEditingComparison && (
-                                <button
-                                  onClick={() => {
-                                    setComparisonSkills(comparisonSkills.filter((_, i) => i !== idx))
-                                  }}
-                                  className="ml-1 hover:text-red-600 transition-colors"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              )}
                             </span>
-                          )
-                        })}
-                        {(!isEditingComparison ? candidateSkills : comparisonSkills).length === 0 && (
-                          <p className="text-sm text-gray-500 italic">Aucune compétence renseignée</p>
-                        )}
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                        <h4 className="font-semibold text-yellow-900 mb-2 text-sm">Manquantes</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiAnalysis.missing_skills.map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                        <h4 className="font-semibold text-purple-900 mb-2 text-sm">Complémentaires</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiAnalysis.complementary_skills.map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </>
-                )
-              })()}
+
+                    {/* Recommandations */}
+                    <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                      <h4 className="font-semibold text-indigo-900 mb-3 flex items-center gap-2">
+                        <MessageSquare className="w-5 h-5" />
+                        Recommandations
+                      </h4>
+                      <ul className="space-y-2">
+                        {aiAnalysis.recommendations.map((rec, idx) => (
+                          <li key={idx} className="text-sm text-indigo-800 flex items-start gap-2">
+                            <span className="text-indigo-600 mt-1">→</span>
+                            <span>{rec}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-4 sm:p-6">
+                  <div className="text-center py-8">
+                    <Sparkles className="w-12 h-12 text-purple-400 mx-auto mb-4" />
+                    <p className="text-purple-700 font-medium mb-4">Cliquez sur "Analyse IA" pour lancer l'analyse approfondie</p>
+                    <button
+                      onClick={handleAiAnalysis}
+                      disabled={isLoadingAiAnalysis || !candidate.cv_file_path}
+                      className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+                    >
+                      <Sparkles className="w-5 h-5" />
+                      Lancer l'analyse IA
+                    </button>
+                  </div>
+                </div>
+              )}
+
             </div>
 
-            {/* Footer fixe */}
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 rounded-b-xl flex-shrink-0">
-              {isEditingComparison ? (
-                <>
-                  <button
-                    onClick={handleCancelComparison}
-                    disabled={isSavingComparison}
-                    className="w-full sm:w-auto px-4 sm:px-6 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium text-sm sm:text-base disabled:opacity-50"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    onClick={handleSaveComparison}
-                    disabled={isSavingComparison}
-                    className="w-full sm:w-auto px-4 sm:px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {isSavingComparison ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Enregistrement...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        <span className="hidden sm:inline">Enregistrer les modifications</span>
-                        <span className="sm:hidden">Enregistrer</span>
-                      </>
-                    )}
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => {
-                    setShowComparisonModal(false)
-                    setSelectedJobForComparison(null)
-                    setIsEditingComparison(false)
-                    setComparisonSkills([])
-                    setComparisonExperience(null)
-                  }}
-                  className="w-full sm:w-auto px-4 sm:px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base"
-                >
-                  Fermer
-                </button>
-              )}
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3 rounded-b-xl">
+              <button
+                onClick={() => {
+                  setShowComparisonModal(false)
+                  setSelectedJobForComparison(null)
+                  setAiAnalysis(null)
+                }}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+              >
+                Fermer
+              </button>
             </div>
           </div>
         </div>

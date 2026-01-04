@@ -245,7 +245,8 @@ export async function updateCandidateStatus(
   newStatus: string
 ): Promise<CandidateResponse> {
   try {
-    const response = await authenticatedFetch(`${API_URL}/candidates/${candidateId}/status?new_status=${encodeURIComponent(newStatus)}`, {
+    const url = `${API_URL}/candidates/${candidateId}/status?new_status=${encodeURIComponent(newStatus)}`
+    const response = await authenticatedFetch(url, {
       method: 'PATCH',
     })
 
@@ -257,6 +258,12 @@ export async function updateCandidateStatus(
           window.location.href = '/auth/choice'
         }
         throw new Error('Session expirée. Veuillez vous reconnecter.')
+      }
+
+      if (response.status === 404) {
+        const error = await response.json().catch(() => ({ detail: 'Endpoint non trouvé' }))
+        const errorMessage = error.detail || 'Endpoint non trouvé. Vérifiez que le backend est démarré et que l\'endpoint existe.'
+        throw new Error(errorMessage)
       }
 
       const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour du statut' }))

@@ -275,15 +275,14 @@ def get_candidate_applications(
     return result
 
 
-@router.post("/{application_id}/shortlist", response_model=ApplicationResponse)
+@router.patch("/{application_id}/toggle-shortlist", response_model=ApplicationResponse)
 def toggle_shortlist(
     application_id: UUID,
-    is_in_shortlist: bool = Query(True, description="Ajouter (True) ou retirer (False) de la shortlist"),
     current_user: User = Depends(require_recruteur),
     session: Session = Depends(get_session)
 ):
     """
-    Ajouter ou retirer un candidat de la shortlist
+    Basculer le statut de shortlist d'un candidat (ajouter si absent, retirer si présent)
     """
     # Récupérer l'application
     application = session.get(Application, application_id)
@@ -293,9 +292,9 @@ def toggle_shortlist(
             detail="Candidature non trouvée"
         )
     
-    # Mettre à jour le statut de shortlist
-    application.is_in_shortlist = is_in_shortlist
-    if is_in_shortlist:
+    # Basculer le statut de shortlist (toggle)
+    application.is_in_shortlist = not application.is_in_shortlist
+    if application.is_in_shortlist:
         application.status = "shortlist"
     else:
         # Si retiré de la shortlist, on peut remettre au statut précédent ou "sourcé"

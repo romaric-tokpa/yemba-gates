@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useToastContext } from '@/components/ToastProvider'
 
-export default function RecruiterCandidatesPage() {
+export default function ManagerCandidatsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { success, error: showError } = useToastContext()
@@ -129,10 +129,10 @@ export default function RecruiterCandidatesPage() {
   const allSkills = Array.from(new Set(candidates.flatMap((c) => c.skills || [])))
 
   const handleAddTag = () => {
-    if (tagInput.trim() && !formData.tags?.includes(tagInput.trim())) {
+    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
       setFormData({
         ...formData,
-        tags: [...(formData.tags || []), tagInput.trim()],
+        tags: [...formData.tags, tagInput.trim()],
       })
       setTagInput('')
     }
@@ -141,7 +141,7 @@ export default function RecruiterCandidatesPage() {
   const handleRemoveTag = (tagToRemove: string) => {
     setFormData({
       ...formData,
-      tags: (formData.tags || []).filter((tag) => tag !== tagToRemove),
+      tags: formData.tags.filter((tag) => tag !== tagToRemove),
     })
   }
 
@@ -344,11 +344,7 @@ export default function RecruiterCandidatesPage() {
       if (selectedTag && !candidate.tags?.includes(selectedTag)) return false
       if (selectedSource && candidate.source !== selectedSource) return false
       if (selectedStatus && candidate.status !== selectedStatus) return false
-      if (selectedSkill && !Array.isArray(candidate.skills) && typeof candidate.skills === 'string') {
-        if (!candidate.skills.toLowerCase().includes(selectedSkill.toLowerCase())) return false
-      } else if (selectedSkill && Array.isArray(candidate.skills)) {
-        if (!candidate.skills.some((skill: string) => skill.toLowerCase().includes(selectedSkill.toLowerCase()))) return false
-      }
+      if (selectedSkill && !candidate.skills?.some(skill => skill.toLowerCase().includes(selectedSkill.toLowerCase()))) return false
       
       const yearsExp = candidate.years_of_experience ?? 0
       if (selectedExperienceMin && yearsExp < parseInt(selectedExperienceMin)) return false
@@ -641,8 +637,8 @@ export default function RecruiterCandidatesPage() {
       {/* Header */}
       <div className="mb-8 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Mes Candidats</h1>
-          <p className="text-gray-600">Gestion de la base de candidats</p>
+          <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Gestion des Candidats</h1>
+          <p className="text-gray-600">Gérez tous vos candidats</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -1313,16 +1309,6 @@ export default function RecruiterCandidatesPage() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">CV (PDF)</label>
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={(e) => setCvFile(e.target.files?.[0] || null)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                
-                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
                   <textarea
                     value={formData.notes}
@@ -1335,10 +1321,11 @@ export default function RecruiterCandidatesPage() {
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsModalOpen(false)
-                      setAddMode('manual')
-                    }}
+                  onClick={() => {
+                    setIsModalOpen(false)
+                    setAddMode('manual')
+                    setSelectedJobId('')
+                  }}
                     className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Annuler

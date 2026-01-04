@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Clock, User, Briefcase, MapPin, DollarSign, Calendar, FileText, Tag, Award, Languages, Building2, UserCheck, Edit, X, Save, Plus } from 'lucide-react'
-import { getJob, getJobHistory, updateJob, JobResponse, JobHistoryItem, JobUpdate } from '@/lib/api'
+import { ArrowLeft, Clock, User, Briefcase, MapPin, DollarSign, Calendar, FileText, Tag, Award, Languages, Building2, UserCheck, Edit, X, Save, Plus, CheckCircle, XCircle, Eye, Mail, Phone, MessageSquare, Search, Filter, Sparkles } from 'lucide-react'
+import { getJob, getJobHistory, updateJob, JobResponse, JobHistoryItem, JobUpdate, getClientShortlists, validateCandidate, type ShortlistItem, type ShortlistValidation, createClientInterviewRequest, type AvailabilitySlot } from '@/lib/api'
+import { formatDateTime } from '@/lib/utils'
 import { getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
 
@@ -19,7 +20,21 @@ export default function ClientJobDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState<'details' | 'shortlist'>('details')
   const { success, error: showError } = useToastContext()
+
+  // États pour la shortlist
+  const [shortlists, setShortlists] = useState<ShortlistItem[]>([])
+  const [isLoadingShortlist, setIsLoadingShortlist] = useState(false)
+  const [validationModal, setValidationModal] = useState<{ open: boolean; item: ShortlistItem | null }>({ open: false, item: null })
+  const [validationFeedback, setValidationFeedback] = useState('')
+  const [isValidating, setIsValidating] = useState(false)
+  const [interviewRequestModal, setInterviewRequestModal] = useState<{ open: boolean; item: ShortlistItem | null }>({ open: false, item: null })
+  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([])
+  const [requestNotes, setRequestNotes] = useState('')
+  const [isCreatingRequest, setIsCreatingRequest] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'validated' | 'rejected'>('all')
 
   // États pour l'édition
   const [formData, setFormData] = useState<JobUpdate>({})
@@ -56,6 +71,28 @@ export default function ClientJobDetailPage() {
       setIsLoading(false)
     }
   }
+
+  const loadShortlist = async () => {
+    try {
+      setIsLoadingShortlist(true)
+      const allShortlists = await getClientShortlists()
+      // Filtrer par job_id
+      const jobShortlists = allShortlists.filter(item => item.job_id === jobId)
+      setShortlists(jobShortlists)
+    } catch (error) {
+      console.error('Erreur lors du chargement de la shortlist:', error)
+      showError('Erreur lors du chargement de la shortlist')
+    } finally {
+      setIsLoadingShortlist(false)
+    }
+  }
+
+  // Charger la shortlist quand on passe à l'onglet shortlist
+  useEffect(() => {
+    if (activeTab === 'shortlist' && jobId) {
+      loadShortlist()
+    }
+  }, [activeTab, jobId])
 
   // Initialiser le formulaire quand le besoin est chargé
   useEffect(() => {
@@ -257,6 +294,152 @@ export default function ClientJobDetailPage() {
     )
   }
 
+  // Fonctions pour la shortlist
+  const handleOpenValidationModal = (item: ShortlistItem) => {
+    setValidationModal({ open: true, item })
+    setValidationFeedback(item.client_feedback || '')
+  }
+
+  const handleCloseValidationModal = () => {
+    setValidationModal({ open: false, item: null })
+    setValidationFeedback('')
+  }
+
+  const handleValidate = async (validated: boolean) => {
+    if (!validationModal.item) return
+
+    try {
+      setIsValidating(true)
+      const validation: ShortlistValidation = {
+        validated,
+        feedback: validationFeedback.trim() || undefined
+      }
+      
+      await validateCandidate(validationModal.item.application_id, validation)
+      success(validated ? 'Candidat validé avec succès' : 'Candidat refusé')
+      handleCloseValidationModal()
+      await loadShortlist()
+    } catch (error) {
+      console.error('Erreur lors de la validation:', error)
+      showError(error instanceof Error ? error.message : 'Erreur lors de la validation')
+    } finally {
+      setIsValidating(false)
+    }
+  }
+
+  const handleOpenInterviewRequestModal = (item: ShortlistItem) => {
+    setInterviewRequestModal({ open: true, item })
+    setAvailabilitySlots([{ date: '', start_time: '', end_time: '' }])
+    setRequestNotes('')
+  }
+
+  const handleCloseInterviewRequestModal = () => {
+    setInterviewRequestModal({ open: false, item: null })
+    setAvailabilitySlots([])
+    setRequestNotes('')
+  }
+
+  const handleAddAvailabilitySlot = () => {
+    setAvailabilitySlots([...availabilitySlots, { date: '', start_time: '', end_time: '' }])
+  }
+
+  const handleRemoveAvailabilitySlot = (index: number) => {
+    setAvailabilitySlots(availabilitySlots.filter((_, i) => i !== index))
+  }
+
+  const handleUpdateAvailabilitySlot = (index: number, field: keyof AvailabilitySlot, value: string) => {
+    const updated = [...availabilitySlots]
+    updated[index] = { ...updated[index], [field]: value }
+    setAvailabilitySlots(updated)
+  }
+
+  const handleCreateInterviewRequest = async () => {
+    if (!interviewRequestModal.item) return
+
+    const validSlots = availabilitySlots.filter(slot => slot.date && slot.start_time && slot.end_time)
+    if (validSlots.length === 0) {
+      showError('Veuillez remplir tous les champs pour au moins un créneau')
+      return
+    }
+
+    try {
+      setIsCreatingRequest(true)
+      await createClientInterviewRequest({
+        application_id: interviewRequestModal.item.application_id,
+        availability_slots: validSlots,
+        notes: requestNotes.trim() || undefined
+      })
+      success('Demande d\'entretien créée avec succès. Le recruteur sera notifié.')
+      handleCloseInterviewRequestModal()
+      await loadShortlist()
+    } catch (error) {
+      console.error('Erreur lors de la création de la demande:', error)
+      showError(error instanceof Error ? error.message : 'Erreur lors de la création de la demande')
+    } finally {
+      setIsCreatingRequest(false)
+    }
+  }
+
+  const getValidationBadge = (item: ShortlistItem) => {
+    if (item.client_validated === null) {
+      return (
+        <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+          En attente
+        </span>
+      )
+    }
+    if (item.client_validated === true) {
+      return (
+        <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 flex items-center">
+          <CheckCircle className="w-3 h-3 mr-1" />
+          Validé
+        </span>
+      )
+    }
+    return (
+      <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 flex items-center">
+        <XCircle className="w-3 h-3 mr-1" />
+        Refusé
+      </span>
+    )
+  }
+
+  // Filtrer les candidats de la shortlist
+  const filteredShortlists = useMemo(() => {
+    let filtered = shortlists
+
+    // Filtre par recherche
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(item =>
+        item.candidate_name.toLowerCase().includes(query) ||
+        item.candidate_email?.toLowerCase().includes(query) ||
+        item.candidate_tags?.some(tag => tag.toLowerCase().includes(query))
+      )
+    }
+
+    // Filtre par statut
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(item => {
+        if (filterStatus === 'pending') return item.client_validated === null
+        if (filterStatus === 'validated') return item.client_validated === true
+        if (filterStatus === 'rejected') return item.client_validated === false
+        return true
+      })
+    }
+
+    return filtered
+  }, [shortlists, searchQuery, filterStatus])
+
+  // Statistiques pour la shortlist
+  const shortlistStats = useMemo(() => {
+    const total = shortlists.length
+    const pending = shortlists.filter(s => s.client_validated === null).length
+    const validated = shortlists.filter(s => s.client_validated === true).length
+    const rejected = shortlists.filter(s => s.client_validated === false).length
+    return { total, pending, validated, rejected }
+  }, [shortlists])
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -338,10 +521,57 @@ export default function ClientJobDetailPage() {
         </div>
       </div>
 
-      {/* Contenu principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Colonne principale */}
-        <div className="lg:col-span-2 space-y-6">
+      {/* Système d'onglets */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden mb-6">
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+          <nav className="flex -mb-px">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`flex-1 px-6 py-5 text-sm font-semibold transition-all relative ${
+                activeTab === 'details'
+                  ? 'text-emerald-600 bg-white'
+                  : 'text-gray-600 hover:text-emerald-600 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Briefcase className={`w-5 h-5 ${activeTab === 'details' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                <span>Détails</span>
+              </div>
+              {activeTab === 'details' && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 to-teal-600"></div>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('shortlist')}
+              className={`flex-1 px-6 py-5 text-sm font-semibold transition-all relative ${
+                activeTab === 'shortlist'
+                  ? 'text-emerald-600 bg-white'
+                  : 'text-gray-600 hover:text-emerald-600 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <User className={`w-5 h-5 ${activeTab === 'shortlist' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                <span>Shortlist</span>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  activeTab === 'shortlist' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {shortlistStats.total}
+                </span>
+              </div>
+              {activeTab === 'shortlist' && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 to-teal-600"></div>
+              )}
+            </button>
+          </nav>
+        </div>
+
+        {/* Contenu des onglets */}
+        <div className="p-6 lg:p-8">
+          {/* Onglet Détails */}
+          {activeTab === 'details' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Colonne principale */}
+              <div className="lg:col-span-2 space-y-6">
           {/* Informations générales */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
@@ -924,48 +1154,483 @@ export default function ClientJobDetailPage() {
           </div>
         </div>
 
-        {/* Colonne latérale */}
-        <div className="space-y-6">
-          {/* Informations rapides */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Informations</h2>
-            <div className="space-y-3">
-              <div className="flex items-center text-sm text-gray-600">
-                <Calendar className="w-4 h-4 mr-2" />
-                <span>Créé le {new Date(job.created_at).toLocaleDateString('fr-FR')}</span>
+              {/* Colonne latérale */}
+              <div className="space-y-6">
+                {/* Informations rapides */}
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Informations</h2>
+                  <div className="space-y-3">
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      <span>Créé le {new Date(job.created_at).toLocaleDateString('fr-FR')}</span>
+                    </div>
+                    {job.validated_at && (
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Clock className="w-4 h-4 mr-2" />
+                        <span>Validé le {new Date(job.validated_at).toLocaleDateString('fr-FR')}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Historique */}
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Clock className="w-4 h-4 mr-2 text-emerald-600" />
+                    Historique récent
+                  </h2>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {history.length > 0 ? (
+                      history.slice(0, 5).map((item, index) => (
+                        <div key={index} className="text-sm border-l-2 border-emerald-200 pl-3 py-2">
+                          <p className="font-medium text-gray-900">{item.field_name}</p>
+                          <p className="text-gray-600 text-xs mt-1">
+                            {new Date(item.created_at).toLocaleDateString('fr-FR')} à {new Date(item.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-sm">Aucun historique</p>
+                    )}
+                  </div>
+                </div>
               </div>
-              {job.validated_at && (
-                <div className="flex items-center text-sm text-gray-600">
-                  <Clock className="w-4 h-4 mr-2" />
-                  <span>Validé le {new Date(job.validated_at).toLocaleDateString('fr-FR')}</span>
+            </div>
+          )}
+
+          {/* Onglet Shortlist */}
+          {activeTab === 'shortlist' && (
+            <div className="space-y-6">
+              {/* Statistiques */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-600 mb-1">Total</p>
+                      <p className="text-2xl font-bold text-gray-900">{shortlistStats.total}</p>
+                    </div>
+                    <User className="w-6 h-6 text-emerald-600" />
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl border border-yellow-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-600 mb-1">En attente</p>
+                      <p className="text-2xl font-bold text-orange-600">{shortlistStats.pending}</p>
+                    </div>
+                    <Clock className="w-6 h-6 text-orange-600" />
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-600 mb-1">Validés</p>
+                      <p className="text-2xl font-bold text-green-600">{shortlistStats.validated}</p>
+                    </div>
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-xl border border-red-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-600 mb-1">Refusés</p>
+                      <p className="text-2xl font-bold text-red-600">{shortlistStats.rejected}</p>
+                    </div>
+                    <XCircle className="w-6 h-6 text-red-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Barre de recherche et filtres */}
+              <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                <div className="flex flex-col lg:flex-row gap-4">
+                  {/* Recherche */}
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Rechercher un candidat..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                  </div>
+                  
+                  {/* Filtre par statut */}
+                  <div className="relative">
+                    <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value as any)}
+                      className="pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none bg-white"
+                    >
+                      <option value="all">Tous les statuts</option>
+                      <option value="pending">En attente</option>
+                      <option value="validated">Validés</option>
+                      <option value="rejected">Refusés</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Liste des candidats */}
+              {isLoadingShortlist ? (
+                <div className="text-center py-12">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mb-4"></div>
+                  <p className="text-gray-600">Chargement de la shortlist...</p>
+                </div>
+              ) : filteredShortlists.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+                  {filteredShortlists.map((candidate) => (
+                    <div
+                      key={candidate.application_id}
+                      className={`p-5 border-2 rounded-xl transition-all hover:shadow-lg ${
+                        candidate.client_validated === true
+                          ? 'border-green-200 bg-green-50/30'
+                          : candidate.client_validated === false
+                          ? 'border-red-200 bg-red-50/30'
+                          : 'border-yellow-200 bg-yellow-50/30 hover:border-emerald-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <User className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-bold text-gray-900 text-lg truncate">{candidate.candidate_name}</h3>
+                            </div>
+                          </div>
+                          {getValidationBadge(candidate)}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3 mb-4">
+                        {candidate.candidate_email && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{candidate.candidate_email}</span>
+                          </div>
+                        )}
+                        {candidate.candidate_phone && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span>{candidate.candidate_phone}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {candidate.candidate_tags && candidate.candidate_tags.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {candidate.candidate_tags.slice(0, 3).map((tag, index) => (
+                            <span
+                              key={index}
+                              className="px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                          {candidate.candidate_tags.length > 3 && (
+                            <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
+                              +{candidate.candidate_tags.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {candidate.client_feedback && (
+                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <MessageSquare className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-blue-900 mb-1">Votre commentaire</p>
+                              <p className="text-sm text-blue-800 line-clamp-2">{candidate.client_feedback}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Dates */}
+                      <div className="mb-4 pt-3 border-t border-gray-200">
+                        <div className="flex flex-col gap-1.5 text-xs text-gray-500">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5" />
+                            <span>Ajouté le {formatDateTime(candidate.created_at)}</span>
+                          </div>
+                          {candidate.client_validated_at && (
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>Décision le {formatDateTime(candidate.client_validated_at)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex flex-wrap gap-2">
+                        {candidate.candidate_cv_path && (
+                          <a
+                            href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${candidate.candidate_cv_path}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                          >
+                            <FileText className="w-4 h-4" />
+                            CV
+                          </a>
+                        )}
+                        <button
+                          onClick={() => router.push(`/client/candidats/${candidate.candidate_id}`)}
+                          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Fiche
+                        </button>
+                        {candidate.client_validated === true && (
+                          <button
+                            onClick={() => handleOpenInterviewRequestModal(candidate)}
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            <Calendar className="w-4 h-4" />
+                            Entretien
+                          </button>
+                        )}
+                        {candidate.client_validated === null && (
+                          <button
+                            onClick={() => handleOpenValidationModal(candidate)}
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                            Décider
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-12 text-center">
+                  <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg font-semibold mb-2">
+                    {searchQuery || filterStatus !== 'all'
+                      ? 'Aucun candidat ne correspond à vos critères'
+                      : 'Aucun candidat en shortlist pour ce poste'}
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    {searchQuery || filterStatus !== 'all'
+                      ? 'Essayez de modifier vos filtres de recherche'
+                      : 'Les recruteurs vous enverront des candidats pour ce besoin'}
+                  </p>
                 </div>
               )}
             </div>
-          </div>
+          )}
+        </div>
+      </div>
 
-          {/* Historique */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Clock className="w-4 h-4 mr-2 text-emerald-600" />
-              Historique récent
-            </h2>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {history.length > 0 ? (
-                history.slice(0, 5).map((item, index) => (
-                  <div key={index} className="text-sm border-l-2 border-emerald-200 pl-3 py-2">
-                    <p className="font-medium text-gray-900">{item.field_name}</p>
-                    <p className="text-gray-600 text-xs mt-1">
-                      {new Date(item.created_at).toLocaleDateString('fr-FR')} à {new Date(item.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-500 text-sm">Aucun historique</p>
-              )}
+      {/* Modals de la shortlist */}
+      {/* Modal de demande d'entretien client */}
+      {interviewRequestModal.open && interviewRequestModal.item && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold mb-1">Demander un entretien client</h3>
+                  <p className="text-blue-100 text-sm">
+                    {interviewRequestModal.item.candidate_name} - {interviewRequestModal.item.job_title}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseInterviewRequestModal}
+                  className="text-white hover:text-gray-200 transition-colors p-1 hover:bg-white/10 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-900 flex items-start gap-2">
+                  <Calendar className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <span>Indiquez vos disponibilités pour planifier l'entretien. Le recruteur sera notifié et pourra choisir parmi vos créneaux.</span>
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-semibold text-gray-900">
+                    Créneaux de disponibilité *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddAvailabilitySlot}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Ajouter
+                  </button>
+                </div>
+                
+                <div className="space-y-3">
+                  {availabilitySlots.map((slot, index) => (
+                    <div key={index} className="p-4 border-2 border-gray-200 rounded-lg bg-gray-50 hover:border-emerald-300 transition-colors">
+                      <div className="flex items-end gap-3">
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1.5">Date *</label>
+                          <input
+                            type="date"
+                            value={slot.date}
+                            onChange={(e) => handleUpdateAvailabilitySlot(index, 'date', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1.5">Heure début *</label>
+                          <input
+                            type="time"
+                            value={slot.start_time}
+                            onChange={(e) => handleUpdateAvailabilitySlot(index, 'start_time', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-1.5">Heure fin *</label>
+                          <input
+                            type="time"
+                            value={slot.end_time}
+                            onChange={(e) => handleUpdateAvailabilitySlot(index, 'end_time', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                            required
+                          />
+                        </div>
+                        {availabilitySlots.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAvailabilitySlot(index)}
+                            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors mb-0.5"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Notes (optionnel)
+                </label>
+                <textarea
+                  value={requestNotes}
+                  onChange={(e) => setRequestNotes(e.target.value)}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Ajoutez des informations complémentaires sur vos disponibilités..."
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
+                <button
+                  onClick={handleCloseInterviewRequestModal}
+                  disabled={isCreatingRequest}
+                  className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleCreateInterviewRequest}
+                  disabled={isCreatingRequest || availabilitySlots.filter(s => s.date && s.start_time && s.end_time).length === 0}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCreatingRequest ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Création...
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="w-4 h-4" />
+                      Envoyer la demande
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Modal de validation */}
+      {validationModal.open && validationModal.item && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white px-6 py-4 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold mb-1">Valider ou refuser le candidat</h3>
+                  <p className="text-emerald-100 text-sm">
+                    {validationModal.item.candidate_name} - {validationModal.item.job_title}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseValidationModal}
+                  className="text-white hover:text-gray-200 transition-colors p-1 hover:bg-white/10 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Commentaire (optionnel)
+                </label>
+                <textarea
+                  value={validationFeedback}
+                  onChange={(e) => setValidationFeedback(e.target.value)}
+                  rows={4}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Ajoutez un commentaire sur votre décision..."
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
+                <button
+                  onClick={handleCloseValidationModal}
+                  disabled={isValidating}
+                  className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={() => handleValidate(false)}
+                  disabled={isValidating}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Refuser
+                </button>
+                <button
+                  onClick={() => handleValidate(true)}
+                  disabled={isValidating}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  {isValidating ? 'Validation...' : 'Valider'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

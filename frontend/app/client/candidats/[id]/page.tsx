@@ -6,11 +6,11 @@ import Link from 'next/link'
 import { 
   ArrowLeft, FileText, Tag, Mail, Phone, Calendar, User, Eye, Briefcase, 
   Award, MapPin, Download, X, MessageSquare, Star, CheckCircle2, XCircle, 
-  Clock, AlertCircle, FileCheck, BarChart3
+  Clock, AlertCircle, FileCheck, BarChart3, Sparkles, Loader2, Building2, Users
 } from 'lucide-react'
 import { 
   getCandidate, CandidateResponse, getCandidateApplications, ApplicationResponse,
-  getInterviews, InterviewResponse, getJobs, JobResponse
+  getInterviews, InterviewResponse, getJobs, JobResponse, getSavedComparison, JobCandidateComparisonResponse
 } from '@/lib/api'
 import { authenticatedFetch, getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
@@ -39,6 +39,13 @@ export default function ClientCandidateDetailPage() {
   const [activeTab, setActiveTab] = useState<'profil' | 'postes' | 'entretiens'>('profil')
   const [selectedJobForComparison, setSelectedJobForComparison] = useState<JobResponse | null>(null)
   const [showComparisonModal, setShowComparisonModal] = useState(false)
+  
+  // États pour l'analyse IA (lecture seule pour le client)
+  const [aiAnalysis, setAiAnalysis] = useState<JobCandidateComparisonResponse | null>(null)
+  const [isLoadingAiAnalysis, setIsLoadingAiAnalysis] = useState(false)
+  // États pour les analyses IA par job (pour l'affichage dans la liste des postes)
+  const [jobAnalyses, setJobAnalyses] = useState<Record<string, JobCandidateComparisonResponse>>({})
+  const [loadingJobAnalyses, setLoadingJobAnalyses] = useState<Record<string, boolean>>({})
 
   const { error: showError } = useToastContext()
 
@@ -60,6 +67,69 @@ export default function ClientCandidateDetailPage() {
       loadInterviews()
     }
   }, [applications])
+
+  // Charger l'analyse IA sauvegardée quand le modal s'ouvre
+  useEffect(() => {
+    if (showComparisonModal && selectedJobForComparison && candidate && candidate.cv_file_path) {
+      loadSavedAnalysis()
+    }
+  }, [showComparisonModal, selectedJobForComparison?.id, candidate?.id])
+
+  // Réinitialiser l'analyse quand on ferme le modal
+  useEffect(() => {
+    if (!showComparisonModal) {
+      setAiAnalysis(null)
+    }
+  }, [showComparisonModal])
+
+  const loadSavedAnalysis = async () => {
+    if (!candidate || !selectedJobForComparison || !candidate.id) return
+    
+    try {
+      setIsLoadingAiAnalysis(true)
+      const savedAnalysis = await getSavedComparison(candidate.id, selectedJobForComparison.id)
+      if (savedAnalysis) {
+        setAiAnalysis(savedAnalysis)
+      }
+    } catch (err) {
+      // Si l'analyse sauvegardée n'existe pas, on laisse aiAnalysis à null
+      console.log('Aucune analyse sauvegardée trouvée')
+    } finally {
+      setIsLoadingAiAnalysis(false)
+    }
+  }
+
+  // Charger les analyses IA pour tous les postes
+  const loadJobAnalyses = async () => {
+    if (!candidate || !candidate.id || applications.length === 0) return
+
+    const newAnalyses: Record<string, JobCandidateComparisonResponse> = {}
+
+    for (const app of applications) {
+      setLoadingJobAnalyses(prev => ({ ...prev, [app.job_id]: true }))
+      
+      try {
+        const analysis = await getSavedComparison(candidate.id!, app.job_id)
+        if (analysis) {
+          newAnalyses[app.job_id] = analysis
+        }
+      } catch (err) {
+        // Si l'analyse n'existe pas, on continue
+        console.log(`Aucune analyse trouvée pour le job ${app.job_id}`)
+      } finally {
+        setLoadingJobAnalyses(prev => ({ ...prev, [app.job_id]: false }))
+      }
+    }
+    
+    setJobAnalyses(newAnalyses)
+  }
+
+  // Charger les analyses IA quand les applications sont chargées
+  useEffect(() => {
+    if (applications.length > 0 && candidate && candidate.id) {
+      loadJobAnalyses()
+    }
+  }, [applications.length, candidate?.id])
 
   const loadCandidate = async () => {
     try {
@@ -267,7 +337,7 @@ export default function ClientCandidateDetailPage() {
             {/* Photo/Avatar */}
             <div className="relative">
               {(() => {
-                const photoUrl = normalizeImageUrl(candidate.profile_picture_url || candidate.photo_url)
+                const photoUrl = normalizeImageUrl(API_URL, candidate.profile_picture_url || candidate.photo_url)
                 if (photoUrl) {
                   return (
                     <img
@@ -701,43 +771,44 @@ export default function ClientCandidateDetailPage() {
                       if (!job) return null
                       
                       const appInterviews = interviews.filter(i => i.application_id === app.id)
-                      const candidateSkills = Array.isArray(candidate.skills) 
-                        ? candidate.skills 
-                        : (typeof candidate.skills === 'string' ? candidate.skills.split(',').map(s => s.trim().toLowerCase()) : [])
+                      const jobAnalysis = jobAnalyses[app.job_id]
+                      const isLoadingAnalysis = loadingJobAnalyses[app.job_id]
                       
-                      const jobRequiredSkills = Array.isArray(job.competences_techniques_obligatoires)
-                        ? job.competences_techniques_obligatoires.map(s => s.toLowerCase())
-                        : []
-                      const jobPreferredSkills = Array.isArray(job.competences_techniques_souhaitees)
-                        ? job.competences_techniques_souhaitees.map(s => s.toLowerCase())
-                        : []
-                      
-                      const matchingRequiredSkills = jobRequiredSkills.filter(skill => 
-                        candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                      )
-                      const matchingPreferredSkills = jobPreferredSkills.filter(skill => 
-                        candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                      )
-                      
-                      const experienceMatch = job.experience_requise 
-                        ? (candidate.years_of_experience || 0) >= job.experience_requise
-                        : null
-                      
-                      const matchScore = jobRequiredSkills.length > 0 
-                        ? Math.round((matchingRequiredSkills.length / jobRequiredSkills.length) * 100)
-                        : 0
+                      // Utiliser l'analyse IA si disponible
+                      const overallScore = jobAnalysis?.overall_score
+                      const hasAiAnalysis = !!jobAnalysis
 
                       return (
                         <div
                           key={app.id}
-                          className="bg-gradient-to-br from-white to-gray-50 rounded-xl border-2 border-gray-200 hover:border-emerald-300 shadow-lg hover:shadow-xl transition-all overflow-hidden"
+                          className={`bg-gradient-to-br rounded-xl border-2 shadow-lg hover:shadow-xl transition-all overflow-hidden ${
+                            hasAiAnalysis 
+                              ? overallScore && overallScore >= 80 
+                                ? 'from-green-50 to-white border-green-200 hover:border-green-300'
+                                : overallScore && overallScore >= 50
+                                ? 'from-yellow-50 to-white border-yellow-200 hover:border-yellow-300'
+                                : overallScore
+                                ? 'from-red-50 to-white border-red-200 hover:border-red-300'
+                                : 'from-white to-gray-50 border-gray-200 hover:border-emerald-300'
+                              : 'from-white to-gray-50 border-gray-200 hover:border-emerald-300'
+                          }`}
                         >
                           <div className="p-6">
                             <div className="flex items-start justify-between mb-4">
                               <div className="flex-1">
-                                <h3 className="text-lg font-bold text-gray-900 mb-1">
-                                  {job.title}
-                                </h3>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="text-lg font-bold text-gray-900">
+                                    {job.title}
+                                  </h3>
+                                  {hasAiAnalysis && (
+                                    <div className="relative group">
+                                      <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                        Analyse IA disponible
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                                 {job.department && (
                                   <p className="text-sm text-gray-600">{job.department}</p>
                                 )}
@@ -753,58 +824,147 @@ export default function ClientCandidateDetailPage() {
                               </span>
                             </div>
 
-                            {/* Score de correspondance */}
-                            <div className="mb-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-gray-700">Correspondance</span>
-                                <span className={`text-lg font-bold ${
-                                  matchScore >= 80 ? 'text-green-600' :
-                                  matchScore >= 50 ? 'text-yellow-600' :
-                                  'text-red-600'
-                                }`}>
-                                  {matchScore}%
-                                </span>
+                            {/* Score de correspondance IA */}
+                            {isLoadingAnalysis ? (
+                              <div className="mb-4 flex items-center justify-center py-4">
+                                <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+                                <span className="ml-2 text-sm text-gray-600">Chargement de l'analyse IA...</span>
                               </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                <div
-                                  className={`h-2.5 rounded-full transition-all ${
-                                    matchScore >= 80 ? 'bg-green-600' :
-                                    matchScore >= 50 ? 'bg-yellow-600' :
-                                    'bg-red-600'
-                                  }`}
-                                  style={{ width: `${matchScore}%` }}
-                                />
+                            ) : hasAiAnalysis && jobAnalysis && overallScore !== undefined ? (
+                              <div className="mb-4 space-y-3">
+                                {/* Score global IA */}
+                                <div>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <Sparkles className="w-4 h-4 text-purple-600" />
+                                      <span className="text-sm font-medium text-gray-700">Score IA global</span>
+                                    </div>
+                                    <span className={`text-2xl font-bold ${
+                                      overallScore >= 80 ? 'text-green-600' :
+                                      overallScore >= 50 ? 'text-yellow-600' :
+                                      'text-red-600'
+                                    }`}>
+                                      {overallScore}%
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-3">
+                                    <div
+                                      className={`h-3 rounded-full transition-all ${
+                                        overallScore >= 80 ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                                        overallScore >= 50 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
+                                        'bg-gradient-to-r from-red-500 to-red-600'
+                                      }`}
+                                      style={{ width: `${overallScore}%` }}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Scores par catégorie */}
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="bg-white/60 rounded-lg p-2 border border-gray-200">
+                                    <div className="text-xs text-gray-500 mb-1">Compétences</div>
+                                    <div className="text-sm font-bold text-gray-900">
+                                      {jobAnalysis.technical_score}%
+                                    </div>
+                                  </div>
+                                  <div className="bg-white/60 rounded-lg p-2 border border-gray-200">
+                                    <div className="text-xs text-gray-500 mb-1">Expérience</div>
+                                    <div className="text-sm font-bold text-gray-900">
+                                      {jobAnalysis.experience_score}%
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Points forts (premiers 2) */}
+                                {jobAnalysis.strengths && jobAnalysis.strengths.length > 0 && (
+                                  <div className="bg-green-50 rounded-lg p-2 border border-green-200">
+                                    <div className="text-xs font-semibold text-green-900 mb-1 flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      Points forts
+                                    </div>
+                                    <ul className="text-xs text-green-800 space-y-0.5">
+                                      {jobAnalysis.strengths.slice(0, 2).map((strength, idx) => (
+                                        <li key={idx} className="flex items-start gap-1">
+                                          <span className="text-green-600 mt-0.5">•</span>
+                                          <span className="line-clamp-1">{strength}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {/* Points à améliorer (premiers 2) */}
+                                {jobAnalysis.weaknesses && jobAnalysis.weaknesses.length > 0 && (
+                                  <div className="bg-red-50 rounded-lg p-2 border border-red-200">
+                                    <div className="text-xs font-semibold text-red-900 mb-1 flex items-center gap-1">
+                                      <XCircle className="w-3 h-3" />
+                                      Points à améliorer
+                                    </div>
+                                    <ul className="text-xs text-red-800 space-y-0.5">
+                                      {jobAnalysis.weaknesses.slice(0, 2).map((weakness, idx) => (
+                                        <li key={idx} className="flex items-start gap-1">
+                                          <span className="text-red-600 mt-0.5">•</span>
+                                          <span className="line-clamp-1">{weakness}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
                               </div>
-                            </div>
+                            ) : (
+                              <div className="mb-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium text-gray-700">Analyse IA non disponible</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                  <div className="h-2.5 rounded-full bg-gray-400" style={{ width: '0%' }} />
+                                </div>
+                              </div>
+                            )}
 
                             {/* Statistiques rapides */}
                             <div className="grid grid-cols-3 gap-3 mb-4">
-                              <div className="text-center p-2 bg-white rounded-lg border border-gray-200">
-                                <div className="text-xs text-gray-500">Compétences</div>
-                                <div className="text-sm font-bold text-gray-900">
-                                  {matchingRequiredSkills.length}/{jobRequiredSkills.length}
-                                </div>
-                              </div>
-                              <div className="text-center p-2 bg-white rounded-lg border border-gray-200">
-                                <div className="text-xs text-gray-500">Entretiens</div>
-                                <div className="text-sm font-bold text-gray-900">
-                                  {appInterviews.length}
-                                </div>
-                              </div>
-                              <div className="text-center p-2 bg-white rounded-lg border border-gray-200">
-                                <div className="text-xs text-gray-500">Expérience</div>
-                                <div className="text-sm font-bold text-gray-900">
-                                  {experienceMatch !== null ? (
-                                    experienceMatch ? (
-                                      <CheckCircle2 className="w-4 h-4 text-green-600 mx-auto" />
-                                    ) : (
-                                      <XCircle className="w-4 h-4 text-red-600 mx-auto" />
-                                    )
-                                  ) : (
-                                    <span className="text-gray-400">-</span>
-                                  )}
-                                </div>
-                              </div>
+                              {hasAiAnalysis && jobAnalysis ? (
+                                <>
+                                  <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                    <div className="text-xs text-gray-500">Compétences</div>
+                                    <div className="text-sm font-bold text-gray-900">
+                                      {jobAnalysis.technical_score}%
+                                    </div>
+                                  </div>
+                                  <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                    <div className="text-xs text-gray-500">Entretiens</div>
+                                    <div className="text-sm font-bold text-gray-900">
+                                      {appInterviews.length}
+                                    </div>
+                                  </div>
+                                  <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                    <div className="text-xs text-gray-500">Expérience</div>
+                                    <div className="text-sm font-bold text-gray-900">
+                                      {jobAnalysis.experience_score}%
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                    <div className="text-xs text-gray-500">Entretiens</div>
+                                    <div className="text-sm font-bold text-gray-900">
+                                      {appInterviews.length}
+                                    </div>
+                                  </div>
+                                  <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                    <div className="text-xs text-gray-500">Statut</div>
+                                    <div className="text-xs font-bold text-gray-900">
+                                      {app.status}
+                                    </div>
+                                  </div>
+                                  <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                    <div className="text-xs text-gray-500">-</div>
+                                    <div className="text-sm font-bold text-gray-400">-</div>
+                                  </div>
+                                </>
+                              )}
                             </div>
 
                             {/* Actions */}
@@ -817,7 +977,7 @@ export default function ClientCandidateDetailPage() {
                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
                               >
                                 <BarChart3 className="w-4 h-4" />
-                                Voir le comparatif
+                                {hasAiAnalysis ? 'Voir le comparatif complet' : 'Voir le comparatif'}
                               </button>
                               <Link
                                 href={`/client/jobs/${job.id}`}
@@ -1160,6 +1320,255 @@ export default function ClientCandidateDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal de comparatif Besoin vs Candidat (lecture seule pour le client) */}
+      {showComparisonModal && selectedJobForComparison && candidate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full my-2 sm:my-4 md:my-8 max-h-[95vh] flex flex-col">
+            {/* Header fixe */}
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-t-xl flex-shrink-0">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-1 flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
+                  <span className="truncate">Comparatif Besoin vs Candidat</span>
+                </h2>
+                <p className="text-emerald-100 text-xs sm:text-sm line-clamp-2">
+                  Analyse détaillée de la correspondance entre le poste et le profil par IA
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowComparisonModal(false)
+                  setSelectedJobForComparison(null)
+                  setAiAnalysis(null)
+                }}
+                className="text-white hover:text-gray-200 transition-colors p-1.5 sm:p-2 hover:bg-white/10 rounded-lg flex-shrink-0"
+              >
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            </div>
+            
+            {/* Contenu scrollable */}
+            <div className="overflow-y-auto flex-1 px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+              {/* En-tête du poste */}
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-4 sm:p-5 md:p-6">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="bg-emerald-600 rounded-lg p-2 sm:p-3 flex-shrink-0">
+                    <Briefcase className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-2 break-words">{selectedJobForComparison.title}</h3>
+                    {selectedJobForComparison.department && (
+                      <p className="text-sm sm:text-base md:text-lg text-gray-700 mb-2 flex items-center gap-1">
+                        <Building2 className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                        <span className="break-words">{selectedJobForComparison.department}</span>
+                      </p>
+                    )}
+                    {selectedJobForComparison.contract_type && (
+                      <p className="text-xs sm:text-sm text-gray-600">
+                        Type de contrat: {selectedJobForComparison.contract_type}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Analyse IA (lecture seule) */}
+              {isLoadingAiAnalysis ? (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-4 sm:p-6">
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+                    <span className="ml-3 text-purple-700 font-medium">Chargement de l'analyse IA...</span>
+                  </div>
+                </div>
+              ) : aiAnalysis ? (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-4 sm:p-6">
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Sparkles className="w-6 h-6 text-purple-600" />
+                      <h3 className="text-xl font-bold text-gray-900">Analyse IA approfondie</h3>
+                      <div className={`ml-auto text-3xl font-bold ${
+                        aiAnalysis.overall_score >= 80 ? 'text-green-600' :
+                        aiAnalysis.overall_score >= 50 ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {aiAnalysis.overall_score}%
+                      </div>
+                    </div>
+
+                    {/* Évaluation globale */}
+                    <div className="bg-white rounded-lg p-4 border border-purple-100">
+                      <h4 className="font-semibold text-gray-900 mb-2">Évaluation globale</h4>
+                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                        {aiAnalysis.overall_assessment}
+                      </p>
+                    </div>
+
+                    {/* Analyses détaillées */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-white rounded-lg p-4 border border-purple-100">
+                        <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                          <Award className="w-4 h-4 text-purple-600" />
+                          Compétences techniques
+                        </h4>
+                        <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.technical_score}%</p>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                          {aiAnalysis.technical_skills_analysis}
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-lg p-4 border border-purple-100">
+                        <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                          <Briefcase className="w-4 h-4 text-purple-600" />
+                          Expérience
+                        </h4>
+                        <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.experience_score}%</p>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                          {aiAnalysis.experience_analysis}
+                        </p>
+                      </div>
+
+                      {aiAnalysis.soft_skills_analysis && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-100">
+                          <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                            <Users className="w-4 h-4 text-purple-600" />
+                            Compétences comportementales
+                          </h4>
+                          <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.soft_skills_score || 'N/A'}%</p>
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                            {aiAnalysis.soft_skills_analysis}
+                          </p>
+                        </div>
+                      )}
+
+                      {aiAnalysis.education_analysis && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-100">
+                          <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                            <FileCheck className="w-4 h-4 text-purple-600" />
+                            Formation
+                          </h4>
+                          <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.education_score || 'N/A'}%</p>
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                            {aiAnalysis.education_analysis}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Points forts et faibles */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                        <h4 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5" />
+                          Points forts
+                        </h4>
+                        <ul className="space-y-2">
+                          {aiAnalysis.strengths.map((strength, idx) => (
+                            <li key={idx} className="text-sm text-green-800 flex items-start gap-2">
+                              <span className="text-green-600 mt-1">•</span>
+                              <span>{strength}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                        <h4 className="font-semibold text-red-900 mb-3 flex items-center gap-2">
+                          <XCircle className="w-5 h-5" />
+                          Points à améliorer
+                        </h4>
+                        <ul className="space-y-2">
+                          {aiAnalysis.weaknesses.map((weakness, idx) => (
+                            <li key={idx} className="text-sm text-red-800 flex items-start gap-2">
+                              <span className="text-red-600 mt-1">•</span>
+                              <span>{weakness}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Compétences */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <h4 className="font-semibold text-blue-900 mb-2 text-sm">Correspondances</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiAnalysis.matching_skills.map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                        <h4 className="font-semibold text-yellow-900 mb-2 text-sm">Manquantes</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiAnalysis.missing_skills.map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                        <h4 className="font-semibold text-purple-900 mb-2 text-sm">Complémentaires</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiAnalysis.complementary_skills.map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recommandations */}
+                    <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                      <h4 className="font-semibold text-indigo-900 mb-3 flex items-center gap-2">
+                        <MessageSquare className="w-5 h-5" />
+                        Recommandations
+                      </h4>
+                      <ul className="space-y-2">
+                        {aiAnalysis.recommendations.map((rec, idx) => (
+                          <li key={idx} className="text-sm text-indigo-800 flex items-start gap-2">
+                            <span className="text-indigo-600 mt-1">→</span>
+                            <span>{rec}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-4 sm:p-6">
+                  <div className="text-center py-8">
+                    <Sparkles className="w-12 h-12 text-purple-400 mx-auto mb-4" />
+                    <p className="text-purple-700 font-medium">
+                      Aucune analyse IA disponible pour ce comparatif. L'analyse sera générée par le recruteur ou le manager.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3 rounded-b-xl">
+              <button
+                onClick={() => {
+                  setShowComparisonModal(false)
+                  setSelectedJobForComparison(null)
+                  setAiAnalysis(null)
+                }}
+                className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de prévisualisation */}
       {previewDocument && (
