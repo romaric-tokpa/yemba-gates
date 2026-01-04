@@ -11,7 +11,8 @@ import {
   type RecruiterPerformance,
   type ManagerKPIs,
   type UserCreateResponse,
-  type JobResponse
+  type JobResponse,
+  type DetailedStatistics
 } from '@/lib/api'
 import { useToastContext } from '@/components/ToastProvider'
 import { 
@@ -611,7 +612,7 @@ export default function ManagerKPIPage() {
                     <Activity className="w-6 h-6 text-purple-600" />
                     Volume & Productivité
                   </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                     <KPICard
                       title="Candidats sourcés"
                       value={managerKPIs.volume_productivity.total_candidates_sourced}
@@ -637,6 +638,176 @@ export default function ManagerKPIPage() {
                       color="orange"
                     />
                   </div>
+
+                  {/* Statistiques de sourcing par période */}
+                  {managerKPIs.volume_productivity.sourcing_statistics && (
+                    <div className="border-t border-gray-200 pt-6 mt-6">
+                      <h3 className="text-md font-semibold text-gray-900 mb-4 flex items-center">
+                        <Calendar className="w-4 h-4 mr-2 text-indigo-600" />
+                        Statistiques de Sourcing par Période
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Aujourd'hui</span>
+                            <Calendar className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-blue-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.today_count}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats sourcés</p>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Ce mois</span>
+                            <Calendar className="w-4 h-4 text-green-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-green-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.this_month_count}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats sourcés</p>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Cette année</span>
+                            <Calendar className="w-4 h-4 text-purple-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-purple-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.this_year_count}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats sourcés</p>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg p-4 border border-orange-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Moyenne par jour</span>
+                            <TrendingUp className="w-4 h-4 text-orange-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-orange-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.per_day.toFixed(1)}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats/jour</p>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg p-4 border border-teal-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Moyenne par mois</span>
+                            <TrendingUp className="w-4 h-4 text-teal-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-teal-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.per_month.toFixed(1)}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats/mois</p>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg p-4 border border-indigo-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Moyenne par an</span>
+                            <TrendingUp className="w-4 h-4 text-indigo-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-indigo-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.per_year.toFixed(1)}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats/an</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Statistiques détaillées */}
+              {managerKPIs?.detailed_statistics && (
+                <div className="space-y-6 mb-8">
+                  {/* Statistiques par étape du processus */}
+                  {managerKPIs.detailed_statistics.candidates_by_status && managerKPIs.detailed_statistics.candidates_by_status.length > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <Users className="w-5 h-5 mr-2 text-blue-600" />
+                        Répartition par Étape du Processus
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {managerKPIs.detailed_statistics.candidates_by_status.map((stat) => (
+                          <div key={stat.status} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-gray-700 capitalize">{stat.status.replace('_', ' ')}</span>
+                              <Users className="w-4 h-4 text-gray-600" />
+                            </div>
+                            <p className="text-2xl font-bold text-gray-900">{stat.count}</p>
+                            <p className="text-xs text-gray-600 mt-1">{stat.percentage.toFixed(1)}% du total</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Statistiques par statut de besoin */}
+                  {managerKPIs.detailed_statistics.jobs_by_status && managerKPIs.detailed_statistics.jobs_by_status.length > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <Briefcase className="w-5 h-5 mr-2 text-purple-600" />
+                        Répartition par Statut de Besoin
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {managerKPIs.detailed_statistics.jobs_by_status.map((stat) => (
+                          <div key={stat.status} className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-gray-700 capitalize">{stat.status.replace('_', ' ')}</span>
+                              <Briefcase className="w-4 h-4 text-purple-600" />
+                            </div>
+                            <p className="text-2xl font-bold text-purple-700">{stat.count}</p>
+                            <p className="text-xs text-gray-600 mt-1">{stat.percentage.toFixed(1)}% du total</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Performance par recruteur */}
+                  {managerKPIs.detailed_statistics.recruiters_performance && managerKPIs.detailed_statistics.recruiters_performance.length > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <UserCheck className="w-5 h-5 mr-2 text-green-600" />
+                        Performance par Recruteur
+                      </h2>
+                      <div className="space-y-4">
+                        {managerKPIs.detailed_statistics.recruiters_performance.map((perf) => (
+                          <div key={perf.recruiter_id} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="text-md font-semibold text-gray-900">{perf.recruiter_name}</h3>
+                              <UserCheck className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                              <div>
+                                <p className="text-sm text-gray-600">Candidats sourcés</p>
+                                <p className="text-xl font-bold text-blue-700">{perf.total_candidates_sourced}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Besoins gérés</p>
+                                <p className="text-xl font-bold text-purple-700">{perf.total_jobs_managed}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Moyenne/jour</p>
+                                <p className="text-xl font-bold text-green-700">{perf.sourcing_statistics.per_day.toFixed(1)}</p>
+                              </div>
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-blue-200">
+                              <p className="text-xs font-medium text-gray-700 mb-2">Répartition par statut candidat:</p>
+                              <div className="flex flex-wrap gap-2">
+                                {perf.candidates_by_status.filter(s => s.count > 0).map((stat) => (
+                                  <span key={stat.status} className="px-2 py-1 bg-white rounded text-xs text-gray-700 border border-gray-300">
+                                    {stat.status.replace('_', ' ')}: {stat.count}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -852,6 +1023,83 @@ export default function ManagerKPIPage() {
                       color="orange"
                     />
                   </div>
+
+                  {/* Statistiques de sourcing par période */}
+                  {managerKPIs.volume_productivity.sourcing_statistics && (
+                    <div className="border-t border-gray-200 pt-6 mt-6">
+                      <h3 className="text-md font-semibold text-gray-900 mb-4 flex items-center">
+                        <Calendar className="w-4 h-4 mr-2 text-indigo-600" />
+                        Statistiques de Sourcing par Période
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Aujourd'hui</span>
+                            <Calendar className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-blue-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.today_count}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats sourcés</p>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Ce mois</span>
+                            <Calendar className="w-4 h-4 text-green-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-green-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.this_month_count}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats sourcés</p>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Cette année</span>
+                            <Calendar className="w-4 h-4 text-purple-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-purple-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.this_year_count}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats sourcés</p>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg p-4 border border-orange-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Moyenne par jour</span>
+                            <TrendingUp className="w-4 h-4 text-orange-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-orange-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.per_day.toFixed(1)}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats/jour</p>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg p-4 border border-teal-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Moyenne par mois</span>
+                            <TrendingUp className="w-4 h-4 text-teal-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-teal-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.per_month.toFixed(1)}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats/mois</p>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg p-4 border border-indigo-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Moyenne par an</span>
+                            <TrendingUp className="w-4 h-4 text-indigo-600" />
+                          </div>
+                          <p className="text-2xl font-bold text-indigo-700">
+                            {managerKPIs.volume_productivity.sourcing_statistics.per_year.toFixed(1)}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">candidats/an</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Coût / Budget */}

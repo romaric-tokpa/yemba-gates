@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
-from sqlalchemy import text
+from sqlalchemy import text, func
 from typing import List, Optional
 from uuid import UUID, uuid4
 
@@ -28,8 +28,21 @@ except ImportError:
 # Import pour OpenAI
 try:
     from openai import OpenAI
+    try:
+        from openai import RateLimitError, APIError
+    except ImportError:
+        # Pour les versions plus anciennes d'OpenAI, utiliser OpenAIError
+        try:
+            from openai import OpenAIError
+            RateLimitError = OpenAIError
+            APIError = OpenAIError
+        except ImportError:
+            RateLimitError = Exception
+            APIError = Exception
 except ImportError:
     OpenAI = None
+    RateLimitError = Exception
+    APIError = Exception
 
 from database import get_session, engine
 from models import Candidate, User, UserRole, Interview, Application, Job, CandidateJobComparison
@@ -58,6 +71,85 @@ def is_allowed_file(filename: str) -> bool:
 def is_allowed_image(filename: str) -> bool:
     """Vérifie si le fichier est une image autorisée"""
     return Path(filename).suffix.lower() in ALLOWED_IMAGE_EXTENSIONS
+
+
+def get_creator_info(creator_id: UUID, session: Session) -> dict:
+    """Récupère les informations du créateur (nom, prénom, email)"""
+    creator = session.get(User, creator_id)
+    if creator:
+        return {
+            "creator_first_name": creator.first_name,
+            "creator_last_name": creator.last_name,
+            "creator_email": creator.email,
+        }
+    return {
+        "creator_first_name": None,
+        "creator_last_name": None,
+        "creator_email": None,
+    }
+
+
+def check_duplicate_candidate(
+    session: Session,
+    email: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    phone: Optional[str] = None
+) -> Optional[Candidate]:
+    """
+    Vérifie si un candidat avec les mêmes informations existe déjà
+    
+    Priorité de vérification:
+    1. Email (si fourni) - vérification exacte
+    2. Nom + Prénom + Téléphone (si tous fournis) - vérification exacte
+    3. Nom + Prénom (si fournis) - vérification exacte (moins fiable)
+    
+    Retourne le candidat existant si trouvé, None sinon
+    """
+    # Vérification par email (le plus fiable)
+    if email and email.strip():
+        email_clean = email.strip().lower()
+        existing = session.exec(
+            select(Candidate).where(
+                Candidate.email.isnot(None),
+                func.lower(Candidate.email) == email_clean
+            )
+        ).first()
+        if existing:
+            return existing
+    
+    # Vérification par nom + prénom + téléphone (si tous fournis)
+    if first_name and last_name and phone:
+        first_name_clean = first_name.strip().lower()
+        last_name_clean = last_name.strip().lower()
+        phone_clean = phone.strip()
+        
+        existing = session.exec(
+            select(Candidate).where(
+                func.lower(Candidate.first_name) == first_name_clean,
+                func.lower(Candidate.last_name) == last_name_clean,
+                Candidate.phone.isnot(None),
+                Candidate.phone == phone_clean
+            )
+        ).first()
+        if existing:
+            return existing
+    
+    # Vérification par nom + prénom uniquement (moins fiable, mais utile si pas d'email/téléphone)
+    if first_name and last_name:
+        first_name_clean = first_name.strip().lower()
+        last_name_clean = last_name.strip().lower()
+        
+        existing = session.exec(
+            select(Candidate).where(
+                func.lower(Candidate.first_name) == first_name_clean,
+                func.lower(Candidate.last_name) == last_name_clean
+            )
+        ).first()
+        if existing:
+            return existing
+    
+    return None
 
 
 def extract_text_from_pdf(file_path: str) -> str:
@@ -177,16 +269,28 @@ def extract_image_from_cv(file_path: str, file_extension: str) -> Optional[str]:
         return None
 
 
-def extract_text_from_cv(file: UploadFile) -> tuple[str, str]:
+async def extract_text_from_cv(file: UploadFile) -> tuple[str, str]:
     """Extrait le texte brut d'un CV (PDF ou Word) et retourne aussi le chemin temporaire"""
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucun nom de fichier fourni"
+        )
+    
     file_extension = Path(file.filename).suffix.lower()
     
     # Créer un fichier temporaire
     with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
         tmp_path = tmp_file.name
         try:
-            # Écrire le contenu du fichier uploadé
-            shutil.copyfileobj(file.file, tmp_file)
+            # Réinitialiser le pointeur du fichier
+            await file.seek(0)
+            
+            # Lire le contenu du fichier uploadé
+            content = await file.read()
+            
+            # Écrire le contenu dans le fichier temporaire
+            tmp_file.write(content)
             tmp_file.flush()
             
             # Extraire le texte selon le type de fichier
@@ -206,6 +310,14 @@ def extract_text_from_cv(file: UploadFile) -> tuple[str, str]:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
             raise
+        except Exception as e:
+            # Nettoyer le fichier temporaire en cas d'erreur
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Erreur lors de l'extraction du texte du CV: {str(e)}"
+            )
 
 
 def parse_cv_with_llm(cv_text: str) -> dict:
@@ -291,6 +403,76 @@ Règles importantes:
             detail=f"Erreur lors du parsing JSON de la réponse LLM: {str(e)}. Réponse reçue: {response_text[:200]}"
         )
     except Exception as e:
+        # Vérifier si c'est une erreur de rate limit (429)
+        error_str = str(e)
+        is_rate_limit = False
+        
+        # Vérifier si c'est une RateLimitError ou si le message contient des indices de rate limit
+        if RateLimitError and RateLimitError != Exception and isinstance(e, RateLimitError):
+            is_rate_limit = True
+        elif "429" in error_str or "rate_limit" in error_str.lower() or "Rate limit" in error_str or "rate_limit_exceeded" in error_str.lower():
+            is_rate_limit = True
+        
+        if is_rate_limit:
+            # Extraire le temps d'attente si disponible
+            wait_time = None
+            if "try again in" in error_str:
+                try:
+                    import re
+                    # Chercher différents formats de temps (19h16m53.76s, 1h, 30m, etc.)
+                    match = re.search(r'try again in ([\d\.]+[hms]+)', error_str)
+                    if match:
+                        wait_time = match.group(1)
+                except:
+                    pass
+            
+            error_message = "Limite de requêtes OpenAI atteinte. Le service d'analyse automatique de CV est temporairement indisponible."
+            if wait_time:
+                error_message += f" Veuillez réessayer dans {wait_time}."
+            else:
+                error_message += " Veuillez réessayer plus tard."
+            
+            error_message += " Vous pouvez créer le candidat manuellement en remplissant le formulaire."
+            
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=error_message
+            )
+        
+        # Autres erreurs OpenAI ou erreurs générales
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'appel à l'API OpenAI: {str(e)}"
+        )
+    except Exception as e:
+        # Gérer les autres exceptions (y compris les erreurs OpenAI non capturées)
+        error_str = str(e)
+        if "429" in error_str or "rate_limit" in error_str.lower() or "Rate limit" in error_str:
+            # Extraire le temps d'attente si disponible
+            wait_time = None
+            if "try again in" in error_str:
+                try:
+                    import re
+                    match = re.search(r'try again in ([\d\.]+[hms]+)', error_str)
+                    if match:
+                        wait_time = match.group(1)
+                except:
+                    pass
+            
+            error_message = "Limite de requêtes OpenAI atteinte. Le service d'analyse automatique de CV est temporairement indisponible."
+            if wait_time:
+                error_message += f" Veuillez réessayer dans {wait_time}."
+            else:
+                error_message += " Veuillez réessayer plus tard."
+            
+            error_message += " Vous pouvez créer le candidat manuellement en remplissant le formulaire."
+            
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=error_message
+            )
+        
+        # Autres erreurs
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de l'appel à l'API OpenAI: {str(e)}"
@@ -359,11 +541,18 @@ async def parse_cv(
         
         file_extension = Path(cv_file.filename).suffix.lower()
         
+        # Vérifier que le fichier a un nom
+        if not cv_file.filename:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Aucun nom de fichier fourni"
+            )
+        
         # Réinitialiser le pointeur du fichier pour pouvoir le lire plusieurs fois
         await cv_file.seek(0)
         
         # Extraire le texte du CV (retourne aussi le chemin temporaire)
-        cv_text, tmp_path = extract_text_from_cv(cv_file)
+        cv_text, tmp_path = await extract_text_from_cv(cv_file)
         
         if not cv_text or len(cv_text.strip()) < 50:
             # Nettoyer le fichier temporaire
@@ -508,6 +697,28 @@ async def create_candidate(
         with open(cv_file_path, "wb") as buffer:
             shutil.copyfileobj(cv_file.file, buffer)
     
+    # Vérifier les doublons avant de créer le candidat
+    existing_candidate = check_duplicate_candidate(
+        session=session,
+        email=email.strip() if email else None,
+        first_name=first_name.strip(),
+        last_name=last_name.strip(),
+        phone=phone.strip() if phone else None
+    )
+    
+    if existing_candidate:
+        # Si un candidat existe déjà, retourner une erreur avec les informations du candidat existant
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Un candidat avec ces informations existe déjà dans la plateforme",
+                "existing_candidate_id": str(existing_candidate.id),
+                "existing_candidate_name": f"{existing_candidate.first_name} {existing_candidate.last_name}",
+                "existing_candidate_email": existing_candidate.email,
+                "match_criteria": "email" if email and email.strip() else ("nom + prénom + téléphone" if phone and phone.strip() else "nom + prénom")
+            }
+        )
+    
     # Créer le candidat
     try:
         candidate = Candidate(
@@ -534,6 +745,7 @@ async def create_candidate(
         
         # Normaliser la réponse comme dans get_candidate et list_candidates
         # Créer un dictionnaire avec toutes les valeurs
+        creator_info = get_creator_info(candidate.created_by, session)
         candidate_dict = {
             "id": candidate.id,
             "first_name": candidate.first_name,
@@ -553,6 +765,7 @@ async def create_candidate(
             "created_by": candidate.created_by,
             "created_at": candidate.created_at,
             "updated_at": candidate.updated_at,
+            **creator_info,
         }
         
         # Valider avec le schéma Pydantic
@@ -646,6 +859,8 @@ def list_candidates(
         candidates_list = []
         for candidate in candidates:
             try:
+                # Récupérer les informations du créateur
+                creator_info = get_creator_info(candidate.created_by, session)
                 # Créer un dictionnaire avec tous les champs nécessaires
                 candidate_dict = {
                     "id": candidate.id,
@@ -666,6 +881,7 @@ def list_candidates(
                     "created_by": candidate.created_by,
                     "created_at": candidate.created_at,
                     "updated_at": candidate.updated_at,
+                    **creator_info,
                 }
                 candidates_list.append(CandidateResponse.model_validate(candidate_dict))
             except Exception as e:
@@ -923,6 +1139,7 @@ def update_candidate_status(
     session.refresh(candidate)
     
     # Normaliser la réponse comme dans les autres endpoints
+    creator_info = get_creator_info(candidate.created_by, session)
     candidate_dict = {
         "id": candidate.id,
         "first_name": candidate.first_name,
@@ -942,6 +1159,7 @@ def update_candidate_status(
         "created_by": candidate.created_by,
         "created_at": candidate.created_at,
         "updated_at": candidate.updated_at,
+        **creator_info,
     }
     
     # Valider avec le schéma Pydantic
@@ -971,6 +1189,7 @@ def get_candidate(
         
         # Normaliser la réponse comme dans list_candidates
         # Créer un dictionnaire avec toutes les valeurs
+        creator_info = get_creator_info(candidate.created_by, session)
         candidate_dict = {
             "id": candidate.id,
             "first_name": candidate.first_name,
@@ -990,6 +1209,7 @@ def get_candidate(
             "created_by": candidate.created_by,
             "created_at": candidate.created_at,
             "updated_at": candidate.updated_at,
+            **creator_info,
         }
         
         # Valider avec le schéma Pydantic
@@ -1038,6 +1258,7 @@ def update_candidate(
     session.refresh(candidate)
     
     # Normaliser la réponse comme dans get_candidate et create_candidate
+    creator_info = get_creator_info(candidate.created_by, session)
     candidate_dict = {
         "id": candidate.id,
         "first_name": candidate.first_name,
@@ -1057,6 +1278,7 @@ def update_candidate(
         "created_by": candidate.created_by,
         "created_at": candidate.created_at,
         "updated_at": candidate.updated_at,
+        **creator_info,
     }
     
     # Valider avec le schéma Pydantic

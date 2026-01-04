@@ -40,7 +40,8 @@ import {
   Copy,
   CheckCircle,
   Shield,
-  UserCheck
+  UserCheck,
+  AlertCircle
 } from 'lucide-react'
 
 type TabType = 'teams' | 'users'
@@ -87,6 +88,8 @@ export default function TeamsPage() {
   const [selectedUser, setSelectedUser] = useState<UserCreateResponse | null>(null)
   const [generatedCredentials, setGeneratedCredentials] = useState<{email: string, password: string} | null>(null)
   const [copiedPassword, setCopiedPassword] = useState(false)
+  // Stocker les mots de passe générés par ID utilisateur pour pouvoir les afficher plus tard
+  const [storedPasswords, setStoredPasswords] = useState<Record<string, string>>({})
   
   // Users form
   const [userFormData, setUserFormData] = useState<Partial<UserCreateByManager>>({
@@ -96,7 +99,8 @@ export default function TeamsPage() {
     role: 'recruteur',
     phone: '',
     department: '',
-    generate_password: true
+    generate_password: true,
+    is_active: true
   })
 
   useEffect(() => {
@@ -337,7 +341,8 @@ export default function TeamsPage() {
       role: 'recruteur',
       phone: '',
       department: '',
-      generate_password: true
+      generate_password: true,
+      is_active: true
     })
     setGeneratedCredentials(null)
     setCopiedPassword(false)
@@ -353,6 +358,8 @@ export default function TeamsPage() {
           email: result.email,
           password: result.generated_password
         })
+        // Stocker le mot de passe pour pouvoir l'afficher plus tard
+        setStoredPasswords(prev => ({ ...prev, [result.id]: result.generated_password || '' }))
       }
       success('Utilisateur créé avec succès')
       setShowCreateUserModal(false)
@@ -377,6 +384,8 @@ export default function TeamsPage() {
           email: result.email,
           password: result.generated_password
         })
+        // Stocker le mot de passe pour pouvoir l'afficher plus tard
+        setStoredPasswords(prev => ({ ...prev, [result.id]: result.generated_password || '' }))
       }
       success('Utilisateur mis à jour avec succès')
       setShowEditUserModal(false)
@@ -416,7 +425,8 @@ export default function TeamsPage() {
       role: user.role as 'recruteur' | 'client',
       phone: user.phone || '',
       department: user.department || '',
-      generate_password: false
+      generate_password: false,
+      is_active: user.is_active
     })
     setShowEditUserModal(true)
   }
@@ -456,11 +466,11 @@ export default function TeamsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header moderne avec onglets */}
         <div className="mb-8">
-          <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 rounded-2xl shadow-xl p-8 text-white">
+          <div className="bg-gradient-to-r from-primary via-primary-600 to-primary-700 rounded-2xl shadow-xl p-8 text-white">
             <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
               <div>
                 <h1 className="text-4xl font-bold mb-2">Gestion des Équipes & Utilisateurs</h1>
-                <p className="text-indigo-100 text-lg">Organisez vos équipes et créez des accès utilisateurs</p>
+                <p className="text-primary-100 text-lg">Organisez vos équipes et créez des accès utilisateurs</p>
               </div>
               {activeTab === 'teams' ? (
                 <button
@@ -468,7 +478,7 @@ export default function TeamsPage() {
                     resetForm()
                     setShowCreateModal(true)
                   }}
-                  className="flex items-center gap-2 bg-white text-indigo-600 px-6 py-3 rounded-xl hover:bg-indigo-50 transition-all shadow-lg hover:shadow-xl font-semibold"
+                  className="flex items-center gap-2 bg-white text-primary px-6 py-3 rounded-xl hover:bg-primary-50 transition-all shadow-lg hover:shadow-xl font-semibold"
                 >
                   <Plus className="w-5 h-5" />
                   Créer une équipe
@@ -479,7 +489,7 @@ export default function TeamsPage() {
                     resetUserForm()
                     setShowCreateUserModal(true)
                   }}
-                  className="flex items-center gap-2 bg-white text-indigo-600 px-6 py-3 rounded-xl hover:bg-indigo-50 transition-all shadow-lg hover:shadow-xl font-semibold"
+                  className="flex items-center gap-2 bg-white text-primary px-6 py-3 rounded-xl hover:bg-primary-50 transition-all shadow-lg hover:shadow-xl font-semibold"
                 >
                   <UserPlus className="w-5 h-5" />
                   Créer un utilisateur
@@ -493,7 +503,7 @@ export default function TeamsPage() {
                 onClick={() => setActiveTab('teams')}
                 className={`flex-1 px-6 py-3 rounded-lg text-sm font-medium transition-all ${
                   activeTab === 'teams'
-                    ? 'bg-white text-indigo-600 shadow-lg'
+                    ? 'bg-white text-primary shadow-lg'
                     : 'text-white hover:bg-white/10'
                 }`}
               >
@@ -504,7 +514,7 @@ export default function TeamsPage() {
                 onClick={() => setActiveTab('users')}
                 className={`flex-1 px-6 py-3 rounded-lg text-sm font-medium transition-all ${
                   activeTab === 'users'
-                    ? 'bg-white text-indigo-600 shadow-lg'
+                    ? 'bg-white text-primary shadow-lg'
                     : 'text-white hover:bg-white/10'
                 }`}
               >
@@ -528,8 +538,8 @@ export default function TeamsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
               <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-indigo-100 rounded-xl group-hover:bg-indigo-200 transition-colors">
-                    <Users className="w-6 h-6 text-indigo-600" />
+                  <div className="p-3 bg-primary-100 rounded-xl group-hover:bg-primary-200 transition-colors">
+                    <Users className="w-6 h-6 text-primary" />
                   </div>
                 </div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Total équipes</p>
@@ -548,8 +558,8 @@ export default function TeamsPage() {
               </div>
               <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-purple-100 rounded-xl group-hover:bg-purple-200 transition-colors">
-                    <Building2 className="w-6 h-6 text-purple-600" />
+                  <div className="p-3 bg-accent-100 rounded-xl group-hover:bg-accent-200 transition-colors">
+                    <Building2 className="w-6 h-6 text-accent" />
                   </div>
                 </div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Départements</p>
@@ -568,7 +578,7 @@ export default function TeamsPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Rechercher une équipe par nom, département ou description..."
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                 />
               </div>
             </div>
@@ -579,13 +589,13 @@ export default function TeamsPage() {
             filteredTeams.map((team) => (
               <div
                 key={team.id}
-                className="bg-white rounded-xl shadow-lg border-2 border-gray-200 hover:border-indigo-300 hover:shadow-xl transition-all p-6"
+                className="bg-white rounded-xl shadow-lg border-2 border-gray-200 hover:border-primary-300 hover:shadow-xl transition-all p-6"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-indigo-100 rounded-lg">
-                        <Users className="w-5 h-5 text-indigo-600" />
+                      <div className="p-2 bg-primary-100 rounded-lg">
+                        <Users className="w-5 h-5 text-primary" />
                       </div>
                       <div>
                         <h3 className="text-xl font-bold text-gray-900">{team.name}</h3>
@@ -607,7 +617,7 @@ export default function TeamsPage() {
                     )}
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       <span className="flex items-center gap-1">
-                        <Users className="w-4 h-4 text-indigo-600" />
+                        <Users className="w-4 h-4 text-primary" />
                         {team.members_count || 0} membre{team.members_count !== 1 ? 's' : ''}
                       </span>
                     </div>
@@ -622,8 +632,8 @@ export default function TeamsPage() {
                       {team.members.slice(0, 3).map((member) => (
                         <div key={member.id} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                              <UserIcon className="w-4 h-4 text-indigo-600" />
+                            <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                              <UserIcon className="w-4 h-4 text-primary" />
                             </div>
                             <div>
                               <p className="text-sm font-medium text-gray-900">
@@ -654,7 +664,7 @@ export default function TeamsPage() {
                 <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
                   <button
                     onClick={() => openAddMemberModal(team)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm font-medium"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-100 text-primary-600 rounded-lg hover:bg-primary-200 transition-colors text-sm font-medium"
                   >
                     <UserPlus className="w-4 h-4" />
                     Ajouter membre
@@ -676,8 +686,8 @@ export default function TeamsPage() {
             ))
           ) : (
             <div className="col-span-2 text-center py-16 bg-white rounded-xl shadow-lg">
-              <div className="inline-flex items-center justify-center w-20 h-20 bg-indigo-100 rounded-full mb-4">
-                <Users className="w-10 h-10 text-indigo-600" />
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-primary-100 rounded-full mb-4">
+                <Users className="w-10 h-10 text-primary" />
               </div>
               <p className="text-xl font-semibold text-gray-900 mb-2">Aucune équipe trouvée</p>
               <p className="text-gray-600 mb-6">
@@ -689,7 +699,7 @@ export default function TeamsPage() {
                     resetForm()
                     setShowCreateModal(true)
                   }}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl font-semibold"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary-600 transition-all shadow-lg hover:shadow-xl font-semibold"
                 >
                   <Plus className="w-5 h-5" />
                   Créer votre première équipe
@@ -705,8 +715,8 @@ export default function TeamsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
               <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all group">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-indigo-100 rounded-xl group-hover:bg-indigo-200 transition-colors">
-                    <UserIcon className="w-6 h-6 text-indigo-600" />
+                  <div className="p-3 bg-primary-100 rounded-xl group-hover:bg-primary-200 transition-colors">
+                    <UserIcon className="w-6 h-6 text-primary" />
                   </div>
                 </div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Total utilisateurs</p>
@@ -745,7 +755,7 @@ export default function TeamsPage() {
                   value={userSearchQuery}
                   onChange={(e) => setUserSearchQuery(e.target.value)}
                   placeholder="Rechercher un utilisateur..."
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                 />
               </div>
               <div className="flex items-center gap-2 bg-white rounded-xl border-2 border-gray-200 p-1">
@@ -753,7 +763,7 @@ export default function TeamsPage() {
                   onClick={() => setUserFilter('all')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     userFilter === 'all'
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-primary text-white'
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
@@ -763,7 +773,7 @@ export default function TeamsPage() {
                   onClick={() => setUserFilter('recruteur')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     userFilter === 'recruteur'
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-primary text-white'
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
@@ -773,7 +783,7 @@ export default function TeamsPage() {
                   onClick={() => setUserFilter('client')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     userFilter === 'client'
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-primary text-white'
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
@@ -788,12 +798,12 @@ export default function TeamsPage() {
                 filteredUsers.map((user) => (
                   <div
                     key={user.id}
-                    className="bg-white rounded-xl shadow-lg border-2 border-gray-200 hover:border-indigo-300 hover:shadow-xl transition-all p-6"
+                    className="bg-white rounded-xl shadow-lg border-2 border-gray-200 hover:border-primary-300 hover:shadow-xl transition-all p-6"
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3 flex-1">
-                        <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                          <UserIcon className="w-6 h-6 text-indigo-600" />
+                        <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
+                          <UserIcon className="w-6 h-6 text-primary" />
                         </div>
                         <div className="flex-1">
                           <h3 className="text-lg font-bold text-gray-900">
@@ -817,13 +827,13 @@ export default function TeamsPage() {
                     <div className="space-y-2 mb-4">
                       {user.phone && (
                         <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Phone className="w-4 h-4 text-indigo-600" />
+                          <Phone className="w-4 h-4 text-primary" />
                           <span>{user.phone}</span>
                         </div>
                       )}
                       {user.department && (
                         <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Building2 className="w-4 h-4 text-indigo-600" />
+                          <Building2 className="w-4 h-4 text-primary" />
                           <span>{user.department}</span>
                         </div>
                       )}
@@ -836,30 +846,53 @@ export default function TeamsPage() {
                     <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
                       <button
                         onClick={() => openUserDetailsModal(user)}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm font-medium"
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-100 text-primary-600 rounded-lg hover:bg-primary-200 transition-colors text-sm font-medium"
                       >
                         <UserIcon className="w-4 h-4" />
                         Voir fiche
                       </button>
+                      {!user.is_active && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              setIsLoading(true)
+                              await updateUserByManager(user.id, { ...user, is_active: true } as UserCreateByManager)
+                              success('Utilisateur réactivé avec succès')
+                              await loadData()
+                            } catch (err: any) {
+                              showError(err.message || 'Erreur lors de la réactivation de l\'utilisateur')
+                            } finally {
+                              setIsLoading(false)
+                            }
+                          }}
+                          disabled={isLoading}
+                          className="px-4 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium disabled:opacity-50"
+                          title="Réactiver l'utilisateur"
+                        >
+                          <UserCheck className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => openEditUserModal(user)}
                         className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => openDeleteUserModal(user)}
-                        className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {user.is_active && (
+                        <button
+                          onClick={() => openDeleteUserModal(user)}
+                          className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
               ) : (
                 <div className="col-span-2 text-center py-16 bg-white rounded-xl shadow-lg">
-                  <div className="inline-flex items-center justify-center w-20 h-20 bg-indigo-100 rounded-full mb-4">
-                    <UserIcon className="w-10 h-10 text-indigo-600" />
+                  <div className="inline-flex items-center justify-center w-20 h-20 bg-primary-100 rounded-full mb-4">
+                    <UserIcon className="w-10 h-10 text-primary" />
                   </div>
                   <p className="text-xl font-semibold text-gray-900 mb-2">Aucun utilisateur trouvé</p>
                   <p className="text-gray-600 mb-6">
@@ -871,7 +904,7 @@ export default function TeamsPage() {
                         resetUserForm()
                         setShowCreateUserModal(true)
                       }}
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl font-semibold"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary-600 transition-all shadow-lg hover:shadow-xl font-semibold"
                     >
                       <UserPlus className="w-5 h-5" />
                       Créer votre premier utilisateur
@@ -888,14 +921,14 @@ export default function TeamsPage() {
         {showCreateModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8 border border-gray-200">
-              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
+              <div className="bg-gradient-to-r from-primary to-primary-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-lg">
                     <Users className="w-6 h-6 text-white" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-white">Créer une équipe</h2>
-                    <p className="text-indigo-100 text-sm mt-1">Remplissez les informations ci-dessous</p>
+                    <p className="text-primary-100 text-sm mt-1">Remplissez les informations ci-dessous</p>
                   </div>
                 </div>
                 <button
@@ -918,7 +951,7 @@ export default function TeamsPage() {
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     placeholder="Ex: Équipe Recrutement IT"
                   />
                 </div>
@@ -929,7 +962,7 @@ export default function TeamsPage() {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     placeholder="Description de l'équipe..."
                   />
                 </div>
@@ -940,7 +973,7 @@ export default function TeamsPage() {
                     type="text"
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     placeholder="Ex: IT, RH, Marketing..."
                   />
                 </div>
@@ -950,7 +983,7 @@ export default function TeamsPage() {
                   <select
                     value={formData.manager_id}
                     onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   >
                     <option value="">Sélectionner un manager</option>
                     {users.filter(u => u.role === 'manager' || u.role === 'administrateur').map((user) => (
@@ -975,7 +1008,7 @@ export default function TeamsPage() {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-8 py-3 bg-gradient-to-r from-primary to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? 'Création...' : 'Créer l\'équipe'}
                   </button>
@@ -989,14 +1022,14 @@ export default function TeamsPage() {
         {showEditModal && selectedTeam && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8 border border-gray-200">
-              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
+              <div className="bg-gradient-to-r from-primary to-primary-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-lg">
                     <Edit className="w-6 h-6 text-white" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-white">Modifier l'équipe</h2>
-                    <p className="text-indigo-100 text-sm mt-1">Mettez à jour les informations</p>
+                    <p className="text-primary-100 text-sm mt-1">Mettez à jour les informations</p>
                   </div>
                 </div>
                 <button
@@ -1020,7 +1053,7 @@ export default function TeamsPage() {
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   />
                 </div>
 
@@ -1030,7 +1063,7 @@ export default function TeamsPage() {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   />
                 </div>
 
@@ -1040,7 +1073,7 @@ export default function TeamsPage() {
                     type="text"
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   />
                 </div>
 
@@ -1049,7 +1082,7 @@ export default function TeamsPage() {
                   <select
                     value={formData.manager_id}
                     onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   >
                     <option value="">Sélectionner un manager</option>
                     {users.filter(u => u.role === 'manager' || u.role === 'administrateur').map((user) => (
@@ -1075,7 +1108,7 @@ export default function TeamsPage() {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-8 py-3 bg-gradient-to-r from-primary to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? 'Mise à jour...' : 'Mettre à jour'}
                   </button>
@@ -1119,14 +1152,14 @@ export default function TeamsPage() {
         {showAddMemberModal && selectedTeam && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8 border border-gray-200">
-              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
+              <div className="bg-gradient-to-r from-primary to-primary-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-lg">
                     <UserPlus className="w-6 h-6 text-white" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-white">Ajouter un membre</h2>
-                    <p className="text-indigo-100 text-sm mt-1">Équipe: {selectedTeam.name}</p>
+                    <p className="text-primary-100 text-sm mt-1">Équipe: {selectedTeam.name}</p>
                   </div>
                 </div>
                 <button
@@ -1149,7 +1182,7 @@ export default function TeamsPage() {
                       value={memberSearchQuery}
                       onChange={(e) => setMemberSearchQuery(e.target.value)}
                       placeholder="Rechercher un utilisateur..."
-                      className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                      className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     />
                   </div>
                 </div>
@@ -1159,12 +1192,12 @@ export default function TeamsPage() {
                     availableUsers.map((user) => (
                       <div
                         key={user.id}
-                        className="bg-white p-4 rounded-xl border border-gray-200 hover:border-indigo-300 transition-all"
+                        className="bg-white p-4 rounded-xl border border-gray-200 hover:border-primary-300 transition-all"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                              <UserIcon className="w-5 h-5 text-indigo-600" />
+                            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                              <UserIcon className="w-5 h-5 text-primary" />
                             </div>
                             <div>
                               <p className="font-medium text-gray-900">
@@ -1177,7 +1210,7 @@ export default function TeamsPage() {
                           <button
                             onClick={() => handleAddMember(user.id)}
                             disabled={isLoading}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium disabled:opacity-50"
+                            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium disabled:opacity-50"
                           >
                             Ajouter
                           </button>
@@ -1200,14 +1233,14 @@ export default function TeamsPage() {
         {showCreateUserModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8 border border-gray-200">
-              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
+              <div className="bg-gradient-to-r from-primary to-primary-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-lg">
                     <UserPlus className="w-6 h-6 text-white" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-white">Créer un utilisateur</h2>
-                    <p className="text-indigo-100 text-sm mt-1">Créez un accès recruteur ou client</p>
+                    <p className="text-primary-100 text-sm mt-1">Créez un accès recruteur ou client</p>
                   </div>
                 </div>
                 <button
@@ -1229,7 +1262,7 @@ export default function TeamsPage() {
                     required
                     value={userFormData.role}
                     onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value as 'recruteur' | 'client' })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   >
                     <option value="recruteur">Recruteur</option>
                     <option value="client">Client</option>
@@ -1245,7 +1278,7 @@ export default function TeamsPage() {
                     required
                     value={userFormData.email}
                     onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     placeholder="exemple@email.com"
                   />
                 </div>
@@ -1260,7 +1293,7 @@ export default function TeamsPage() {
                       required
                       value={userFormData.first_name}
                       onChange={(e) => setUserFormData({ ...userFormData, first_name: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     />
                   </div>
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
@@ -1272,7 +1305,7 @@ export default function TeamsPage() {
                       required
                       value={userFormData.last_name}
                       onChange={(e) => setUserFormData({ ...userFormData, last_name: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     />
                   </div>
                 </div>
@@ -1283,7 +1316,7 @@ export default function TeamsPage() {
                     type="tel"
                     value={userFormData.phone}
                     onChange={(e) => setUserFormData({ ...userFormData, phone: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     placeholder="+33 6 12 34 56 78"
                   />
                 </div>
@@ -1294,7 +1327,7 @@ export default function TeamsPage() {
                     type="text"
                     value={userFormData.department}
                     onChange={(e) => setUserFormData({ ...userFormData, department: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     placeholder="Ex: IT, RH, Marketing..."
                   />
                 </div>
@@ -1305,7 +1338,7 @@ export default function TeamsPage() {
                       type="checkbox"
                       checked={userFormData.generate_password}
                       onChange={(e) => setUserFormData({ ...userFormData, generate_password: e.target.checked })}
-                      className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                      className="w-5 h-5 text-primary rounded focus:ring-primary"
                     />
                     <span className="text-sm font-semibold text-gray-900">
                       Générer un mot de passe automatiquement
@@ -1321,7 +1354,7 @@ export default function TeamsPage() {
                         required={!userFormData.generate_password}
                         value={userFormData.password || ''}
                         onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
-                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                       />
                     </div>
                   )}
@@ -1341,7 +1374,7 @@ export default function TeamsPage() {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-8 py-3 bg-gradient-to-r from-primary to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? 'Création...' : 'Créer l\'utilisateur'}
                   </button>
@@ -1397,7 +1430,7 @@ export default function TeamsPage() {
                   setGeneratedCredentials(null)
                   setCopiedPassword(false)
                 }}
-                className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-semibold"
+                className="w-full px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary-600 transition-all font-semibold"
               >
                 J'ai noté les identifiants
               </button>
@@ -1409,14 +1442,14 @@ export default function TeamsPage() {
         {showUserDetailsModal && selectedUser && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8 border border-gray-200">
-              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
+              <div className="bg-gradient-to-r from-primary to-primary-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-lg">
                     <UserIcon className="w-6 h-6 text-white" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-white">Fiche utilisateur</h2>
-                    <p className="text-indigo-100 text-sm mt-1">{selectedUser.first_name} {selectedUser.last_name}</p>
+                    <p className="text-primary-100 text-sm mt-1">{selectedUser.first_name} {selectedUser.last_name}</p>
                   </div>
                 </div>
                 <button
@@ -1483,14 +1516,88 @@ export default function TeamsPage() {
                 </div>
 
                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Accès</h3>
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600">
-                      L'utilisateur peut se connecter avec son email et son mot de passe via la page de connexion.
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <strong>Espace de travail:</strong> {selectedUser.role === 'recruteur' ? '/recruteur' : '/client'}
-                    </p>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <Key className="w-5 h-5 text-primary" />
+                    Accès et Identifiants
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2">
+                        L'utilisateur peut se connecter avec son email et son mot de passe via la page de connexion.
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <strong>Espace de travail:</strong> {selectedUser.role === 'recruteur' ? '/recruteur' : '/client'}
+                      </p>
+                    </div>
+                    
+                    {/* Section Email */}
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <label className="text-xs font-semibold text-gray-600 mb-1 block">Email de connexion</label>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-mono text-gray-900 flex-1">{selectedUser.email}</p>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedUser.email)
+                            setCopiedPassword(true)
+                            setTimeout(() => setCopiedPassword(false), 2000)
+                          }}
+                          className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                          title="Copier l'email"
+                        >
+                          {copiedPassword ? (
+                            <CheckCircle className="w-4 h-4 text-green-600" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-gray-600" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Section Mot de passe généré */}
+                    {(selectedUser.generated_password || storedPasswords[selectedUser.id]) ? (
+                      <div className="p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Key className="w-4 h-4 text-yellow-700" />
+                          <p className="text-sm font-semibold text-yellow-800">Mot de passe généré</p>
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <p className="text-base font-mono text-yellow-900 flex-1 bg-white px-3 py-2 rounded border border-yellow-200">
+                            {selectedUser.generated_password || storedPasswords[selectedUser.id]}
+                          </p>
+                          <button
+                            onClick={() => {
+                              const password = selectedUser.generated_password || storedPasswords[selectedUser.id] || ''
+                              navigator.clipboard.writeText(password)
+                              setCopiedPassword(true)
+                              setTimeout(() => setCopiedPassword(false), 2000)
+                            }}
+                            className="p-2 bg-yellow-100 hover:bg-yellow-200 rounded-lg transition-colors"
+                            title="Copier le mot de passe"
+                          >
+                            {copiedPassword ? (
+                              <CheckCircle className="w-5 h-5 text-green-600" />
+                            ) : (
+                              <Copy className="w-5 h-5 text-yellow-700" />
+                            )}
+                          </button>
+                        </div>
+                        <div className="bg-yellow-100 border border-yellow-300 rounded p-2 mt-2">
+                          <p className="text-xs text-yellow-800 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>Ce mot de passe a été généré lors de la création ou de la dernière mise à jour. Notez-le, il ne sera plus affiché après fermeture de cette session.</span>
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <p className="text-sm text-gray-600">
+                          <strong>Mot de passe:</strong> Le mot de passe n'est pas disponible. Il a été défini lors de la création de l'utilisateur et n'est pas stocké pour des raisons de sécurité.
+                        </p>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Pour réinitialiser le mot de passe, modifiez l'utilisateur et cochez "Régénérer un nouveau mot de passe".
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1509,7 +1616,7 @@ export default function TeamsPage() {
                       setShowUserDetailsModal(false)
                       openEditUserModal(selectedUser)
                     }}
-                    className="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-semibold"
+                    className="px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary-600 transition-all font-semibold"
                   >
                     Modifier
                   </button>
@@ -1523,14 +1630,14 @@ export default function TeamsPage() {
         {showEditUserModal && selectedUser && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8 border border-gray-200">
-              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
+              <div className="bg-gradient-to-r from-primary to-primary-600 p-6 rounded-t-2xl flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-lg">
                     <Edit className="w-6 h-6 text-white" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-white">Modifier l'utilisateur</h2>
-                    <p className="text-indigo-100 text-sm mt-1">Mettez à jour les informations</p>
+                    <p className="text-primary-100 text-sm mt-1">Mettez à jour les informations</p>
                   </div>
                 </div>
                 <button
@@ -1553,7 +1660,7 @@ export default function TeamsPage() {
                     required
                     value={userFormData.role}
                     onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value as 'recruteur' | 'client' })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   >
                     <option value="recruteur">Recruteur</option>
                     <option value="client">Client</option>
@@ -1569,7 +1676,7 @@ export default function TeamsPage() {
                     required
                     value={userFormData.email}
                     onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   />
                 </div>
 
@@ -1583,7 +1690,7 @@ export default function TeamsPage() {
                       required
                       value={userFormData.first_name}
                       onChange={(e) => setUserFormData({ ...userFormData, first_name: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     />
                   </div>
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
@@ -1595,7 +1702,7 @@ export default function TeamsPage() {
                       required
                       value={userFormData.last_name}
                       onChange={(e) => setUserFormData({ ...userFormData, last_name: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     />
                   </div>
                 </div>
@@ -1606,7 +1713,7 @@ export default function TeamsPage() {
                     type="tel"
                     value={userFormData.phone}
                     onChange={(e) => setUserFormData({ ...userFormData, phone: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   />
                 </div>
 
@@ -1616,17 +1723,28 @@ export default function TeamsPage() {
                     type="text"
                     value={userFormData.department}
                     onChange={(e) => setUserFormData({ ...userFormData, department: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   />
                 </div>
 
                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <label className="flex items-center gap-3 cursor-pointer mb-4">
+                    <input
+                      type="checkbox"
+                      checked={userFormData.is_active ?? true}
+                      onChange={(e) => setUserFormData({ ...userFormData, is_active: e.target.checked })}
+                      className="w-5 h-5 text-primary rounded focus:ring-primary"
+                    />
+                    <span className="text-sm font-semibold text-gray-900">
+                      Utilisateur actif
+                    </span>
+                  </label>
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={userFormData.generate_password}
                       onChange={(e) => setUserFormData({ ...userFormData, generate_password: e.target.checked })}
-                      className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                      className="w-5 h-5 text-primary rounded focus:ring-primary"
                     />
                     <span className="text-sm font-semibold text-gray-900">
                       Régénérer un nouveau mot de passe
@@ -1639,7 +1757,7 @@ export default function TeamsPage() {
                         type="password"
                         value={userFormData.password || ''}
                         onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
-                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                       />
                     </div>
                   )}
@@ -1660,7 +1778,7 @@ export default function TeamsPage() {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-8 py-3 bg-gradient-to-r from-primary to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-lg hover:shadow-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? 'Mise à jour...' : 'Mettre à jour'}
                   </button>
@@ -1670,32 +1788,74 @@ export default function TeamsPage() {
           </div>
         )}
 
-        {/* Modal de suppression utilisateur */}
+        {/* Modal de suppression/réactivation utilisateur */}
         {showDeleteUserModal && selectedUser && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Désactiver l'utilisateur</h3>
-              <p className="text-gray-600 mb-6">
-                Êtes-vous sûr de vouloir désactiver l'utilisateur <strong>{selectedUser.first_name} {selectedUser.last_name}</strong> ? Il ne pourra plus se connecter.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => {
-                    setShowDeleteUserModal(false)
-                    setSelectedUser(null)
-                  }}
-                  className="px-6 py-2 border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-all font-medium text-gray-700"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={handleDeleteUser}
-                  disabled={isLoading}
-                  className="px-6 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-medium disabled:opacity-50"
-                >
-                  {isLoading ? 'Désactivation...' : 'Désactiver'}
-                </button>
-              </div>
+              {selectedUser.is_active ? (
+                <>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">Désactiver l'utilisateur</h3>
+                  <p className="text-gray-600 mb-6">
+                    Êtes-vous sûr de vouloir désactiver l'utilisateur <strong>{selectedUser.first_name} {selectedUser.last_name}</strong> ? Il ne pourra plus se connecter.
+                  </p>
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => {
+                        setShowDeleteUserModal(false)
+                        setSelectedUser(null)
+                      }}
+                      className="px-6 py-2 border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-all font-medium text-gray-700"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={handleDeleteUser}
+                      disabled={isLoading}
+                      className="px-6 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-medium disabled:opacity-50"
+                    >
+                      {isLoading ? 'Désactivation...' : 'Désactiver'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">Réactiver l'utilisateur</h3>
+                  <p className="text-gray-600 mb-6">
+                    Êtes-vous sûr de vouloir réactiver l'utilisateur <strong>{selectedUser.first_name} {selectedUser.last_name}</strong> ? Il pourra à nouveau se connecter.
+                  </p>
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => {
+                        setShowDeleteUserModal(false)
+                        setSelectedUser(null)
+                      }}
+                      className="px-6 py-2 border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-all font-medium text-gray-700"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          setIsLoading(true)
+                          await updateUserByManager(selectedUser.id, { ...selectedUser, is_active: true } as UserCreateByManager)
+                          success('Utilisateur réactivé avec succès')
+                          setShowDeleteUserModal(false)
+                          setSelectedUser(null)
+                          await loadData()
+                        } catch (err: any) {
+                          showError(err.message || 'Erreur lors de la réactivation de l\'utilisateur')
+                        } finally {
+                          setIsLoading(false)
+                        }
+                      }}
+                      disabled={isLoading}
+                      className="px-6 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all font-medium disabled:opacity-50"
+                    >
+                      {isLoading ? 'Réactivation...' : 'Réactiver'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

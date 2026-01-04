@@ -4,29 +4,31 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    /* Nouvelle palette de couleurs */
+    --background: 245 247 250; /* #F5F7FA */
+    --foreground: 31 42 68; /* #1F2A44 */
+    --card: 255 255 255; /* #FFFFFF */
+    --card-foreground: 31 42 68; /* #1F2A44 */
+    --popover: 255 255 255;
+    --popover-foreground: 31 42 68;
+    --primary: 47 143 157; /* #2F8F9D */
+    --primary-foreground: 255 255 255;
+    --secondary: 31 42 68; /* #1F2A44 */
+    --secondary-foreground: 255 255 255;
+    --muted: 107 114 128; /* #6B7280 */
+    --muted-foreground: 255 255 255;
+    --accent: 247 148 29; /* #F7941D */
+    --accent-foreground: 255 255 255;
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
+    --border: 229 231 235;
+    --input: 229 231 235;
+    --ring: 47 143 157; /* #2F8F9D */
     --radius: 0.75rem;
     
     /* Couleurs personnalisées pour le design moderne */
-    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-primary: linear-gradient(135deg, #2F8F9D 0%, #1F2A44 100%);
+    --gradient-accent: linear-gradient(135deg, #F7941D 0%, #FDBA4D 100%);
     --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
     --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     --gradient-danger: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
@@ -42,6 +44,14 @@
     --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-[#F5F7FA] text-[#1F2A44];
   }
 }
 
@@ -264,7 +274,7 @@
 
   /* Button moderne avec gradient */
   .btn-gradient {
-    @apply bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium;
+    @apply bg-gradient-to-r from-primary to-primary-600 text-white font-medium;
     @apply px-6 py-3 rounded-lg shadow-md;
     transition: all var(--transition-base);
   }
@@ -282,9 +292,9 @@
   /* Input moderne */
   .input-modern {
     @apply w-full px-4 py-3 rounded-lg border border-gray-300;
-    @apply focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
     @apply transition-all duration-200;
-    @apply placeholder:text-gray-400;
+    @apply placeholder:text-muted;
   }
   
   .input-modern:focus {
@@ -369,7 +379,7 @@
   /* Gradient text */
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-image: linear-gradient(135deg, #2F8F9D 0%, #1F2A44 100%);
   }
 
   /* Smooth transitions pour tous les éléments interactifs */
@@ -379,7 +389,7 @@
 
   /* Focus visible amélioré */
   .focus-visible-modern:focus-visible {
-    @apply outline-none ring-2 ring-indigo-500 ring-offset-2;
+    @apply outline-none ring-2 ring-primary ring-offset-2;
   }
 }
 

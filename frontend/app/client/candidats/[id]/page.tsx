@@ -82,6 +82,15 @@ export default function ClientCandidateDetailPage() {
     }
   }, [showComparisonModal])
 
+  // Nettoyer les URLs blob lors du démontage
+  useEffect(() => {
+    return () => {
+      if (previewDocument?.url && previewDocument.url.startsWith('blob:')) {
+        window.URL.revokeObjectURL(previewDocument.url)
+      }
+    }
+  }, [previewDocument])
+
   const loadSavedAnalysis = async () => {
     if (!candidate || !selectedJobForComparison || !candidate.id) return
     
@@ -191,6 +200,15 @@ export default function ClientCandidateDetailPage() {
     return filePath.split('/').pop() || 'document'
   }
 
+  // Fonction pour normaliser le chemin du fichier (s'assurer qu'il commence par /)
+  const normalizeFilePath = (filePath: string | null | undefined): string => {
+    if (!filePath) return ''
+    // Supprimer les espaces et normaliser
+    const cleaned = filePath.trim()
+    // S'assurer que le chemin commence par /
+    return cleaned.startsWith('/') ? cleaned : `/${cleaned}`
+  }
+
   // Fonction pour télécharger un fichier
   const handleDownload = async (filePath: string, fileName: string) => {
     try {
@@ -201,9 +219,11 @@ export default function ClientCandidateDetailPage() {
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      const response = await fetch(`${API_URL}${filePath}`, {
+      const normalizedPath = normalizeFilePath(filePath)
+      const response = await fetch(`${API_URL}${normalizedPath}`, {
         method: 'GET',
         headers,
+        credentials: 'include',
       })
       
       if (!response.ok) {
@@ -226,17 +246,49 @@ export default function ClientCandidateDetailPage() {
   }
 
   // Fonction pour ouvrir la prévisualisation
-  const handlePreview = (filePath: string, name: string) => {
-    const fileType = getFileType(filePath)
-    setPreviewDocument({
-      url: `${API_URL}${filePath}`,
-      name: name,
-      type: fileType
-    })
+  const handlePreview = async (filePath: string, name: string) => {
+    try {
+      const fileType = getFileType(filePath)
+      
+      // Télécharger le fichier avec authentification
+      const token = getToken()
+      const headers: HeadersInit = {}
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const normalizedPath = normalizeFilePath(filePath)
+      const response = await fetch(`${API_URL}${normalizedPath}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      })
+      
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement du fichier')
+      }
+
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      
+      setPreviewDocument({
+        url: blobUrl,
+        name: name,
+        type: fileType
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la prévisualisation'
+      showError(errorMessage)
+    }
   }
 
   // Fonction pour fermer la prévisualisation
   const closePreview = () => {
+    // Nettoyer l'URL blob pour libérer la mémoire
+    if (previewDocument?.url && previewDocument.url.startsWith('blob:')) {
+      window.URL.revokeObjectURL(previewDocument.url)
+    }
     setPreviewDocument(null)
   }
 
@@ -1582,11 +1634,26 @@ export default function ClientCandidateDetailPage() {
               </h3>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    const link = document.createElement('a')
-                    link.href = previewDocument.url
-                    link.download = previewDocument.name
-                    link.click()
+                  onClick={async () => {
+                    try {
+                      // Si c'est déjà un blob URL, on peut le télécharger directement
+                      if (previewDocument.url.startsWith('blob:')) {
+                        const link = document.createElement('a')
+                        link.href = previewDocument.url
+                        link.download = previewDocument.name
+                        document.body.appendChild(link)
+                        link.click()
+                        document.body.removeChild(link)
+                      } else {
+                        // Sinon, télécharger via l'API
+                        const filePath = candidate?.cv_file_path || candidate?.motivation_letter_file_path
+                        if (filePath) {
+                          await handleDownload(filePath, previewDocument.name)
+                        }
+                      }
+                    } catch (err) {
+                      showError('Erreur lors du téléchargement')
+                    }
                   }}
                   className="flex items-center px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                   title="Télécharger"
@@ -1627,15 +1694,32 @@ export default function ClientCandidateDetailPage() {
                   <p className="text-gray-600 mb-4">
                     La prévisualisation n'est pas disponible pour ce type de fichier.
                   </p>
-                  <a
-                    href={previewDocument.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Télécharger le fichier
+                        if (previewDocument.url.startsWith('blob:')) {
+                          const link = document.createElement('a')
+                          link.href = previewDocument.url
+                          link.download = previewDocument.name
+                          document.body.appendChild(link)
+                          link.click()
+                          document.body.removeChild(link)
+                        } else {
+                          const filePath = candidate?.cv_file_path || candidate?.motivation_letter_file_path
+                          if (filePath) {
+                            await handleDownload(filePath, previewDocument.name)
+                          }
+                        }
+                      } catch (err) {
+                        showError('Erreur lors du téléchargement')
+                      }
+                    }}
                     className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
                   >
-                    <Eye className="w-4 h-4 mr-2" />
-                    Ouvrir dans un nouvel onglet
-                  </a>
+                    <Download className="w-4 h-4 mr-2" />
+                    Télécharger le fichier
+                  </button>
                 </div>
               )}
             </div>

@@ -63,7 +63,7 @@ export default function RecruiterSidebar() {
       {/* Menu burger pour mobile */}
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="lg:hidden fixed top-3 left-3 sm:top-4 sm:left-4 z-50 p-2.5 bg-blue-600 rounded-lg shadow-lg border border-blue-700 touch-target"
+        className="lg:hidden fixed top-3 left-3 sm:top-4 sm:left-4 z-50 p-2.5 bg-emerald-600 rounded-lg shadow-lg border border-emerald-700 touch-target"
         aria-label="Toggle menu"
       >
         {isMobileMenuOpen ? (
@@ -84,18 +84,18 @@ export default function RecruiterSidebar() {
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-40
-        w-64 bg-gradient-to-b from-blue-600 to-blue-700 border-r border-blue-800/50 flex flex-col
+        w-64 bg-gradient-to-b from-emerald-600 to-emerald-700 border-r border-emerald-800/50 flex flex-col
         transform transition-transform duration-300 ease-in-out shadow-xl lg:shadow-none
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="p-6 border-b border-blue-800/30">
+        <div className="p-6 border-b border-emerald-800/30">
           <div className="flex items-center space-x-3">
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2.5 shadow-lg">
               <Users className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-white">Recruteur</h1>
-              <p className="text-xs text-blue-200/80">Espace Recruteur</p>
+              <p className="text-xs text-emerald-100/80">Espace Recruteur</p>
             </div>
           </div>
         </div>
@@ -114,12 +114,12 @@ export default function RecruiterSidebar() {
                   "flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group",
                   isActive
                     ? "bg-white/20 text-white font-medium shadow-lg backdrop-blur-sm"
-                    : "text-blue-100 hover:bg-white/10 hover:text-white"
+                    : "text-emerald-100 hover:bg-white/10 hover:text-white"
                 )}
               >
                 <Icon className={cn(
                   "w-5 h-5 transition-transform duration-200",
-                  isActive ? "text-white scale-110" : "text-blue-200 group-hover:scale-110"
+                  isActive ? "text-white scale-110" : "text-emerald-200 group-hover:scale-110"
                 )} />
                 <span className="flex-1">{item.title}</span>
                 {isActive && (
@@ -130,7 +130,7 @@ export default function RecruiterSidebar() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-blue-800/30 bg-blue-800/20">
+        <div className="p-4 border-t border-emerald-800/30 bg-emerald-800/20">
           {userInfo && (
             <>
               <div className="flex items-center space-x-3 px-4 py-3 mb-3 bg-white/5 rounded-xl backdrop-blur-sm">
@@ -141,12 +141,12 @@ export default function RecruiterSidebar() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{userInfo.user_name}</p>
-                  <p className="text-xs text-blue-200/80 capitalize truncate">{userInfo.user_role}</p>
+                  <p className="text-xs text-emerald-100/80 capitalize truncate">{userInfo.user_role}</p>
                 </div>
               </div>
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-blue-100 bg-white/10 hover:bg-white/20 hover:text-white transition-all duration-200 backdrop-blur-sm border border-white/10 hover:border-white/20 shadow-md hover:shadow-lg"
+                className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-emerald-100 bg-white/10 hover:bg-white/20 hover:text-white transition-all duration-200 backdrop-blur-sm border border-white/10 hover:border-white/20 shadow-md hover:shadow-lg"
               >
                 <LogOut className="w-4 h-4" />
                 <span className="font-medium">Déconnexion</span>

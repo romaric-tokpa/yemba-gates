@@ -35,6 +35,7 @@ class UserCreateByManager(BaseModel):
     department: Optional[str] = None
     generate_password: bool = True  # Si True, génère un mot de passe, sinon attend un password
     password: Optional[str] = None  # Utilisé si generate_password est False
+    is_active: Optional[bool] = None  # Permet de réactiver un utilisateur désactivé
 
 
 class UserCreateResponse(BaseModel):
@@ -252,6 +253,10 @@ def update_user_by_manager(
     user.role = user_data.role
     user.phone = user_data.phone
     user.department = user_data.department
+    
+    # Mettre à jour is_active si fourni (permet la réactivation)
+    if user_data.is_active is not None:
+        user.is_active = user_data.is_active
     
     # Mettre à jour le mot de passe si fourni
     generated_password = None

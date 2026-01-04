@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   X,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUserInfo, logout } from '@/lib/auth'
@@ -24,6 +25,11 @@ const menuItems = [
     title: 'Mes Shortlists',
     href: '/client/shortlist',
     icon: Users,
+  },
+  {
+    title: 'KPIs',
+    href: '/client/kpi',
+    icon: BarChart3,
   },
   {
     title: 'Historique Décisions',
@@ -83,7 +89,7 @@ export default function ClientSidebar() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-white">Client</h1>
-              <p className="text-xs text-emerald-200/80">Espace Client</p>
+              <p className="text-xs text-emerald-100/80">Espace Client</p>
             </div>
           </div>
         </div>
@@ -129,7 +135,7 @@ export default function ClientSidebar() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{userInfo.user_name}</p>
-                  <p className="text-xs text-emerald-200/80 capitalize truncate">{userInfo.user_role}</p>
+                  <p className="text-xs text-emerald-100/80 capitalize truncate">{userInfo.user_role}</p>
                 </div>
               </div>
               <button

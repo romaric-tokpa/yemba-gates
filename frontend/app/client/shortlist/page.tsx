@@ -3,10 +3,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Briefcase, User, CheckCircle, XCircle, Clock, Eye, FileText, Mail, Phone, Tag, ExternalLink, MessageSquare, Calendar, Plus, X, Search, Filter, Sparkles, TrendingUp, Award, MapPin, Building2, ArrowLeft } from 'lucide-react'
+import { Briefcase, User, CheckCircle, XCircle, Clock, Eye, FileText, Mail, Phone, Tag, ExternalLink, MessageSquare, Calendar, Plus, X, Search, Filter, Sparkles, TrendingUp, Award, MapPin, Building2, ArrowLeft, Download } from 'lucide-react'
 import { getClientShortlists, validateCandidate, type ShortlistItem, type ShortlistValidation, createClientInterviewRequest, type AvailabilitySlot, type ClientInterviewRequestResponse } from '@/lib/api'
 import { useToastContext } from '@/components/ToastProvider'
 import { formatDateTime } from '@/lib/utils'
+import { getToken } from '@/lib/auth'
+import { getApiUrl } from '@/lib/api'
 
 export default function ClientShortlistPage() {
   const router = useRouter()
@@ -23,7 +25,10 @@ export default function ClientShortlistPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'validated' | 'rejected'>('all')
   const [selectedJobFilter, setSelectedJobFilter] = useState<string>('all')
+  const [previewDocument, setPreviewDocument] = useState<{ url: string; name: string; type: string; filePath?: string } | null>(null)
   const { success, error: showError } = useToastContext()
+  
+  const API_URL = getApiUrl()
 
   useEffect(() => {
     loadShortlists()
@@ -238,6 +243,122 @@ export default function ClientShortlistPage() {
       </span>
     )
   }
+
+  // Fonction pour obtenir le type de fichier
+  const getFileType = (filePath: string): string => {
+    const extension = filePath.split('.').pop()?.toLowerCase() || ''
+    if (['pdf'].includes(extension)) return 'pdf'
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension)) return 'image'
+    if (['doc', 'docx'].includes(extension)) return 'word'
+    return 'other'
+  }
+
+  // Fonction pour obtenir le nom du fichier
+  const getFileName = (filePath: string): string => {
+    return filePath.split('/').pop() || 'document'
+  }
+
+  // Fonction pour normaliser le chemin du fichier (s'assurer qu'il commence par /)
+  const normalizeFilePath = (filePath: string | null | undefined): string => {
+    if (!filePath) return ''
+    // Supprimer les espaces et normaliser
+    const cleaned = filePath.trim()
+    // S'assurer que le chemin commence par /
+    return cleaned.startsWith('/') ? cleaned : `/${cleaned}`
+  }
+
+  // Fonction pour télécharger un fichier
+  const handleDownload = async (filePath: string, fileName: string) => {
+    try {
+      const token = getToken()
+      const headers: HeadersInit = {}
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const normalizedPath = normalizeFilePath(filePath)
+      const response = await fetch(`${API_URL}${normalizedPath}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      })
+      
+      if (!response.ok) {
+        throw new Error('Erreur lors du téléchargement')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors du téléchargement'
+      showError(errorMessage)
+    }
+  }
+
+  // Fonction pour ouvrir la prévisualisation
+  const handlePreview = async (filePath: string, name: string) => {
+    try {
+      const fileType = getFileType(filePath)
+      
+      // Télécharger le fichier avec authentification
+      const token = getToken()
+      const headers: HeadersInit = {}
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const normalizedPath = normalizeFilePath(filePath)
+      const response = await fetch(`${API_URL}${normalizedPath}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      })
+      
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement du fichier')
+      }
+
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      
+      setPreviewDocument({
+        url: blobUrl,
+        name: name,
+        type: fileType,
+        filePath: filePath
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la prévisualisation'
+      showError(errorMessage)
+    }
+  }
+
+  // Fonction pour fermer la prévisualisation
+  const closePreview = () => {
+    // Nettoyer l'URL blob pour libérer la mémoire
+    if (previewDocument?.url && previewDocument.url.startsWith('blob:')) {
+      window.URL.revokeObjectURL(previewDocument.url)
+    }
+    setPreviewDocument(null)
+  }
+
+  // Nettoyer les URLs blob lors du démontage
+  useEffect(() => {
+    return () => {
+      if (previewDocument?.url && previewDocument.url.startsWith('blob:')) {
+        window.URL.revokeObjectURL(previewDocument.url)
+      }
+    }
+  }, [previewDocument])
 
   if (isLoading) {
     return (
@@ -505,15 +626,13 @@ export default function ClientShortlistPage() {
                         {/* Actions */}
                         <div className="flex flex-wrap gap-2">
                           {candidate.candidate_cv_path && (
-                            <a
-                              href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${candidate.candidate_cv_path}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              onClick={() => handlePreview(candidate.candidate_cv_path!, 'CV')}
                               className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
                             >
                               <FileText className="w-4 h-4" />
                               CV
-                            </a>
+                            </button>
                           )}
                           <button
                             onClick={() => router.push(`/client/candidats/${candidate.candidate_id}`)}
@@ -762,6 +881,109 @@ export default function ClientShortlistPage() {
                   {isValidating ? 'Validation...' : 'Valider'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de prévisualisation */}
+      {previewDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4" onClick={closePreview}>
+          <div className="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* En-tête du modal */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <FileText className="w-5 h-5 mr-2 text-emerald-600" />
+                {previewDocument.name}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      // Si c'est déjà un blob URL, on peut le télécharger directement
+                      if (previewDocument.url.startsWith('blob:')) {
+                        const link = document.createElement('a')
+                        link.href = previewDocument.url
+                        link.download = previewDocument.name
+                        document.body.appendChild(link)
+                        link.click()
+                        document.body.removeChild(link)
+                      } else {
+                        // Sinon, télécharger via l'API
+                        if (previewDocument.filePath) {
+                          await handleDownload(previewDocument.filePath, previewDocument.name)
+                        }
+                      }
+                    } catch (err) {
+                      showError('Erreur lors du téléchargement')
+                    }
+                  }}
+                  className="flex items-center px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  title="Télécharger"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={closePreview}
+                  className="flex items-center px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  title="Fermer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Contenu de la prévisualisation */}
+            <div className="flex-1 overflow-auto p-4">
+              {previewDocument.type === 'pdf' && (
+                <iframe
+                  src={previewDocument.url}
+                  className="w-full h-full min-h-[600px] border border-gray-200 rounded-lg"
+                  title={previewDocument.name}
+                />
+              )}
+              {previewDocument.type === 'image' && (
+                <div className="flex items-center justify-center">
+                  <img
+                    src={previewDocument.url}
+                    alt={previewDocument.name}
+                    className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                  />
+                </div>
+              )}
+              {(previewDocument.type === 'word' || previewDocument.type === 'other') && (
+                <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center">
+                  <FileText className="w-16 h-16 text-gray-400 mb-4" />
+                  <p className="text-gray-600 mb-4">
+                    La prévisualisation n'est pas disponible pour ce type de fichier.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Télécharger le fichier
+                        if (previewDocument.url.startsWith('blob:')) {
+                          const link = document.createElement('a')
+                          link.href = previewDocument.url
+                          link.download = previewDocument.name
+                          document.body.appendChild(link)
+                          link.click()
+                          document.body.removeChild(link)
+                        } else {
+                          if (previewDocument.filePath) {
+                            await handleDownload(previewDocument.filePath, previewDocument.name)
+                          }
+                        }
+                      } catch (err) {
+                        showError('Erreur lors du téléchargement')
+                      }
+                    }}
+                    className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Télécharger le fichier
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

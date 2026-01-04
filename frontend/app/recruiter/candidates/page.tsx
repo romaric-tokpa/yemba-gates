@@ -9,7 +9,7 @@ import { getToken, isAuthenticated } from '@/lib/auth'
 import { 
   Plus, X, Upload, Tag, Mail, Phone, Search, List, LayoutGrid, Image as ImageIcon, 
   FileText, UserPlus, ChevronDown, Filter, XCircle, Briefcase, Users, Clock,
-  Grid3x3, RefreshCw, ArrowRight, Eye, CheckCircle2, AlertCircle, MapPin, Calendar
+  Grid3x3, RefreshCw, ArrowRight, Eye, CheckCircle2, AlertCircle, MapPin, Calendar, User
 } from 'lucide-react'
 import { useToastContext } from '@/components/ToastProvider'
 
@@ -487,6 +487,12 @@ export default function ManagerCandidatsPage() {
                   <span>{candidate.source}</span>
                 </div>
               )}
+              {(candidate.creator_first_name || candidate.creator_last_name) && (
+                <div className="flex items-center gap-1.5 text-xs text-gray-500" title={`Créé par ${candidate.creator_first_name || ''} ${candidate.creator_last_name || ''}`}>
+                  <User className="w-3.5 h-3.5" />
+                  <span className="truncate">Créé par {candidate.creator_first_name || ''} {candidate.creator_last_name || ''}</span>
+                </div>
+              )}
               
               {candidate.tags && candidate.tags.length > 0 && (
                 <div className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -595,6 +601,12 @@ export default function ManagerCandidatsPage() {
               <div className="flex items-center gap-2 text-gray-600">
                 <Tag className="w-4 h-4 text-gray-400" />
                 <span className="font-medium">{candidate.source}</span>
+              </div>
+            )}
+            {(candidate.creator_first_name || candidate.creator_last_name) && (
+              <div className="flex items-center gap-2 text-gray-500" title={`Créé par ${candidate.creator_first_name || ''} ${candidate.creator_last_name || ''}`}>
+                <User className="w-4 h-4 text-gray-400" />
+                <span className="text-xs">Créé par {candidate.creator_first_name || ''} {candidate.creator_last_name || ''}</span>
               </div>
             )}
             <div className="flex items-center gap-2 text-gray-500">

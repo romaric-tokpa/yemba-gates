@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { 
   ArrowLeft, Upload, FileText, Tag, Mail, Phone, Calendar, User, Briefcase, 
   Edit, X, Plus, Save, Eye, Clock, MapPin, MessageSquare, Star, CheckCircle2, 
-  XCircle, AlertCircle, Users, Building2, Award, FileCheck, BarChart3, TrendingUp, TrendingDown, Sparkles, Loader2
+  XCircle, AlertCircle, Users, Building2, Award, FileCheck, BarChart3, TrendingUp, TrendingDown, Sparkles, Loader2, Download
 } from 'lucide-react'
 import { 
   getCandidate, CandidateResponse, updateCandidateStatus, updateCandidate, CandidateUpdate,
@@ -30,6 +30,7 @@ export default function ManagerCandidateDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [previewDocument, setPreviewDocument] = useState<{ url: string; name: string; type: string; filePath?: string } | null>(null)
   const { success, error: showError } = useToastContext()
 
   // États pour les besoins
@@ -219,6 +220,122 @@ export default function ManagerCandidateDetailPage() {
       setIsLoadingInterviews(false)
     }
   }
+
+  // Fonction pour obtenir le type de fichier
+  const getFileType = (filePath: string): string => {
+    const extension = filePath.split('.').pop()?.toLowerCase() || ''
+    if (['pdf'].includes(extension)) return 'pdf'
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension)) return 'image'
+    if (['doc', 'docx'].includes(extension)) return 'word'
+    return 'other'
+  }
+
+  // Fonction pour obtenir le nom du fichier
+  const getFileName = (filePath: string): string => {
+    return filePath.split('/').pop() || 'document'
+  }
+
+  // Fonction pour normaliser le chemin du fichier (s'assurer qu'il commence par /)
+  const normalizeFilePath = (filePath: string | null | undefined): string => {
+    if (!filePath) return ''
+    // Supprimer les espaces et normaliser
+    const cleaned = filePath.trim()
+    // S'assurer que le chemin commence par /
+    return cleaned.startsWith('/') ? cleaned : `/${cleaned}`
+  }
+
+  // Fonction pour télécharger un fichier
+  const handleDownload = async (filePath: string, fileName: string) => {
+    try {
+      const token = getToken()
+      const headers: HeadersInit = {}
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const normalizedPath = normalizeFilePath(filePath)
+      const response = await fetch(`${API_URL}${normalizedPath}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      })
+      
+      if (!response.ok) {
+        throw new Error('Erreur lors du téléchargement')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors du téléchargement'
+      showError(errorMessage)
+    }
+  }
+
+  // Fonction pour ouvrir la prévisualisation
+  const handlePreview = async (filePath: string, name: string) => {
+    try {
+      const fileType = getFileType(filePath)
+      
+      // Télécharger le fichier avec authentification
+      const token = getToken()
+      const headers: HeadersInit = {}
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const normalizedPath = normalizeFilePath(filePath)
+      const response = await fetch(`${API_URL}${normalizedPath}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      })
+      
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement du fichier')
+      }
+
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      
+      setPreviewDocument({
+        url: blobUrl,
+        name: name,
+        type: fileType,
+        filePath: filePath
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la prévisualisation'
+      showError(errorMessage)
+    }
+  }
+
+  // Fonction pour fermer la prévisualisation
+  const closePreview = () => {
+    // Nettoyer l'URL blob pour libérer la mémoire
+    if (previewDocument?.url && previewDocument.url.startsWith('blob:')) {
+      window.URL.revokeObjectURL(previewDocument.url)
+    }
+    setPreviewDocument(null)
+  }
+
+  // Nettoyer les URLs blob lors du démontage
+  useEffect(() => {
+    return () => {
+      if (previewDocument?.url && previewDocument.url.startsWith('blob:')) {
+        window.URL.revokeObjectURL(previewDocument.url)
+      }
+    }
+  }, [previewDocument])
 
   // Charger les analyses IA pour tous les postes du candidat
   const loadJobAnalyses = async () => {
@@ -732,11 +849,11 @@ export default function ManagerCandidateDetailPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header avec fond coloré */}
-      <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white">
+      <div className="bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-700 text-white">
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-8">
           <Link 
             href="/manager/candidats" 
-            className="inline-flex items-center text-indigo-100 hover:text-white mb-6 transition-colors"
+            className="inline-flex items-center text-emerald-100 hover:text-white mb-6 transition-colors"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
             <span className="font-medium">Retour aux candidats</span>
@@ -780,7 +897,7 @@ export default function ManagerCandidateDetailPage() {
                   candidate.status === 'rejeté' ? 'bg-red-500 text-white' :
                   candidate.status === 'offre' ? 'bg-yellow-500 text-white' :
                   candidate.status === 'shortlist' ? 'bg-blue-500 text-white' :
-                  'bg-white text-indigo-600'
+                  'bg-white text-emerald-600'
                 }`}>
                   {candidate.status.charAt(0).toUpperCase() + candidate.status.slice(1).replace('_', ' ')}
                 </span>
@@ -816,10 +933,10 @@ export default function ManagerCandidateDetailPage() {
                     )}
                   </h1>
                   {!isEditing && candidate.profile_title && (
-                    <p className="text-lg text-indigo-100 mb-2">{candidate.profile_title}</p>
+                    <p className="text-lg text-emerald-100 mb-2">{candidate.profile_title}</p>
                   )}
                   {!isEditing && candidate.years_of_experience !== null && candidate.years_of_experience !== undefined && (
-                    <p className="text-sm text-indigo-200">
+                    <p className="text-sm text-emerald-200">
                       {candidate.years_of_experience} ans d&apos;expérience
                     </p>
                   )}
@@ -827,7 +944,7 @@ export default function ManagerCandidateDetailPage() {
                 {!isEditing && (
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-indigo-600 rounded-xl hover:bg-indigo-50 transition-all shadow-lg hover:shadow-xl font-semibold"
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-emerald-600 rounded-xl hover:bg-emerald-50 transition-all shadow-lg hover:shadow-xl font-semibold"
                   >
                     <Edit className="w-5 h-5" />
                     Modifier
@@ -1109,6 +1226,21 @@ export default function ManagerCandidateDetailPage() {
                   })}
                 </p>
               </div>
+
+              {(candidate.creator_first_name || candidate.creator_last_name) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <User className="w-4 h-4 mr-1" />
+                    Créé par
+                  </label>
+                  <p className="text-sm text-gray-900">
+                    {candidate.creator_first_name || ''} {candidate.creator_last_name || ''}
+                    {candidate.creator_email && (
+                      <span className="text-gray-500 ml-2">({candidate.creator_email})</span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1371,15 +1503,13 @@ export default function ManagerCandidateDetailPage() {
                         <p className="text-xs text-gray-500">Document disponible</p>
                       </div>
                     </div>
-                    <a
-                      href={`${API_URL}/candidates/${candidateId}/cv`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={() => candidate.cv_file_path && handlePreview(candidate.cv_file_path, 'CV')}
                       className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
                     >
                       <Eye className="w-4 h-4" />
                       Voir le CV
-                    </a>
+                    </button>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
@@ -3232,6 +3362,109 @@ export default function ManagerCandidateDetailPage() {
               >
                 Fermer
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de prévisualisation */}
+      {previewDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4" onClick={closePreview}>
+          <div className="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* En-tête du modal */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <FileText className="w-5 h-5 mr-2 text-indigo-600" />
+                {previewDocument.name}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      // Si c'est déjà un blob URL, on peut le télécharger directement
+                      if (previewDocument.url.startsWith('blob:')) {
+                        const link = document.createElement('a')
+                        link.href = previewDocument.url
+                        link.download = previewDocument.name
+                        document.body.appendChild(link)
+                        link.click()
+                        document.body.removeChild(link)
+                      } else {
+                        // Sinon, télécharger via l'API
+                        if (previewDocument.filePath) {
+                          await handleDownload(previewDocument.filePath, previewDocument.name)
+                        }
+                      }
+                    } catch (err) {
+                      showError('Erreur lors du téléchargement')
+                    }
+                  }}
+                  className="flex items-center px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  title="Télécharger"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={closePreview}
+                  className="flex items-center px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  title="Fermer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Contenu de la prévisualisation */}
+            <div className="flex-1 overflow-auto p-4">
+              {previewDocument.type === 'pdf' && (
+                <iframe
+                  src={previewDocument.url}
+                  className="w-full h-full min-h-[600px] border border-gray-200 rounded-lg"
+                  title={previewDocument.name}
+                />
+              )}
+              {previewDocument.type === 'image' && (
+                <div className="flex items-center justify-center">
+                  <img
+                    src={previewDocument.url}
+                    alt={previewDocument.name}
+                    className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                  />
+                </div>
+              )}
+              {(previewDocument.type === 'word' || previewDocument.type === 'other') && (
+                <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center">
+                  <FileText className="w-16 h-16 text-gray-400 mb-4" />
+                  <p className="text-gray-600 mb-4">
+                    La prévisualisation n'est pas disponible pour ce type de fichier.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Télécharger le fichier
+                        if (previewDocument.url.startsWith('blob:')) {
+                          const link = document.createElement('a')
+                          link.href = previewDocument.url
+                          link.download = previewDocument.name
+                          document.body.appendChild(link)
+                          link.click()
+                          document.body.removeChild(link)
+                        } else {
+                          if (previewDocument.filePath) {
+                            await handleDownload(previewDocument.filePath, previewDocument.name)
+                          }
+                        }
+                      } catch (err) {
+                        showError('Erreur lors du téléchargement')
+                      }
+                    }}
+                    className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Télécharger le fichier
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

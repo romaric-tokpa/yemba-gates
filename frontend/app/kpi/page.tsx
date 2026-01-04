@@ -4,7 +4,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   getRecruiterKPIs,
-  type RecruiterKPIs
+  getRecruiterKPIsAIAnalysis,
+  getAvailableRecruiters,
+  type RecruiterKPIs,
+  type KPIAnalysis,
+  type DetailedStatistics
 } from '@/lib/api'
 import { isAuthenticated, getToken } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
@@ -31,7 +35,11 @@ import {
   X,
   MessageSquare,
   Award,
-  Star
+  Star,
+  Sparkles,
+  Loader2,
+  AlertTriangle,
+  Lightbulb
 } from 'lucide-react'
 
 // Composant pour afficher un graphique en barres simple
@@ -153,9 +161,12 @@ function KPICard({
 export default function RecruiterKPIPage() {
   const router = useRouter()
   const [recruiterKPIs, setRecruiterKPIs] = useState<RecruiterKPIs | null>(null)
+  const [aiAnalysis, setAiAnalysis] = useState<KPIAnalysis | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingAI, setIsLoadingAI] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [showAIAnalysis, setShowAIAnalysis] = useState(true)
   const { error: showError } = useToastContext()
 
   // Filtres
@@ -164,12 +175,16 @@ export default function RecruiterKPIPage() {
     end_date: string
     job_id: string
     source: string
+    recruiter_id: string
   }>({
     start_date: '',
     end_date: '',
     job_id: '',
     source: '',
+    recruiter_id: '',
   })
+  
+  const [recruiters, setRecruiters] = useState<Array<{ id: string; first_name: string; last_name: string; email: string }>>([])
 
   useEffect(() => {
     if (!isAuthenticated() || !getToken()) {
@@ -177,8 +192,24 @@ export default function RecruiterKPIPage() {
       return
     }
 
+    loadRecruiters()
     loadKPIData()
   }, [router])
+  
+  const loadRecruiters = async () => {
+    try {
+      const data = await getAvailableRecruiters()
+      setRecruiters(data)
+    } catch (err) {
+      // Si l'accès est refusé (403), c'est normal pour un recruteur
+      // On ne charge simplement pas la liste des recruteurs
+      if (err instanceof Error && err.message.includes('Accès refusé')) {
+        console.log('Accès à la liste des recruteurs non autorisé (réservé aux managers)')
+      } else {
+        console.error('Erreur lors du chargement des recruteurs:', err)
+      }
+    }
+  }
 
   const loadKPIData = async () => {
     try {
@@ -190,15 +221,40 @@ export default function RecruiterKPIPage() {
       if (filters.end_date) params.end_date = filters.end_date
       if (filters.job_id) params.job_id = filters.job_id
       if (filters.source) params.source = filters.source
+      if (filters.recruiter_id) params.recruiter_id = filters.recruiter_id
 
       const data = await getRecruiterKPIs(params)
       setRecruiterKPIs(data)
+      
+      // Charger l'analyse IA en parallèle
+      loadAIAnalysis(params)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors du chargement des KPI'
       setError(errorMessage)
       showError(errorMessage)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadAIAnalysis = async (params: any) => {
+    try {
+      setIsLoadingAI(true)
+      const analysis = await getRecruiterKPIsAIAnalysis(params)
+      setAiAnalysis(analysis)
+    } catch (err) {
+      // Gérer spécifiquement les erreurs de rate limit
+      if (err instanceof Error && (err as any).isRateLimit) {
+        console.warn('Limite de requêtes OpenAI atteinte:', err.message)
+        // Ne pas afficher d'erreur pour les rate limits - c'est temporaire
+        // L'utilisateur pourra réessayer plus tard
+      } else {
+        console.error('Erreur lors du chargement de l\'analyse IA:', err)
+      }
+      // Ne pas bloquer l'affichage si l'analyse IA échoue
+      setAiAnalysis(null)
+    } finally {
+      setIsLoadingAI(false)
     }
   }
 
@@ -260,7 +316,7 @@ export default function RecruiterKPIPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className={`grid grid-cols-1 md:grid-cols-2 ${recruiters.length > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Date de début</label>
                 <input
@@ -279,6 +335,23 @@ export default function RecruiterKPIPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
+              {recruiters.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Recruteur</label>
+                  <select
+                    value={filters.recruiter_id}
+                    onChange={(e) => handleFilterChange('recruiter_id', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Tous les recruteurs</option>
+                    {recruiters.map((recruiter) => (
+                      <option key={recruiter.id} value={recruiter.id}>
+                        {recruiter.first_name} {recruiter.last_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Besoin</label>
                 <input
@@ -324,6 +397,147 @@ export default function RecruiterKPIPage() {
         )}
       </div>
 
+      {/* Analyse IA */}
+      {showAIAnalysis && !isLoading && (
+        <div className="mb-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl shadow-sm border border-purple-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-purple-600" />
+              <h2 className="text-xl font-bold text-gray-900">Analyse IA des KPIs</h2>
+            </div>
+            {isLoadingAI && (
+              <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+            )}
+          </div>
+
+          {isLoadingAI ? (
+            <div className="text-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-purple-600" />
+              <p className="text-gray-600">Analyse en cours...</p>
+            </div>
+          ) : aiAnalysis ? (
+            <div className="space-y-6">
+              {/* Résumé global */}
+              <div className="bg-white rounded-lg p-4 border border-purple-100">
+                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-purple-600" />
+                  Résumé global
+                </h3>
+                <p className="text-gray-700 leading-relaxed">{aiAnalysis.overall_summary}</p>
+              </div>
+
+              {/* Top recommandations */}
+              {aiAnalysis.top_recommendations.length > 0 && (
+                <div className="bg-white rounded-lg p-4 border border-purple-100">
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Lightbulb className="w-5 h-5 text-yellow-600" />
+                    Top Recommandations
+                  </h3>
+                  <ol className="space-y-2">
+                    {aiAnalysis.top_recommendations.map((rec, idx) => (
+                      <li key={idx} className="flex gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-semibold">
+                          {idx + 1}
+                        </span>
+                        <span className="text-gray-700 flex-1">{rec}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {/* Insights clés */}
+              {aiAnalysis.key_insights.length > 0 && (
+                <div className="bg-white rounded-lg p-4 border border-purple-100">
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Award className="w-5 h-5 text-indigo-600" />
+                    Insights Clés
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {aiAnalysis.key_insights.map((insight, idx) => (
+                      <div key={idx} className="border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-medium text-gray-900 text-sm">{insight.kpi_name}</h4>
+                          <div className="flex items-center gap-1">
+                            {insight.trend === 'improving' && (
+                              <TrendingUp className="w-4 h-4 text-green-600" />
+                            )}
+                            {insight.trend === 'declining' && (
+                              <TrendingDown className="w-4 h-4 text-red-600" />
+                            )}
+                            {insight.priority === 'high' && (
+                              <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded">
+                                Priorité
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {insight.current_value !== null && (
+                          <p className="text-xs text-gray-500 mb-1">Valeur: {insight.current_value}</p>
+                        )}
+                        <p className="text-sm text-gray-700 mb-2">{insight.insight}</p>
+                        <p className="text-xs text-purple-700 font-medium">{insight.recommendation}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Alertes de risques */}
+              {aiAnalysis.risk_alerts.length > 0 && (
+                <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                  <h3 className="font-semibold text-red-900 mb-3 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    Alertes de Risques
+                  </h3>
+                  <ul className="space-y-2">
+                    {aiAnalysis.risk_alerts.map((alert, idx) => (
+                      <li key={idx} className="flex gap-2 text-red-800">
+                        <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                        <span>{alert}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Opportunités */}
+              {aiAnalysis.opportunities.length > 0 && (
+                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                  <h3 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-green-600" />
+                    Opportunités
+                  </h3>
+                  <ul className="space-y-2">
+                    {aiAnalysis.opportunities.map((opp, idx) => (
+                      <li key={idx} className="flex gap-2 text-green-800">
+                        <Star className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                        <span>{opp}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Tendances prédites */}
+              {aiAnalysis.predicted_trends && (
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-blue-600" />
+                    Tendances Prédites
+                  </h3>
+                  <p className="text-blue-800 leading-relaxed">{aiAnalysis.predicted_trends}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-4 text-gray-500">
+              <p>Cliquez sur "Actualiser" pour générer l'analyse IA</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="text-center py-12">
           <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
@@ -365,7 +579,7 @@ export default function RecruiterKPIPage() {
               <BarChart3 className="w-5 h-5 mr-2 text-blue-600" />
               Volume & Productivité
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <KPICard
                 title="Total candidats sourcés"
                 value={recruiterKPIs?.volume_productivity?.total_candidates_sourced ?? 0}
@@ -391,7 +605,177 @@ export default function RecruiterKPIPage() {
                 color="orange"
               />
             </div>
+
+            {/* Statistiques de sourcing par période */}
+            {recruiterKPIs?.volume_productivity?.sourcing_statistics && (
+              <div className="border-t border-gray-200 pt-6 mt-6">
+                <h3 className="text-md font-semibold text-gray-900 mb-4 flex items-center">
+                  <Calendar className="w-4 h-4 mr-2 text-indigo-600" />
+                  Statistiques de Sourcing par Période
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Aujourd'hui</span>
+                      <Calendar className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <p className="text-2xl font-bold text-blue-700">
+                      {recruiterKPIs.volume_productivity.sourcing_statistics.today_count}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">candidats sourcés</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Ce mois</span>
+                      <Calendar className="w-4 h-4 text-green-600" />
+                    </div>
+                    <p className="text-2xl font-bold text-green-700">
+                      {recruiterKPIs.volume_productivity.sourcing_statistics.this_month_count}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">candidats sourcés</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Cette année</span>
+                      <Calendar className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <p className="text-2xl font-bold text-purple-700">
+                      {recruiterKPIs.volume_productivity.sourcing_statistics.this_year_count}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">candidats sourcés</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg p-4 border border-orange-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Moyenne par jour</span>
+                      <TrendingUp className="w-4 h-4 text-orange-600" />
+                    </div>
+                    <p className="text-2xl font-bold text-orange-700">
+                      {recruiterKPIs.volume_productivity.sourcing_statistics.per_day.toFixed(1)}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">candidats/jour</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg p-4 border border-teal-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Moyenne par mois</span>
+                      <TrendingUp className="w-4 h-4 text-teal-600" />
+                    </div>
+                    <p className="text-2xl font-bold text-teal-700">
+                      {recruiterKPIs.volume_productivity.sourcing_statistics.per_month.toFixed(1)}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">candidats/mois</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg p-4 border border-indigo-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Moyenne par an</span>
+                      <TrendingUp className="w-4 h-4 text-indigo-600" />
+                    </div>
+                    <p className="text-2xl font-bold text-indigo-700">
+                      {recruiterKPIs.volume_productivity.sourcing_statistics.per_year.toFixed(1)}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">candidats/an</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Statistiques détaillées */}
+          {recruiterKPIs?.detailed_statistics && (
+            <div className="space-y-6">
+              {/* Statistiques par étape du processus */}
+              {recruiterKPIs.detailed_statistics.candidates_by_status && recruiterKPIs.detailed_statistics.candidates_by_status.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Users className="w-5 h-5 mr-2 text-blue-600" />
+                    Répartition par Étape du Processus
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {recruiterKPIs.detailed_statistics.candidates_by_status.map((stat) => (
+                      <div key={stat.status} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700 capitalize">{stat.status.replace('_', ' ')}</span>
+                          <Users className="w-4 h-4 text-gray-600" />
+                        </div>
+                        <p className="text-2xl font-bold text-gray-900">{stat.count}</p>
+                        <p className="text-xs text-gray-600 mt-1">{stat.percentage.toFixed(1)}% du total</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Statistiques par statut de besoin */}
+              {recruiterKPIs.detailed_statistics.jobs_by_status && recruiterKPIs.detailed_statistics.jobs_by_status.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Briefcase className="w-5 h-5 mr-2 text-purple-600" />
+                    Répartition par Statut de Besoin
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {recruiterKPIs.detailed_statistics.jobs_by_status.map((stat) => (
+                      <div key={stat.status} className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700 capitalize">{stat.status.replace('_', ' ')}</span>
+                          <Briefcase className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <p className="text-2xl font-bold text-purple-700">{stat.count}</p>
+                        <p className="text-xs text-gray-600 mt-1">{stat.percentage.toFixed(1)}% du total</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Performance par recruteur */}
+              {recruiterKPIs.detailed_statistics.recruiters_performance && recruiterKPIs.detailed_statistics.recruiters_performance.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <UserCheck className="w-5 h-5 mr-2 text-green-600" />
+                    Performance par Recruteur
+                  </h2>
+                  <div className="space-y-4">
+                    {recruiterKPIs.detailed_statistics.recruiters_performance.map((perf) => (
+                      <div key={perf.recruiter_id} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-md font-semibold text-gray-900">{perf.recruiter_name}</h3>
+                          <UserCheck className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                          <div>
+                            <p className="text-sm text-gray-600">Candidats sourcés</p>
+                            <p className="text-xl font-bold text-blue-700">{perf.total_candidates_sourced}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Besoins gérés</p>
+                            <p className="text-xl font-bold text-purple-700">{perf.total_jobs_managed}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Moyenne/jour</p>
+                            <p className="text-xl font-bold text-green-700">{perf.sourcing_statistics.per_day.toFixed(1)}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-blue-200">
+                          <p className="text-xs font-medium text-gray-700 mb-2">Répartition par statut candidat:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {perf.candidates_by_status.filter(s => s.count > 0).map((stat) => (
+                              <span key={stat.status} className="px-2 py-1 bg-white rounded text-xs text-gray-700 border border-gray-300">
+                                {stat.status.replace('_', ' ')}: {stat.count}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Qualité & Sélection */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

@@ -256,6 +256,9 @@ class CandidateResponse(BaseModel):
     status: str
     notes: Optional[str]
     created_by: UUID
+    creator_first_name: Optional[str] = None  # Prénom du créateur
+    creator_last_name: Optional[str] = None  # Nom du créateur
+    creator_email: Optional[str] = None  # Email du créateur
     created_at: datetime
     updated_at: datetime
 

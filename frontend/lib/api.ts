@@ -103,6 +103,9 @@ export interface CandidateResponse {
   status: string
   notes: string | null
   created_by: string
+  creator_first_name?: string | null
+  creator_last_name?: string | null
+  creator_email?: string | null
   created_at: string
   updated_at: string
   motivation_letter_file_path?: string | null
@@ -594,11 +597,49 @@ export async function updateInterviewStatus(
 
 // ===== TYPES KPI =====
 
+export interface SourcingStatistics {
+  per_day: number
+  per_month: number
+  per_year: number
+  today_count: number
+  this_month_count: number
+  this_year_count: number
+}
+
+export interface CandidateStatusStatistics {
+  status: string
+  count: number
+  percentage: number
+}
+
+export interface JobStatusStatistics {
+  status: string
+  count: number
+  percentage: number
+}
+
+export interface RecruiterPerformanceStatistics {
+  recruiter_id: string
+  recruiter_name: string
+  total_candidates_sourced: number
+  candidates_by_status: CandidateStatusStatistics[]
+  total_jobs_managed: number
+  jobs_by_status: JobStatusStatistics[]
+  sourcing_statistics: SourcingStatistics
+}
+
+export interface DetailedStatistics {
+  candidates_by_status: CandidateStatusStatistics[]
+  jobs_by_status: JobStatusStatistics[]
+  recruiters_performance: RecruiterPerformanceStatistics[]
+}
+
 export interface VolumeProductivityKPIs {
   total_candidates_sourced: number
   total_cvs_processed: number
   closed_vs_open_recruitments: number | null
   total_interviews_conducted: number
+  sourcing_statistics?: SourcingStatistics | null
 }
 
 export interface QualitySelectionKPIs {
@@ -656,6 +697,7 @@ export interface ManagerKPIs {
   recruiter_performance: RecruiterPerformanceKPIs
   source_channel: SourceChannelKPIs
   onboarding: OnboardingKPIs
+  detailed_statistics?: DetailedStatistics | null
 }
 
 export interface KPISummary {
@@ -684,6 +726,21 @@ export interface RecruiterKPIs {
   source_channel: SourceChannelKPIs
   onboarding: OnboardingKPIs
   recruiter_performance: RecruiterPerformanceKPIs
+  detailed_statistics?: DetailedStatistics | null
+}
+
+export interface ClientKPIs {
+  total_jobs_created: number
+  jobs_by_status: JobStatusStatistics[]
+  total_candidates_in_shortlist: number
+  total_candidates_validated: number
+  total_candidates_rejected: number
+  validation_rate: number | null
+  total_interviews_scheduled: number
+  average_time_to_hire: number | null
+  average_time_to_fill: number | null
+  jobs_on_time_rate: number | null
+  sourcing_statistics?: SourcingStatistics | null
 }
 
 // ===== FONCTIONS KPI =====
@@ -780,6 +837,124 @@ export async function getRecruiterKPIs(params?: {
       throw new Error('Accès refusé. Réservé aux Recruteurs.')
     }
     throw new Error('Erreur lors de la récupération des KPI recruteur')
+  }
+
+  return response.json()
+}
+
+// ===== ANALYSE IA DES KPIs =====
+
+export interface KPIInsight {
+  kpi_name: string
+  current_value: number | null
+  trend: 'improving' | 'declining' | 'stable'
+  insight: string
+  recommendation: string
+  priority: 'high' | 'medium' | 'low'
+}
+
+export interface KPIAnalysis {
+  overall_summary: string
+  key_insights: KPIInsight[]
+  top_recommendations: string[]
+  predicted_trends: string
+  risk_alerts: string[]
+  opportunities: string[]
+}
+
+export async function getManagerKPIsAIAnalysis(params?: {
+  start_date?: string
+  end_date?: string
+  recruiter_id?: string
+  job_id?: string
+  source?: string
+}): Promise<KPIAnalysis> {
+  const queryParams = new URLSearchParams()
+  if (params?.start_date) queryParams.append('start_date', params.start_date)
+  if (params?.end_date) queryParams.append('end_date', params.end_date)
+  if (params?.recruiter_id) queryParams.append('recruiter_id', params.recruiter_id)
+  if (params?.job_id) queryParams.append('job_id', params.job_id)
+  if (params?.source) queryParams.append('source', params.source)
+
+  const response = await authenticatedFetch(`${API_URL}/kpi/manager/ai-analysis?${queryParams.toString()}`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'analyse IA des KPIs' }))
+    
+    // Gérer spécifiquement les erreurs de rate limit
+    if (response.status === 429 || (error.detail && (error.detail.includes('rate limit') || error.detail.includes('Rate limit')))) {
+      const rateLimitError = new Error('Limite de requêtes OpenAI atteinte. L\'analyse IA sera disponible dans quelques heures.')
+      ;(rateLimitError as any).isRateLimit = true
+      throw rateLimitError
+    }
+    
+    throw new Error(error.detail || 'Erreur lors de l\'analyse IA des KPIs')
+  }
+
+  return response.json()
+}
+
+export async function getRecruiterKPIsAIAnalysis(params?: {
+  start_date?: string
+  end_date?: string
+  job_id?: string
+  source?: string
+}): Promise<KPIAnalysis> {
+  const queryParams = new URLSearchParams()
+  if (params?.start_date) queryParams.append('start_date', params.start_date)
+  if (params?.end_date) queryParams.append('end_date', params.end_date)
+  if (params?.job_id) queryParams.append('job_id', params.job_id)
+  if (params?.source) queryParams.append('source', params.source)
+
+  const queryString = queryParams.toString()
+  const url = queryString 
+    ? `${API_URL}/kpi/recruiter/ai-analysis?${queryString}`
+    : `${API_URL}/kpi/recruiter/ai-analysis`
+
+  const response = await authenticatedFetch(url, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'analyse IA des KPIs' }))
+    
+    // Gérer spécifiquement les erreurs de rate limit
+    if (response.status === 429 || (error.detail && (error.detail.includes('rate limit') || error.detail.includes('Rate limit')))) {
+      const rateLimitError = new Error('Limite de requêtes OpenAI atteinte. L\'analyse IA sera disponible dans quelques heures.')
+      ;(rateLimitError as any).isRateLimit = true
+      throw rateLimitError
+    }
+    
+    throw new Error(error.detail || 'Erreur lors de l\'analyse IA des KPIs')
+  }
+
+  return response.json()
+}
+
+export async function getClientKPIs(params?: {
+  start_date?: string
+  end_date?: string
+  job_id?: string
+}): Promise<ClientKPIs> {
+  const queryParams = new URLSearchParams()
+  if (params?.start_date) queryParams.append('start_date', params.start_date)
+  if (params?.end_date) queryParams.append('end_date', params.end_date)
+  if (params?.job_id) queryParams.append('job_id', params.job_id)
+
+  const queryString = queryParams.toString()
+  const url = queryString 
+    ? `${API_URL}/kpi/client?${queryString}`
+    : `${API_URL}/kpi/client`
+
+  const response = await authenticatedFetch(url, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération des KPIs client' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération des KPIs client')
   }
 
   return response.json()
@@ -1370,6 +1545,27 @@ export interface UserCreateResponse {
   generated_password?: string | null
 }
 
+export interface UserCreate {
+  email: string
+  password: string
+  first_name: string
+  last_name: string
+  role: string
+  phone?: string | null
+  department?: string | null
+}
+
+export interface UserUpdate {
+  email?: string | null
+  password?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  role?: string | null
+  phone?: string | null
+  department?: string | null
+  is_active?: boolean | null
+}
+
 export async function getUsers(): Promise<UserResponse[]> {
   // Essayer d'abord l'endpoint admin, puis l'endpoint auth (accessible aux recruteurs, managers et administrateurs)
   let response = await authenticatedFetch(`${API_URL}/admin/users`, {
@@ -1419,6 +1615,51 @@ export async function getUsers(): Promise<UserResponse[]> {
   return normalizedUsers
 }
 
+export async function createUser(userData: UserCreate): Promise<UserResponse> {
+  const response = await authenticatedFetch(`${API_URL}/admin/users`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(userData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la création de l\'utilisateur' }))
+    throw new Error(error.detail || 'Erreur lors de la création de l\'utilisateur')
+  }
+
+  return response.json()
+}
+
+export async function updateUser(userId: string, userData: UserUpdate): Promise<UserResponse> {
+  const response = await authenticatedFetch(`${API_URL}/admin/users/${userId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(userData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour de l\'utilisateur' }))
+    throw new Error(error.detail || 'Erreur lors de la mise à jour de l\'utilisateur')
+  }
+
+  return response.json()
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/admin/users/${userId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression de l\'utilisateur' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression de l\'utilisateur')
+  }
+}
+
 export interface UserCreateByManager {
   email: string
   first_name: string
@@ -1428,6 +1669,7 @@ export interface UserCreateByManager {
   department?: string | null
   generate_password?: boolean
   password?: string | null
+  is_active?: boolean | null
 }
 
 export async function getUsersByManager(role?: string): Promise<UserCreateResponse[]> {
@@ -1511,6 +1753,97 @@ export async function deleteUserByManager(userId: string): Promise<void> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression de l\'utilisateur' }))
     throw new Error(error.detail || 'Erreur lors de la suppression de l\'utilisateur')
+  }
+}
+
+// ===== FONCTIONS SETTINGS =====
+
+export interface SettingResponse {
+  id: string
+  key: string
+  value: string
+  category: string
+  description: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SettingCreate {
+  key: string
+  value: string
+  category: string
+  description?: string | null
+}
+
+export interface SettingUpdate {
+  value?: string | null
+  description?: string | null
+}
+
+export async function getSettings(category?: string): Promise<SettingResponse[]> {
+  const queryParams = new URLSearchParams()
+  if (category) queryParams.append('category', category)
+
+  const queryString = queryParams.toString()
+  const url = queryString ? `${API_URL}/admin/settings?${queryString}` : `${API_URL}/admin/settings`
+
+  const response = await authenticatedFetch(url, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('Accès refusé. Réservé aux administrateurs.')
+    }
+    throw new Error('Erreur lors de la récupération des paramètres')
+  }
+
+  return response.json()
+}
+
+export async function createSetting(settingData: SettingCreate): Promise<SettingResponse> {
+  const response = await authenticatedFetch(`${API_URL}/admin/settings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(settingData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la création du paramètre' }))
+    throw new Error(error.detail || 'Erreur lors de la création du paramètre')
+  }
+
+  return response.json()
+}
+
+export async function updateSetting(settingKey: string, settingData: SettingUpdate): Promise<SettingResponse> {
+  const response = await authenticatedFetch(`${API_URL}/admin/settings/${settingKey}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(settingData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour du paramètre' }))
+    throw new Error(error.detail || 'Erreur lors de la mise à jour du paramètre')
+  }
+
+  return response.json()
+}
+
+export async function deleteSetting(settingKey: string): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/admin/settings/${settingKey}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression du paramètre' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression du paramètre')
   }
 }
 

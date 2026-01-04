@@ -57,7 +57,7 @@ export default function AdminSidebar() {
       {/* Menu burger pour mobile */}
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="lg:hidden fixed top-3 left-3 sm:top-4 sm:left-4 z-50 p-2.5 bg-gray-800 rounded-lg shadow-lg border border-gray-700 touch-target"
+        className="lg:hidden fixed top-3 left-3 sm:top-4 sm:left-4 z-50 p-2.5 bg-secondary rounded-lg shadow-lg border border-secondary-600 touch-target"
         aria-label="Toggle menu"
       >
         {isMobileMenuOpen ? (
@@ -78,18 +78,18 @@ export default function AdminSidebar() {
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-40
-        w-64 bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700/50 flex flex-col
+        w-64 bg-gradient-to-b from-secondary to-secondary-600 border-r border-secondary-700/50 flex flex-col
         transform transition-transform duration-300 ease-in-out shadow-xl lg:shadow-none
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="p-6 border-b border-gray-700/30">
+        <div className="p-6 border-b border-secondary-700/30">
           <div className="flex items-center space-x-3">
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2.5 shadow-lg">
               <Shield className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-white">Administrateur</h1>
-              <p className="text-xs text-gray-400/80">Espace Admin</p>
+              <p className="text-xs text-secondary-100/80">Espace Admin</p>
             </div>
           </div>
         </div>
@@ -108,12 +108,12 @@ export default function AdminSidebar() {
                   "flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group",
                   isActive
                     ? "bg-white/20 text-white font-medium shadow-lg backdrop-blur-sm"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white"
+                    : "text-secondary-100 hover:bg-white/10 hover:text-white"
                 )}
               >
                 <Icon className={cn(
                   "w-5 h-5 transition-transform duration-200",
-                  isActive ? "text-white scale-110" : "text-gray-400 group-hover:scale-110"
+                  isActive ? "text-white scale-110" : "text-secondary-200 group-hover:scale-110"
                 )} />
                 <span className="flex-1">{item.title}</span>
                 {isActive && (
@@ -124,7 +124,7 @@ export default function AdminSidebar() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-700/30 bg-gray-800/20">
+        <div className="p-4 border-t border-secondary-700/30 bg-secondary-700/20">
           {userInfo && (
             <>
               <div className="flex items-center space-x-3 px-4 py-3 mb-3 bg-white/5 rounded-xl backdrop-blur-sm">
@@ -135,12 +135,12 @@ export default function AdminSidebar() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{userInfo.user_name}</p>
-                  <p className="text-xs text-gray-400/80 capitalize truncate">{userInfo.user_role}</p>
+                  <p className="text-xs text-secondary-100/80 capitalize truncate">{userInfo.user_role}</p>
                 </div>
               </div>
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-gray-300 bg-white/10 hover:bg-white/20 hover:text-white transition-all duration-200 backdrop-blur-sm border border-white/10 hover:border-white/20 shadow-md hover:shadow-lg"
+                className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-secondary-100 bg-white/10 hover:bg-white/20 hover:text-white transition-all duration-200 backdrop-blur-sm border border-white/10 hover:border-white/20 shadow-md hover:shadow-lg"
               >
                 <LogOut className="w-4 h-4" />
                 <span className="font-medium">Déconnexion</span>

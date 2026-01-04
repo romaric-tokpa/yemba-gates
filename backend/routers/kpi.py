@@ -2,6 +2,8 @@
 Routes pour les KPI et statistiques (réservées aux Managers et Recruteurs)
 Implémente toutes les formules mathématiques du specs.md
 """
+import os
+import json
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, func, and_, or_
@@ -12,7 +14,13 @@ from sqlalchemy import case, cast, Date
 
 from database import get_session
 from models import User, UserRole, Candidate, Job, Application, Interview, ApplicationHistory
-from auth import get_current_active_user, require_manager, require_recruteur
+from auth import get_current_active_user, require_manager, require_recruteur, require_client
+
+# Import pour OpenAI
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
 
@@ -49,12 +57,48 @@ class QualitySelectionKPIs(BaseModel):
     turnover_rate_post_onboarding: Optional[float]  # Pourcentage
 
 
+class SourcingStatistics(BaseModel):
+    """Statistiques de sourcing par période"""
+    per_day: float  # Moyenne par jour
+    per_month: float  # Moyenne par mois
+    per_year: float  # Moyenne par an
+    today_count: int  # Nombre aujourd'hui
+    this_month_count: int  # Nombre ce mois
+    this_year_count: int  # Nombre cette année
+
+
+class CandidateStatusStatistics(BaseModel):
+    """Statistiques par statut de candidat"""
+    status: str  # Statut du candidat
+    count: int  # Nombre de candidats avec ce statut
+    percentage: float  # Pourcentage par rapport au total
+
+
+class JobStatusStatistics(BaseModel):
+    """Statistiques par statut de besoin"""
+    status: str  # Statut du besoin
+    count: int  # Nombre de besoins avec ce statut
+    percentage: float  # Pourcentage par rapport au total
+
+
+class RecruiterPerformanceStatistics(BaseModel):
+    """Statistiques de performance par recruteur"""
+    recruiter_id: UUID
+    recruiter_name: str
+    total_candidates_sourced: int
+    candidates_by_status: List[CandidateStatusStatistics]  # Répartition par statut
+    total_jobs_managed: int
+    jobs_by_status: List[JobStatusStatistics]  # Répartition par statut de besoin
+    sourcing_statistics: SourcingStatistics  # Statistiques de sourcing pour ce recruteur
+
+
 class VolumeProductivityKPIs(BaseModel):
     """KPI Volume & Productivité"""
     total_candidates_sourced: int
     total_cvs_processed: int
     closed_vs_open_recruitments: Optional[float]
     total_interviews_conducted: int
+    sourcing_statistics: Optional[SourcingStatistics] = None  # Statistiques par période
 
 
 class CostBudgetKPIs(BaseModel):
@@ -93,6 +137,13 @@ class OnboardingKPIs(BaseModel):
     post_integration_issues_count: int
 
 
+class DetailedStatistics(BaseModel):
+    """Statistiques détaillées par étape et statut"""
+    candidates_by_status: List[CandidateStatusStatistics]  # Répartition par statut de candidat
+    jobs_by_status: List[JobStatusStatistics]  # Répartition par statut de besoin
+    recruiters_performance: List[RecruiterPerformanceStatistics]  # Performance par recruteur
+
+
 class ManagerKPIs(BaseModel):
     """Tous les KPI Manager"""
     time_process: TimeProcessKPIs
@@ -103,6 +154,7 @@ class ManagerKPIs(BaseModel):
     recruiter_performance: RecruiterPerformanceKPIs
     source_channel: SourceChannelKPIs
     onboarding: OnboardingKPIs
+    detailed_statistics: Optional[DetailedStatistics] = None  # Statistiques détaillées
 
 
 class RecruiterKPIs(BaseModel):
@@ -113,6 +165,22 @@ class RecruiterKPIs(BaseModel):
     engagement_conversion: EngagementSatisfactionKPIs
     source_channel: SourceChannelKPIs
     onboarding: OnboardingKPIs
+    detailed_statistics: Optional[DetailedStatistics] = None  # Statistiques détaillées
+
+
+class ClientKPIs(BaseModel):
+    """Tous les KPI Client"""
+    total_jobs_created: int  # Nombre total de besoins créés
+    jobs_by_status: List[JobStatusStatistics]  # Répartition par statut
+    total_candidates_in_shortlist: int  # Candidats en shortlist
+    total_candidates_validated: int  # Candidats validés
+    total_candidates_rejected: int  # Candidats rejetés
+    validation_rate: Optional[float]  # Taux de validation (validés / total shortlist)
+    total_interviews_scheduled: int  # Entretiens planifiés
+    average_time_to_hire: Optional[float]  # Temps moyen de recrutement (jours)
+    average_time_to_fill: Optional[float]  # Temps moyen de pourvoir un poste (jours)
+    jobs_on_time_rate: Optional[float]  # % de postes respectant le délai
+    sourcing_statistics: Optional[SourcingStatistics] = None  # Statistiques de sourcing pour leurs besoins
 
 
 # ==================== FONCTIONS HELPER ====================
@@ -544,6 +612,251 @@ def calculate_average_onboarding_delay(session: Session, filters: KPIFilters) ->
     return float(result) if result else None
 
 
+def calculate_sourcing_statistics(session: Session, filters: KPIFilters) -> Optional[SourcingStatistics]:
+    """Calcule les statistiques de sourcing par jour, mois et année"""
+    from datetime import datetime, timedelta
+    
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    month_start = datetime(now.year, now.month, 1)
+    year_start = datetime(now.year, 1, 1)
+    
+    # Nombre aujourd'hui
+    today_query = select(func.count(Candidate.id)).where(
+        Candidate.status == "sourcé",
+        Candidate.created_at >= today_start
+    )
+    if filters.recruiter_id:
+        today_query = today_query.where(Candidate.created_by == filters.recruiter_id)
+    if filters.source:
+        today_query = today_query.where(Candidate.source == filters.source)
+    today_count = session.exec(today_query).one()
+    
+    # Nombre ce mois
+    this_month_query = select(func.count(Candidate.id)).where(
+        Candidate.status == "sourcé",
+        Candidate.created_at >= month_start
+    )
+    if filters.recruiter_id:
+        this_month_query = this_month_query.where(Candidate.created_by == filters.recruiter_id)
+    if filters.source:
+        this_month_query = this_month_query.where(Candidate.source == filters.source)
+    this_month_count = session.exec(this_month_query).one()
+    
+    # Nombre cette année
+    this_year_query = select(func.count(Candidate.id)).where(
+        Candidate.status == "sourcé",
+        Candidate.created_at >= year_start
+    )
+    if filters.recruiter_id:
+        this_year_query = this_year_query.where(Candidate.created_by == filters.recruiter_id)
+    if filters.source:
+        this_year_query = this_year_query.where(Candidate.source == filters.source)
+    this_year_count = session.exec(this_year_query).one()
+    
+    # Calculer les moyennes
+    # Pour la moyenne par jour : nombre total / nombre de jours depuis le début
+    all_candidates_query = select(func.count(Candidate.id)).where(Candidate.status == "sourcé")
+    if filters.recruiter_id:
+        all_candidates_query = all_candidates_query.where(Candidate.created_by == filters.recruiter_id)
+    if filters.source:
+        all_candidates_query = all_candidates_query.where(Candidate.source == filters.source)
+    
+    if filters.start_date:
+        all_candidates_query = all_candidates_query.where(Candidate.created_at >= filters.start_date)
+    if filters.end_date:
+        all_candidates_query = all_candidates_query.where(Candidate.created_at <= filters.end_date)
+    
+    total_candidates = session.exec(all_candidates_query).one()
+    
+    # Calculer le nombre de jours
+    if filters.start_date:
+        start_date = filters.start_date
+    else:
+        # Trouver la date du premier candidat sourcé
+        first_candidate_query = select(func.min(Candidate.created_at)).where(Candidate.status == "sourcé")
+        if filters.recruiter_id:
+            first_candidate_query = first_candidate_query.where(Candidate.created_by == filters.recruiter_id)
+        if filters.source:
+            first_candidate_query = first_candidate_query.where(Candidate.source == filters.source)
+        first_candidate_date = session.exec(first_candidate_query).one()
+        start_date = first_candidate_date if first_candidate_date else now - timedelta(days=30)
+    
+    if filters.end_date:
+        end_date = filters.end_date
+    else:
+        end_date = now
+    
+    days_diff = (end_date - start_date).days
+    if days_diff <= 0:
+        days_diff = 1
+    
+    # Moyennes
+    per_day = total_candidates / days_diff if days_diff > 0 else 0
+    per_month = per_day * 30  # Approximation : 30 jours par mois
+    per_year = per_day * 365  # Approximation : 365 jours par an
+    
+    return SourcingStatistics(
+        per_day=round(per_day, 2),
+        per_month=round(per_month, 2),
+        per_year=round(per_year, 2),
+        today_count=today_count,
+        this_month_count=this_month_count,
+        this_year_count=this_year_count
+    )
+
+
+def calculate_candidates_by_status(session: Session, filters: KPIFilters) -> List[CandidateStatusStatistics]:
+    """Calcule les statistiques par statut de candidat"""
+    # Statuts possibles
+    statuses = ['sourcé', 'qualifié', 'entretien_rh', 'entretien_client', 'shortlist', 'offre', 'rejeté', 'embauché']
+    
+    # Base query pour compter tous les candidats
+    base_query = select(func.count(Candidate.id))
+    if filters.recruiter_id:
+        base_query = base_query.where(Candidate.created_by == filters.recruiter_id)
+    if filters.source:
+        base_query = base_query.where(Candidate.source == filters.source)
+    if filters.start_date:
+        base_query = base_query.where(Candidate.created_at >= filters.start_date)
+    if filters.end_date:
+        base_query = base_query.where(Candidate.created_at <= filters.end_date)
+    
+    total_candidates = session.exec(base_query).one()
+    
+    if total_candidates == 0:
+        return []
+    
+    statistics = []
+    for status in statuses:
+        status_query = select(func.count(Candidate.id)).where(Candidate.status == status)
+        if filters.recruiter_id:
+            status_query = status_query.where(Candidate.created_by == filters.recruiter_id)
+        if filters.source:
+            status_query = status_query.where(Candidate.source == filters.source)
+        if filters.start_date:
+            status_query = status_query.where(Candidate.created_at >= filters.start_date)
+        if filters.end_date:
+            status_query = status_query.where(Candidate.created_at <= filters.end_date)
+        
+        count = session.exec(status_query).one()
+        percentage = (count / total_candidates * 100) if total_candidates > 0 else 0
+        
+        statistics.append(CandidateStatusStatistics(
+            status=status,
+            count=count,
+            percentage=round(percentage, 2)
+        ))
+    
+    return statistics
+
+
+def calculate_jobs_by_status(session: Session, filters: KPIFilters) -> List[JobStatusStatistics]:
+    """Calcule les statistiques par statut de besoin"""
+    # Statuts possibles
+    statuses = ['brouillon', 'a_valider', 'urgent', 'tres_urgent', 'besoin_courant', 'validé', 'en_cours', 'gagne', 'standby', 'archive', 'clôturé']
+    
+    # Base query pour compter tous les jobs
+    base_query = select(func.count(Job.id))
+    if filters.recruiter_id:
+        base_query = base_query.where(Job.created_by == filters.recruiter_id)
+    if filters.job_id:
+        base_query = base_query.where(Job.id == filters.job_id)
+    if filters.start_date:
+        base_query = base_query.where(Job.created_at >= filters.start_date)
+    if filters.end_date:
+        base_query = base_query.where(Job.created_at <= filters.end_date)
+    
+    total_jobs = session.exec(base_query).one()
+    
+    if total_jobs == 0:
+        return []
+    
+    statistics = []
+    for status in statuses:
+        status_query = select(func.count(Job.id)).where(Job.status == status)
+        if filters.recruiter_id:
+            status_query = status_query.where(Job.created_by == filters.recruiter_id)
+        if filters.job_id:
+            status_query = status_query.where(Job.id == filters.job_id)
+        if filters.start_date:
+            status_query = status_query.where(Job.created_at >= filters.start_date)
+        if filters.end_date:
+            status_query = status_query.where(Job.created_at <= filters.end_date)
+        
+        count = session.exec(status_query).one()
+        percentage = (count / total_jobs * 100) if total_jobs > 0 else 0
+        
+        statistics.append(JobStatusStatistics(
+            status=status,
+            count=count,
+            percentage=round(percentage, 2)
+        ))
+    
+    return statistics
+
+
+def calculate_recruiters_performance_statistics(session: Session, filters: KPIFilters) -> List[RecruiterPerformanceStatistics]:
+    """Calcule les statistiques de performance pour chaque recruteur"""
+    # Trouver tous les recruteurs
+    recruiters_statement = select(User).where(User.role == UserRole.RECRUTEUR.value)
+    recruiters = session.exec(recruiters_statement).all()
+    
+    performances = []
+    for recruiter in recruiters:
+        # Créer un filtre spécifique pour ce recruteur
+        recruiter_filters = KPIFilters(
+            start_date=filters.start_date,
+            end_date=filters.end_date,
+            recruiter_id=recruiter.id,
+            source=filters.source,
+            job_id=filters.job_id
+        )
+        
+        # Statistiques de candidats par statut pour ce recruteur
+        candidates_by_status = calculate_candidates_by_status(session, recruiter_filters)
+        
+        # Statistiques de jobs par statut pour ce recruteur
+        jobs_by_status = calculate_jobs_by_status(session, recruiter_filters)
+        
+        # Statistiques de sourcing pour ce recruteur
+        sourcing_stats = calculate_sourcing_statistics(session, recruiter_filters)
+        
+        if not sourcing_stats:
+            continue
+        
+        # Total candidats sourcés
+        total_candidates_query = select(func.count(Candidate.id)).where(
+            Candidate.created_by == recruiter.id,
+            Candidate.status == "sourcé"
+        )
+        if filters.start_date:
+            total_candidates_query = total_candidates_query.where(Candidate.created_at >= filters.start_date)
+        if filters.end_date:
+            total_candidates_query = total_candidates_query.where(Candidate.created_at <= filters.end_date)
+        total_candidates_sourced = session.exec(total_candidates_query).one()
+        
+        # Total jobs gérés
+        total_jobs_query = select(func.count(Job.id)).where(Job.created_by == recruiter.id)
+        if filters.start_date:
+            total_jobs_query = total_jobs_query.where(Job.created_at >= filters.start_date)
+        if filters.end_date:
+            total_jobs_query = total_jobs_query.where(Job.created_at <= filters.end_date)
+        total_jobs_managed = session.exec(total_jobs_query).one()
+        
+        performances.append(RecruiterPerformanceStatistics(
+            recruiter_id=recruiter.id,
+            recruiter_name=f"{recruiter.first_name} {recruiter.last_name}",
+            total_candidates_sourced=total_candidates_sourced,
+            candidates_by_status=candidates_by_status,
+            total_jobs_managed=total_jobs_managed,
+            jobs_by_status=jobs_by_status,
+            sourcing_statistics=sourcing_stats
+        ))
+    
+    return performances
+
+
 # ==================== ENDPOINTS KPI MANAGER ====================
 
 @router.get("/manager", response_model=ManagerKPIs)
@@ -679,6 +992,9 @@ def get_manager_kpis(
     avg_sourcing_time = calculate_average_sourcing_time(session, filters)
     avg_onboarding_delay = calculate_average_onboarding_delay(session, filters)
     
+    # Calculer les statistiques de sourcing
+    sourcing_stats = calculate_sourcing_statistics(session, filters)
+    
     # Appliquer les filtres aux comptages de base
     candidate_query = select(func.count(Candidate.id))
     if filters.recruiter_id:
@@ -700,55 +1016,70 @@ def get_manager_kpis(
         interview_query = interview_query.where(Interview.created_at <= filters.end_date)
     total_interviews = session.exec(interview_query).one()
     
-    return {
-        "time_process": {
-            "time_to_hire": time_to_hire,
-            "time_to_fill": time_to_fill,
-            "average_cycle_per_stage": avg_cycle_per_stage,
-            "average_feedback_delay": avg_feedback_delay,
-            "percentage_jobs_on_time": pct_jobs_on_time
-        },
-        "quality_selection": {
-            "qualified_candidates_rate": qualified_rate,
-            "rejection_rate_per_stage": rejection_rate,
-            "shortlist_acceptance_rate": shortlist_acceptance_rate,
-            "average_candidate_score": average_candidate_score,
-            "no_show_rate": no_show_rate,
-            "turnover_rate_post_onboarding": turnover_rate
-        },
-        "volume_productivity": {
-            "total_candidates_sourced": total_candidates_sourced,
-            "total_cvs_processed": total_candidates_sourced,  # Approximation
-            "closed_vs_open_recruitments": closed_vs_open,
-            "total_interviews_conducted": total_interviews
-        },
-        "cost_budget": {
-            "average_recruitment_cost": avg_recruitment_cost,
-            "cost_per_source": cost_per_source,
-            "budget_spent_vs_planned": budget_spent_vs_planned
-        },
-        "engagement_satisfaction": {
-            "offer_acceptance_rate": offer_acceptance_rate,
-            "offer_rejection_rate": offer_rejection_rate,
-            "candidate_response_rate": candidate_response_rate
-        },
-        "recruiter_performance": {
-            "jobs_managed": open_jobs,
-            "success_rate": recruiter_success_rate,
-            "average_time_per_stage": avg_time_per_stage,
-            "feedbacks_on_time_rate": feedbacks_on_time
-        },
-        "source_channel": {
-            "performance_per_source": performance_per_source,
-            "conversion_rate_per_source": conversion_rate_per_source,
-            "average_sourcing_time": avg_sourcing_time
-        },
-        "onboarding": {
-            "onboarding_success_rate": onboarding_success_rate,
-            "average_onboarding_delay": avg_onboarding_delay,
-            "post_integration_issues_count": 0  # Nécessite un suivi des incidents
-        }
-    }
+    # Construire detailed_statistics
+    candidates_stats = calculate_candidates_by_status(session, filters)
+    jobs_stats = calculate_jobs_by_status(session, filters)
+    recruiters_perf = calculate_recruiters_performance_statistics(session, filters)
+    
+    detailed_stats = None
+    if candidates_stats or jobs_stats or recruiters_perf:
+        detailed_stats = DetailedStatistics(
+            candidates_by_status=candidates_stats,
+            jobs_by_status=jobs_stats,
+            recruiters_performance=recruiters_perf
+        )
+    
+    return ManagerKPIs(
+        time_process=TimeProcessKPIs(
+            time_to_hire=time_to_hire,
+            time_to_fill=time_to_fill,
+            average_cycle_per_stage=avg_cycle_per_stage,
+            average_feedback_delay=avg_feedback_delay,
+            percentage_jobs_on_time=pct_jobs_on_time
+        ),
+        quality_selection=QualitySelectionKPIs(
+            qualified_candidates_rate=qualified_rate,
+            rejection_rate_per_stage=rejection_rate,
+            shortlist_acceptance_rate=shortlist_acceptance_rate,
+            average_candidate_score=average_candidate_score,
+            no_show_rate=no_show_rate,
+            turnover_rate_post_onboarding=turnover_rate
+        ),
+        volume_productivity=VolumeProductivityKPIs(
+            total_candidates_sourced=total_candidates_sourced,
+            total_cvs_processed=total_candidates_sourced,
+            closed_vs_open_recruitments=closed_vs_open,
+            total_interviews_conducted=total_interviews,
+            sourcing_statistics=sourcing_stats
+        ),
+        cost_budget=CostBudgetKPIs(
+            average_recruitment_cost=avg_recruitment_cost,
+            cost_per_source=cost_per_source,
+            budget_spent_vs_planned=budget_spent_vs_planned
+        ),
+        engagement_satisfaction=EngagementSatisfactionKPIs(
+            offer_acceptance_rate=offer_acceptance_rate,
+            offer_rejection_rate=offer_rejection_rate,
+            candidate_response_rate=candidate_response_rate
+        ),
+        recruiter_performance=RecruiterPerformanceKPIs(
+            jobs_managed=open_jobs,
+            success_rate=recruiter_success_rate,
+            average_time_per_stage=avg_time_per_stage,
+            feedbacks_on_time_rate=feedbacks_on_time
+        ),
+        source_channel=SourceChannelKPIs(
+            performance_per_source=performance_per_source,
+            conversion_rate_per_source=conversion_rate_per_source,
+            average_sourcing_time=avg_sourcing_time
+        ),
+        onboarding=OnboardingKPIs(
+            onboarding_success_rate=onboarding_success_rate,
+            average_onboarding_delay=avg_onboarding_delay,
+            post_integration_issues_count=0
+        ),
+        detailed_statistics=detailed_stats
+    )
 
 
 @router.get("/recruiter", response_model=RecruiterKPIs)
@@ -871,44 +1202,68 @@ def get_recruiter_kpis(
     total_onboarded = total_hired
     onboarding_success_rate = 100.0 if total_hired > 0 else None
     
-    return {
-        "volume_productivity": {
-            "total_candidates_sourced": candidates_sourced,
-            "total_cvs_processed": candidates_sourced,
-            "closed_vs_open_recruitments": None,
-            "total_interviews_conducted": interviews_count
-        },
-        "quality_selection": {
-            "qualified_candidates_rate": qualified_rate,
-            "rejection_rate_per_stage": None,
-            "shortlist_acceptance_rate": shortlist_acceptance_rate,
-            "average_candidate_score": average_candidate_score,
-            "no_show_rate": None,
-            "turnover_rate_post_onboarding": None
-        },
-        "time_process": {
-            "time_to_hire": time_to_hire,
-            "time_to_fill": None,
-            "average_cycle_per_stage": None,
-            "average_feedback_delay": None,
-            "percentage_jobs_on_time": None
-        },
-        "engagement_conversion": {
-            "offer_acceptance_rate": offer_acceptance_rate,
-            "offer_rejection_rate": offer_rejection_rate,
-            "candidate_response_rate": None
-        },
-        "source_channel": {
-            "performance_per_source": None,
-            "conversion_rate_per_source": None,
-            "average_sourcing_time": None
-        },
-        "onboarding": {
-            "onboarding_success_rate": onboarding_success_rate,
-            "average_onboarding_delay": None,
-            "post_integration_issues_count": 0
-        }
-    }
+    # Calculer les statistiques de sourcing
+    sourcing_stats = calculate_sourcing_statistics(session, filters)
+    
+    # Construire detailed_statistics
+    candidates_stats = calculate_candidates_by_status(session, filters)
+    jobs_stats = calculate_jobs_by_status(session, filters)
+    recruiters_perf = calculate_recruiters_performance_statistics(session, filters)
+    
+    detailed_stats = None
+    if candidates_stats or jobs_stats or recruiters_perf:
+        detailed_stats = DetailedStatistics(
+            candidates_by_status=candidates_stats,
+            jobs_by_status=jobs_stats,
+            recruiters_performance=recruiters_perf
+        )
+    
+    return RecruiterKPIs(
+        volume_productivity=VolumeProductivityKPIs(
+            total_candidates_sourced=candidates_sourced,
+            total_cvs_processed=candidates_sourced,
+            closed_vs_open_recruitments=None,
+            total_interviews_conducted=interviews_count,
+            sourcing_statistics=sourcing_stats
+        ),
+        quality_selection=QualitySelectionKPIs(
+            qualified_candidates_rate=qualified_rate,
+            rejection_rate_per_stage=None,
+            shortlist_acceptance_rate=shortlist_acceptance_rate,
+            average_candidate_score=average_candidate_score,
+            no_show_rate=None,
+            turnover_rate_post_onboarding=None
+        ),
+        time_process=TimeProcessKPIs(
+            time_to_hire=time_to_hire,
+            time_to_fill=None,
+            average_cycle_per_stage=None,
+            average_feedback_delay=None,
+            percentage_jobs_on_time=None
+        ),
+        engagement_conversion=EngagementSatisfactionKPIs(
+            offer_acceptance_rate=offer_acceptance_rate,
+            offer_rejection_rate=offer_rejection_rate,
+            candidate_response_rate=None
+        ),
+        source_channel=SourceChannelKPIs(
+            performance_per_source=None,
+            conversion_rate_per_source=None,
+            average_sourcing_time=None
+        ),
+        onboarding=OnboardingKPIs(
+            onboarding_success_rate=onboarding_success_rate,
+            average_onboarding_delay=None,
+            post_integration_issues_count=0
+        ),
+        recruiter_performance=RecruiterPerformanceKPIs(
+            jobs_managed=jobs_managed,
+            success_rate=None,
+            average_time_per_stage=None,
+            feedbacks_on_time_rate=None
+        ),
+        detailed_statistics=detailed_stats
+    )
 
 
 # ==================== ENDPOINTS EXISTANTS (COMPATIBILITÉ) ====================
@@ -1030,3 +1385,521 @@ def get_recruiters_performance(
         })
     
     return performances
+
+
+# ==================== ANALYSE IA DES KPIs ====================
+
+class KPIInsight(BaseModel):
+    """Insight généré par l'IA pour un KPI"""
+    kpi_name: str
+    current_value: Optional[float]
+    trend: str  # 'improving', 'declining', 'stable'
+    insight: str  # Analyse du KPI
+    recommendation: str  # Recommandation d'action
+    priority: str  # 'high', 'medium', 'low'
+
+
+class KPIAnalysis(BaseModel):
+    """Analyse IA complète des KPIs"""
+    overall_summary: str  # Résumé global
+    key_insights: List[KPIInsight]  # Insights par KPI
+    top_recommendations: List[str]  # Top 3 recommandations
+    predicted_trends: str  # Tendances prédites
+    risk_alerts: List[str]  # Alertes de risques
+    opportunities: List[str]  # Opportunités identifiées
+
+
+def analyze_kpis_with_ai(kpis_data: dict, role: str = "manager") -> KPIAnalysis:
+    """
+    Analyse les KPIs avec l'IA pour générer des insights structurés
+    """
+    if OpenAI is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI n'est pas installé. Installez-le avec: pip install openai"
+        )
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OPENAI_API_KEY n'est pas configurée dans les variables d'environnement"
+        )
+    
+    client = OpenAI(api_key=api_key)
+    
+    # Préparer les données KPIs pour l'analyse
+    kpis_json = json.dumps(kpis_data, default=str, indent=2)
+    
+    prompt = f"""Tu es un expert en analyse de performance de recrutement. Analyse les KPIs suivants pour un {role} et génère une analyse structurée et actionnable.
+
+KPIs à analyser:
+{kpis_json}
+
+Génère une analyse complète au format JSON strict (sans markdown, sans commentaires):
+{{
+  "overall_summary": "Résumé global de la performance en 2-3 phrases",
+  "key_insights": [
+    {{
+      "kpi_name": "Nom du KPI (ex: Time to Hire)",
+      "current_value": valeur actuelle ou null,
+      "trend": "improving" | "declining" | "stable",
+      "insight": "Analyse détaillée du KPI en 1-2 phrases",
+      "recommendation": "Recommandation d'action concrète en 1 phrase",
+      "priority": "high" | "medium" | "low"
+    }}
+  ],
+  "top_recommendations": [
+    "Recommandation 1 (la plus prioritaire)",
+    "Recommandation 2",
+    "Recommandation 3"
+  ],
+  "predicted_trends": "Prédiction des tendances futures en 2-3 phrases",
+  "risk_alerts": [
+    "Alerte de risque 1 si applicable",
+    "Alerte de risque 2 si applicable"
+  ],
+  "opportunities": [
+    "Opportunité d'amélioration 1",
+    "Opportunité d'amélioration 2"
+  ]
+}}
+
+Règles importantes:
+- Analyse les KPIs en profondeur et identifie les points forts et faibles
+- Fournis des recommandations actionnables et concrètes
+- Identifie les tendances et patterns
+- Priorise les insights par importance
+- Sois factuel et basé sur les données
+- Retourne UNIQUEMENT le JSON, sans texte avant ou après
+- Si un KPI est null, indique-le dans l'insight mais ne le saute pas
+"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Tu es un expert en analyse de performance de recrutement. Tu retournes uniquement du JSON valide."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=3000
+        )
+        
+        response_text = response.choices[0].message.content.strip()
+        
+        # Nettoyer la réponse
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+        
+        # Parser le JSON
+        parsed_data = json.loads(response_text)
+        
+        # Valider et créer l'objet KPIAnalysis
+        return KPIAnalysis(
+            overall_summary=parsed_data.get("overall_summary", ""),
+            key_insights=[
+                KPIInsight(**insight) for insight in parsed_data.get("key_insights", [])
+            ],
+            top_recommendations=parsed_data.get("top_recommendations", []),
+            predicted_trends=parsed_data.get("predicted_trends", ""),
+            risk_alerts=parsed_data.get("risk_alerts", []),
+            opportunities=parsed_data.get("opportunities", [])
+        )
+        
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors du parsing JSON de la réponse IA: {str(e)}. Réponse: {response_text[:200]}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'analyse IA des KPIs: {str(e)}"
+        )
+
+
+@router.get("/manager/ai-analysis", response_model=KPIAnalysis)
+def get_manager_kpis_ai_analysis(
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    recruiter_id: Optional[UUID] = Query(None),
+    job_id: Optional[UUID] = Query(None),
+    source: Optional[str] = Query(None),
+    current_user: User = Depends(require_manager),
+    session: Session = Depends(get_session)
+):
+    """
+    Récupère l'analyse IA des KPIs Manager
+    
+    Accès réservé aux Managers et Administrateurs
+    """
+    # Récupérer les KPIs
+    filters = KPIFilters(
+        start_date=start_date,
+        end_date=end_date,
+        recruiter_id=recruiter_id,
+        job_id=job_id,
+        source=source
+    )
+    
+    # Appeler la fonction existante pour obtenir les KPIs
+    kpis_dict = get_manager_kpis(
+        start_date=start_date,
+        end_date=end_date,
+        recruiter_id=recruiter_id,
+        job_id=job_id,
+        source=source,
+        current_user=current_user,
+        session=session
+    )
+    
+    # Analyser avec l'IA (kpis_dict est déjà un dictionnaire)
+    return analyze_kpis_with_ai(kpis_dict, role="manager")
+
+
+@router.get("/recruiter/ai-analysis", response_model=KPIAnalysis)
+def get_recruiter_kpis_ai_analysis(
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    job_id: Optional[UUID] = Query(None),
+    source: Optional[str] = Query(None),
+    current_user: User = Depends(require_recruteur),
+    session: Session = Depends(get_session)
+):
+    """
+    Récupère l'analyse IA des KPIs Recruteur
+    
+    Accès réservé aux Recruteurs, Managers et Administrateurs
+    """
+    # Récupérer les KPIs
+    filters = KPIFilters(
+        start_date=start_date,
+        end_date=end_date,
+        recruiter_id=current_user.id,
+        job_id=job_id,
+        source=source
+    )
+    
+    # Appeler la fonction existante pour obtenir les KPIs
+    kpis_dict = get_recruiter_kpis(
+        start_date=start_date,
+        end_date=end_date,
+        job_id=job_id,
+        source=source,
+        current_user=current_user,
+        session=session
+    )
+    
+    # Analyser avec l'IA (kpis_dict est déjà un dictionnaire)
+    return analyze_kpis_with_ai(kpis_dict, role="recruteur")
+
+
+# ==================== ENDPOINTS KPI CLIENT ====================
+
+@router.get("/client", response_model=ClientKPIs)
+def get_client_kpis(
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    job_id: Optional[UUID] = Query(None),
+    current_user: User = Depends(require_client),
+    session: Session = Depends(get_session)
+):
+    """
+    Récupère tous les KPI Client
+    
+    Accès réservé aux Clients et Administrateurs
+    Les KPIs sont calculés uniquement pour les besoins créés par le client
+    """
+    filters = KPIFilters(
+        start_date=start_date,
+        end_date=end_date,
+        job_id=job_id,
+        recruiter_id=None,
+        source=None
+    )
+    
+    # Nombre total de besoins créés par le client
+    jobs_query = select(func.count(Job.id)).where(Job.created_by == current_user.id)
+    if filters.start_date:
+        jobs_query = jobs_query.where(Job.created_at >= filters.start_date)
+    if filters.end_date:
+        jobs_query = jobs_query.where(Job.created_at <= filters.end_date)
+    if filters.job_id:
+        jobs_query = jobs_query.where(Job.id == filters.job_id)
+    total_jobs_created = session.exec(jobs_query).one()
+    
+    # Statistiques par statut de besoin
+    statuses = ['brouillon', 'a_valider', 'urgent', 'tres_urgent', 'besoin_courant', 'validé', 'en_cours', 'gagne', 'standby', 'archive', 'clôturé']
+    client_jobs_by_status = []
+    for status in statuses:
+        status_query = select(func.count(Job.id)).where(
+            Job.status == status,
+            Job.created_by == current_user.id
+        )
+        if filters.start_date:
+            status_query = status_query.where(Job.created_at >= filters.start_date)
+        if filters.end_date:
+            status_query = status_query.where(Job.created_at <= filters.end_date)
+        if filters.job_id:
+            status_query = status_query.where(Job.id == filters.job_id)
+        
+        count = session.exec(status_query).one()
+        percentage = (count / total_jobs_created * 100) if total_jobs_created > 0 else 0
+        
+        client_jobs_by_status.append(JobStatusStatistics(
+            status=status,
+            count=count,
+            percentage=round(percentage, 2)
+        ))
+    
+    # Candidats en shortlist pour les besoins du client
+    shortlist_query = select(func.count(Application.id)).join(
+        Job, Application.job_id == Job.id
+    ).where(
+        Job.created_by == current_user.id,
+        Application.is_in_shortlist == True
+    )
+    if filters.start_date:
+        shortlist_query = shortlist_query.where(Application.created_at >= filters.start_date)
+    if filters.end_date:
+        shortlist_query = shortlist_query.where(Application.created_at <= filters.end_date)
+    if filters.job_id:
+        shortlist_query = shortlist_query.where(Application.job_id == filters.job_id)
+    total_candidates_in_shortlist = session.exec(shortlist_query).one()
+    
+    # Candidats validés
+    validated_query = select(func.count(Application.id)).join(
+        Job, Application.job_id == Job.id
+    ).where(
+        Job.created_by == current_user.id,
+        Application.is_in_shortlist == True,
+        Application.client_validated == True
+    )
+    if filters.start_date:
+        validated_query = validated_query.where(Application.created_at >= filters.start_date)
+    if filters.end_date:
+        validated_query = validated_query.where(Application.created_at <= filters.end_date)
+    if filters.job_id:
+        validated_query = validated_query.where(Application.job_id == filters.job_id)
+    total_candidates_validated = session.exec(validated_query).one()
+    
+    # Candidats rejetés
+    rejected_query = select(func.count(Application.id)).join(
+        Job, Application.job_id == Job.id
+    ).where(
+        Job.created_by == current_user.id,
+        Application.is_in_shortlist == True,
+        Application.client_validated == False,
+        Application.client_validated_at.isnot(None)
+    )
+    if filters.start_date:
+        rejected_query = rejected_query.where(Application.created_at >= filters.start_date)
+    if filters.end_date:
+        rejected_query = rejected_query.where(Application.created_at <= filters.end_date)
+    if filters.job_id:
+        rejected_query = rejected_query.where(Application.job_id == filters.job_id)
+    total_candidates_rejected = session.exec(rejected_query).one()
+    
+    # Taux de validation
+    validation_rate = (total_candidates_validated / total_candidates_in_shortlist * 100) if total_candidates_in_shortlist > 0 else None
+    
+    # Entretiens planifiés pour les besoins du client
+    interviews_query = select(func.count(Interview.id)).join(
+        Application, Interview.application_id == Application.id
+    ).join(
+        Job, Application.job_id == Job.id
+    ).where(
+        Job.created_by == current_user.id
+    )
+    if filters.start_date:
+        interviews_query = interviews_query.where(Interview.created_at >= filters.start_date)
+    if filters.end_date:
+        interviews_query = interviews_query.where(Interview.created_at <= filters.end_date)
+    if filters.job_id:
+        interviews_query = interviews_query.join(Application).where(Application.job_id == filters.job_id)
+    total_interviews_scheduled = session.exec(interviews_query).one()
+    
+    # Temps moyen de recrutement (Time to Hire)
+    time_to_hire_query = select(
+        func.avg(
+            func.extract('epoch', Application.updated_at - Job.created_at) / 86400
+        )
+    ).select_from(Application).join(Job, Application.job_id == Job.id).where(
+        Job.created_by == current_user.id,
+        Application.status == "embauché",
+        Application.updated_at.isnot(None),
+        Job.created_at.isnot(None)
+    )
+    if filters.start_date:
+        time_to_hire_query = time_to_hire_query.where(Job.created_at >= filters.start_date)
+    if filters.end_date:
+        time_to_hire_query = time_to_hire_query.where(Job.created_at <= filters.end_date)
+    if filters.job_id:
+        time_to_hire_query = time_to_hire_query.where(Job.id == filters.job_id)
+    avg_time_to_hire = session.exec(time_to_hire_query).one()
+    average_time_to_hire = float(avg_time_to_hire) if avg_time_to_hire else None
+    
+    # Temps moyen de pourvoir un poste (Time to Fill)
+    time_to_fill_query = select(
+        func.avg(
+            func.extract('epoch', Application.updated_at - Job.validated_at) / 86400
+        )
+    ).select_from(Application).join(Job, Application.job_id == Job.id).where(
+        Job.created_by == current_user.id,
+        Application.status == "offre",
+        Application.updated_at.isnot(None),
+        Job.validated_at.isnot(None)
+    )
+    if filters.start_date:
+        time_to_fill_query = time_to_fill_query.where(Job.created_at >= filters.start_date)
+    if filters.end_date:
+        time_to_fill_query = time_to_fill_query.where(Job.created_at <= filters.end_date)
+    if filters.job_id:
+        time_to_fill_query = time_to_fill_query.where(Job.id == filters.job_id)
+    avg_time_to_fill = session.exec(time_to_fill_query).one()
+    average_time_to_fill = float(avg_time_to_fill) if avg_time_to_fill else None
+    
+    # % de postes respectant le délai
+    TARGET_DAYS = 60
+    closed_jobs_query = select(Job).where(
+        Job.created_by == current_user.id,
+        Job.status == "clôturé",
+        Job.closed_at.isnot(None),
+        Job.validated_at.isnot(None)
+    )
+    if filters.start_date:
+        closed_jobs_query = closed_jobs_query.where(Job.created_at >= filters.start_date)
+    if filters.end_date:
+        closed_jobs_query = closed_jobs_query.where(Job.created_at <= filters.end_date)
+    if filters.job_id:
+        closed_jobs_query = closed_jobs_query.where(Job.id == filters.job_id)
+    closed_jobs = session.exec(closed_jobs_query).all()
+    
+    on_time_count = 0
+    for job in closed_jobs:
+        if job.closed_at and job.validated_at:
+            duration = (job.closed_at - job.validated_at).total_seconds() / 86400
+            if duration <= TARGET_DAYS:
+                on_time_count += 1
+    
+    jobs_on_time_rate = (on_time_count / len(closed_jobs) * 100) if closed_jobs else None
+    
+    # Statistiques de sourcing pour les besoins du client
+    sourcing_stats = None
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    month_start = datetime(now.year, now.month, 1)
+    year_start = datetime(now.year, 1, 1)
+    
+    # Récupérer les IDs des jobs du client
+    client_jobs_ids_query = select(Job.id).where(Job.created_by == current_user.id)
+    if filters.job_id:
+        client_jobs_ids_query = client_jobs_ids_query.where(Job.id == filters.job_id)
+    client_job_ids = session.exec(client_jobs_ids_query).all()
+    
+    if client_job_ids:
+        # Candidats sourcés via les applications des jobs du client
+        today_count_query = select(func.count(Application.id)).join(
+            Candidate, Application.candidate_id == Candidate.id
+        ).where(
+            Application.job_id.in_(client_job_ids),
+            Candidate.status == "sourcé",
+            Candidate.created_at >= today_start
+        )
+        if filters.start_date:
+            today_count_query = today_count_query.where(Candidate.created_at >= filters.start_date)
+        if filters.end_date:
+            today_count_query = today_count_query.where(Candidate.created_at <= filters.end_date)
+        today_count = session.exec(today_count_query).one()
+        
+        this_month_count_query = select(func.count(Application.id)).join(
+            Candidate, Application.candidate_id == Candidate.id
+        ).where(
+            Application.job_id.in_(client_job_ids),
+            Candidate.status == "sourcé",
+            Candidate.created_at >= month_start
+        )
+        if filters.start_date:
+            this_month_count_query = this_month_count_query.where(Candidate.created_at >= filters.start_date)
+        if filters.end_date:
+            this_month_count_query = this_month_count_query.where(Candidate.created_at <= filters.end_date)
+        this_month_count = session.exec(this_month_count_query).one()
+        
+        this_year_count_query = select(func.count(Application.id)).join(
+            Candidate, Application.candidate_id == Candidate.id
+        ).where(
+            Application.job_id.in_(client_job_ids),
+            Candidate.status == "sourcé",
+            Candidate.created_at >= year_start
+        )
+        if filters.start_date:
+            this_year_count_query = this_year_count_query.where(Candidate.created_at >= filters.start_date)
+        if filters.end_date:
+            this_year_count_query = this_year_count_query.where(Candidate.created_at <= filters.end_date)
+        this_year_count = session.exec(this_year_count_query).one()
+        
+        # Total candidats sourcés
+        all_candidates_query = select(func.count(Application.id)).join(
+            Candidate, Application.candidate_id == Candidate.id
+        ).where(
+            Application.job_id.in_(client_job_ids),
+            Candidate.status == "sourcé"
+        )
+        if filters.start_date:
+            all_candidates_query = all_candidates_query.where(Candidate.created_at >= filters.start_date)
+        if filters.end_date:
+            all_candidates_query = all_candidates_query.where(Candidate.created_at <= filters.end_date)
+        total_candidates = session.exec(all_candidates_query).one()
+        
+        # Calculer les moyennes
+        if filters.start_date:
+            start_date = filters.start_date
+        else:
+            first_candidate_query = select(func.min(Candidate.created_at)).join(
+                Application, Candidate.id == Application.candidate_id
+            ).where(
+                Application.job_id.in_(client_job_ids),
+                Candidate.status == "sourcé"
+            )
+            first_candidate_date = session.exec(first_candidate_query).one()
+            start_date = first_candidate_date if first_candidate_date else now - timedelta(days=30)
+        
+        end_date = filters.end_date if filters.end_date else now
+        days_diff = (end_date - start_date).days
+        if days_diff <= 0:
+            days_diff = 1
+        
+        per_day = total_candidates / days_diff if days_diff > 0 else 0
+        per_month = per_day * 30
+        per_year = per_day * 365
+        
+        sourcing_stats = SourcingStatistics(
+            per_day=round(per_day, 2),
+            per_month=round(per_month, 2),
+            per_year=round(per_year, 2),
+            today_count=today_count,
+            this_month_count=this_month_count,
+            this_year_count=this_year_count
+        )
+    
+    return ClientKPIs(
+        total_jobs_created=total_jobs_created,
+        jobs_by_status=client_jobs_by_status,
+        total_candidates_in_shortlist=total_candidates_in_shortlist,
+        total_candidates_validated=total_candidates_validated,
+        total_candidates_rejected=total_candidates_rejected,
+        validation_rate=validation_rate,
+        total_interviews_scheduled=total_interviews_scheduled,
+        average_time_to_hire=average_time_to_hire,
+        average_time_to_fill=average_time_to_fill,
+        jobs_on_time_rate=jobs_on_time_rate,
+        sourcing_statistics=sourcing_stats
+    )
+
