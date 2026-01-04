@@ -480,7 +480,21 @@ export async function getInterviews(params?: {
   })
 
   if (!response.ok) {
-    throw new Error('Erreur lors de la récupération des entretiens')
+    // Essayer d'extraire le message d'erreur du backend
+    let errorMessage = 'Erreur lors de la récupération des entretiens'
+    try {
+      const errorData = await response.json()
+      errorMessage = errorData.detail || errorData.message || errorMessage
+    } catch {
+      // Si la réponse n'est pas du JSON, utiliser le texte brut
+      try {
+        const errorText = await response.text()
+        errorMessage = errorText || errorMessage
+      } catch {
+        // Si tout échoue, utiliser le message par défaut
+      }
+    }
+    throw new Error(errorMessage)
   }
 
   return response.json()
@@ -873,6 +887,89 @@ export interface CandidateParseResponse {
   }
 }
 
+export interface JobCandidateComparisonResponse {
+  overall_score: number
+  overall_assessment: string
+  technical_skills_analysis: string
+  experience_analysis: string
+  soft_skills_analysis?: string | null
+  education_analysis?: string | null
+  language_analysis?: string | null
+  strengths: string[]
+  weaknesses: string[]
+  recommendations: string[]
+  matching_skills: string[]
+  missing_skills: string[]
+  complementary_skills: string[]
+  technical_score: number
+  experience_score: number
+  soft_skills_score?: number | null
+  education_score?: number | null
+  language_score?: number | null
+}
+
+export async function compareCandidateWithJob(
+  candidateId: string,
+  jobId: string
+): Promise<JobCandidateComparisonResponse> {
+  const response = await authenticatedFetch(
+    `${API_URL}/candidates/${candidateId}/compare-with-job/${jobId}`,
+    {
+      method: 'POST',
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'analyse IA du comparatif' }))
+    throw new Error(error.detail || 'Erreur lors de l\'analyse IA du comparatif')
+  }
+
+  return response.json()
+}
+
+export async function getSavedComparison(
+  candidateId: string,
+  jobId: string
+): Promise<JobCandidateComparisonResponse | null> {
+  try {
+    const response = await authenticatedFetch(
+      `${API_URL}/candidates/${candidateId}/compare-with-job/${jobId}`,
+      {
+        method: 'GET',
+      }
+    )
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        // Aucune analyse sauvegardée, ce n'est pas une erreur
+        return null
+      }
+      // Pour les autres erreurs, essayer de lire le message d'erreur
+      const errorData = await response
+        .json()
+        .catch(() => ({ detail: 'Erreur lors de la récupération de l\'analyse sauvegardée' }))
+      // Si c'est une erreur 404 dans le message, retourner null
+      if (response.status === 404 || errorData.detail?.includes('404') || errorData.detail?.includes('non trouvée')) {
+        return null
+      }
+      throw new Error(
+        errorData.detail || 'Erreur lors de la récupération de l\'analyse sauvegardée'
+      )
+    }
+
+    return response.json()
+  } catch (err) {
+    // Si c'est une erreur 404 ou "non trouvée", retourner null (pas d'analyse sauvegardée)
+    if (err instanceof Error) {
+      if (err.message.includes('404') || err.message.includes('non trouvée') || err.message.includes('Aucune analyse')) {
+        return null
+      }
+    }
+    // Pour les autres erreurs, les propager
+    throw err
+  }
+}
+
 export async function parseCv(cvFile: File): Promise<CandidateParseResponse> {
   const formData = new FormData()
   formData.append('cv_file', cvFile)
@@ -934,6 +1031,22 @@ export async function updateJob(jobId: string, data: JobUpdate): Promise<JobResp
 export interface JobValidation {
   validated: boolean
   feedback?: string
+  recruiter_ids?: string[]
+}
+
+export async function getAvailableRecruiters(): Promise<Array<{ id: string; first_name: string; last_name: string; email: string; department?: string }>> {
+  const response = await authenticatedFetch(`${API_URL}/jobs/recruiters/available`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('Accès refusé. Réservé aux Managers.')
+    }
+    throw new Error('Erreur lors de la récupération des recruteurs disponibles')
+  }
+
+  return response.json()
 }
 
 export async function validateJob(jobId: string, validation: JobValidation): Promise<JobResponse> {
@@ -1299,8 +1412,25 @@ export async function getUsers(): Promise<UserResponse[]> {
   return normalizedUsers
 }
 
-export async function getUsersByManager(): Promise<UserCreateResponse[]> {
-  const response = await authenticatedFetch(`${API_URL}/users/by-manager`, {
+export interface UserCreateByManager {
+  email: string
+  first_name: string
+  last_name: string
+  role: string
+  phone?: string | null
+  department?: string | null
+  generate_password?: boolean
+  password?: string | null
+}
+
+export async function getUsersByManager(role?: string): Promise<UserCreateResponse[]> {
+  const queryParams = new URLSearchParams()
+  if (role) queryParams.append('role', role)
+
+  const queryString = queryParams.toString()
+  const url = queryString ? `${API_URL}/teams/users?${queryString}` : `${API_URL}/teams/users`
+
+  const response = await authenticatedFetch(url, {
     method: 'GET',
   })
 
@@ -1312,6 +1442,69 @@ export async function getUsersByManager(): Promise<UserCreateResponse[]> {
   }
 
   return response.json()
+}
+
+export async function getUserByManager(userId: string): Promise<UserCreateResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/users/${userId}`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('Accès refusé. Réservé aux Managers.')
+    }
+    if (response.status === 404) {
+      throw new Error('Utilisateur non trouvé')
+    }
+    throw new Error('Erreur lors de la récupération de l\'utilisateur')
+  }
+
+  return response.json()
+}
+
+export async function createUserByManager(userData: UserCreateByManager): Promise<UserCreateResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/users`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(userData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la création de l\'utilisateur' }))
+    throw new Error(error.detail || 'Erreur lors de la création de l\'utilisateur')
+  }
+
+  return response.json()
+}
+
+export async function updateUserByManager(userId: string, userData: UserCreateByManager): Promise<UserCreateResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/users/${userId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(userData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour de l\'utilisateur' }))
+    throw new Error(error.detail || 'Erreur lors de la mise à jour de l\'utilisateur')
+  }
+
+  return response.json()
+}
+
+export async function deleteUserByManager(userId: string): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/teams/users/${userId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression de l\'utilisateur' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression de l\'utilisateur')
+  }
 }
 
 // ===== FONCTIONS NOTIFICATIONS =====
@@ -1535,6 +1728,139 @@ export async function getSecurityLogs(params?: {
       throw new Error('Accès refusé. Réservé aux administrateurs.')
     }
     throw new Error('Erreur lors de la récupération des logs de sécurité')
+  }
+
+  return response.json()
+}
+
+// ===== FONCTIONS TEAMS =====
+
+export interface TeamResponse {
+  id: string
+  name: string
+  description: string | null
+  department: string | null
+  manager_id: string | null
+  manager_name: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  members: TeamMemberResponse[]
+  members_count: number
+}
+
+export interface TeamMemberResponse {
+  id: string
+  team_id: string
+  user_id: string
+  user_name: string | null
+  user_email: string | null
+  role: string
+  joined_at: string
+}
+
+export interface TeamCreate {
+  name: string
+  description?: string | null
+  department?: string | null
+}
+
+export interface TeamUpdate {
+  name?: string
+  description?: string | null
+  department?: string | null
+  is_active?: boolean
+}
+
+export async function getTeams(skip?: number, limit?: number): Promise<TeamResponse[]> {
+  const queryParams = new URLSearchParams()
+  if (skip !== undefined) queryParams.append('skip', skip.toString())
+  if (limit !== undefined) queryParams.append('limit', limit.toString())
+
+  const queryString = queryParams.toString()
+  const url = queryString ? `${API_URL}/teams?${queryString}` : `${API_URL}/teams`
+
+  const response = await authenticatedFetch(url, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    throw new Error('Erreur lors de la récupération des équipes')
+  }
+
+  return response.json()
+}
+
+export async function createTeam(teamData: TeamCreate): Promise<TeamResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(teamData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la création de l\'équipe' }))
+    throw new Error(error.detail || 'Erreur lors de la création de l\'équipe')
+  }
+
+  return response.json()
+}
+
+export async function updateTeam(teamId: string, teamData: TeamUpdate): Promise<TeamResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(teamData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour de l\'équipe' }))
+    throw new Error(error.detail || 'Erreur lors de la mise à jour de l\'équipe')
+  }
+
+  return response.json()
+}
+
+export async function deleteTeam(teamId: string): Promise<void> {
+  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression de l\'équipe' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression de l\'équipe')
+  }
+}
+
+export async function addTeamMember(teamId: string, userId: string, role: string = 'membre'): Promise<TeamResponse> {
+  const queryParams = new URLSearchParams()
+  queryParams.append('user_id', userId)
+  queryParams.append('role', role)
+
+  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}/members?${queryParams.toString()}`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'ajout du membre' }))
+    throw new Error(error.detail || 'Erreur lors de l\'ajout du membre')
+  }
+
+  return response.json()
+}
+
+export async function removeTeamMember(teamId: string, userId: string): Promise<TeamResponse> {
+  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}/members/${userId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la suppression du membre' }))
+    throw new Error(error.detail || 'Erreur lors de la suppression du membre')
   }
 
   return response.json()

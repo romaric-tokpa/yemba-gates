@@ -6,13 +6,13 @@ import Link from 'next/link'
 import { 
   ArrowLeft, Upload, FileText, Tag, Mail, Phone, Calendar, User, Briefcase, 
   Edit, X, Plus, Save, Eye, Clock, MapPin, MessageSquare, Star, CheckCircle2, 
-  XCircle, AlertCircle, Users, Building2, Award, FileCheck, BarChart3, TrendingUp, TrendingDown
+  XCircle, AlertCircle, Users, Building2, Award, FileCheck, BarChart3, TrendingUp, TrendingDown, Sparkles, Loader2
 } from 'lucide-react'
 import { 
   getCandidate, CandidateResponse, updateCandidateStatus, updateCandidate, CandidateUpdate,
   getJobs, JobResponse, createApplication, getCandidateApplications, ApplicationResponse,
   getInterviews, InterviewResponse, createInterview, InterviewCreate, addInterviewFeedback,
-  InterviewFeedback, updateInterview, deleteInterview
+  InterviewFeedback, updateInterview, deleteInterview, compareCandidateWithJob, getSavedComparison, JobCandidateComparisonResponse
 } from '@/lib/api'
 import { authenticatedFetch, getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
@@ -49,10 +49,13 @@ export default function ManagerCandidateDetailPage() {
   const [activeTab, setActiveTab] = useState<'profil' | 'postes' | 'entretiens'>('profil')
   const [selectedJobForComparison, setSelectedJobForComparison] = useState<JobResponse | null>(null)
   const [showComparisonModal, setShowComparisonModal] = useState(false)
-  const [isEditingComparison, setIsEditingComparison] = useState(false)
-  const [comparisonSkills, setComparisonSkills] = useState<string[]>([])
-  const [comparisonExperience, setComparisonExperience] = useState<number | null>(null)
-  const [isSavingComparison, setIsSavingComparison] = useState(false)
+  
+  // États pour l'analyse IA
+  const [aiAnalysis, setAiAnalysis] = useState<JobCandidateComparisonResponse | null>(null)
+  const [isLoadingAiAnalysis, setIsLoadingAiAnalysis] = useState(false)
+  // États pour les analyses IA par job (pour l'affichage dans la liste des postes)
+  const [jobAnalyses, setJobAnalyses] = useState<Record<string, JobCandidateComparisonResponse>>({})
+  const [loadingJobAnalyses, setLoadingJobAnalyses] = useState<Record<string, boolean>>({})
   
   // États pour l'édition des entretiens dans la fiche
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null)
@@ -217,6 +220,45 @@ export default function ManagerCandidateDetailPage() {
     }
   }
 
+  // Charger les analyses IA pour tous les postes du candidat
+  const loadJobAnalyses = async () => {
+    if (!candidate || !candidate.cv_file_path || applications.length === 0) return
+    
+    const newAnalyses: Record<string, JobCandidateComparisonResponse> = {}
+    const newLoading: Record<string, boolean> = {}
+    
+    // Charger les analyses pour chaque application
+    for (const app of applications) {
+      const jobId = app.job_id
+      if (!jobId) continue
+      
+      newLoading[jobId] = true
+      setLoadingJobAnalyses(prev => ({ ...prev, [jobId]: true }))
+      
+      try {
+        const savedAnalysis = await getSavedComparison(candidate.id!, jobId)
+        if (savedAnalysis) {
+          newAnalyses[jobId] = savedAnalysis
+        }
+      } catch (err) {
+        // Pas d'analyse sauvegardée, ce n'est pas une erreur
+        console.log(`Aucune analyse IA sauvegardée pour le job ${jobId}`)
+      } finally {
+        newLoading[jobId] = false
+        setLoadingJobAnalyses(prev => ({ ...prev, [jobId]: false }))
+      }
+    }
+    
+    setJobAnalyses(newAnalyses)
+  }
+
+  // Charger les analyses IA quand les applications sont chargées
+  useEffect(() => {
+    if (applications.length > 0 && candidate && candidate.cv_file_path) {
+      loadJobAnalyses()
+    }
+  }, [applications.length, candidate?.id, candidate?.cv_file_path])
+
   const handleSave = async () => {
     if (!candidate) return
 
@@ -288,34 +330,55 @@ export default function ManagerCandidateDetailPage() {
     })
   }
 
-  const handleSaveComparison = async () => {
-    if (!candidate) return
-
+  const handleAiAnalysis = async (forceNew: boolean = false) => {
+    if (!candidate || !selectedJobForComparison) return
+    
     try {
-      setIsSavingComparison(true)
-      const updateData: CandidateUpdate = {
-        skills: comparisonSkills,
-        years_of_experience: comparisonExperience ?? undefined,
+      setIsLoadingAiAnalysis(true)
+      
+      // Essayer d'abord de charger l'analyse sauvegardée si on ne force pas une nouvelle analyse
+      if (!forceNew) {
+        try {
+          const savedAnalysis = await getSavedComparison(candidate.id!, selectedJobForComparison.id)
+          if (savedAnalysis) {
+            setAiAnalysis(savedAnalysis)
+            setIsLoadingAiAnalysis(false)
+            success('Analyse IA chargée depuis la sauvegarde')
+            return
+          }
+        } catch (err) {
+          // Si l'analyse sauvegardée n'existe pas, continuer pour créer une nouvelle
+          console.log('Aucune analyse sauvegardée trouvée, création d\'une nouvelle analyse...')
+        }
       }
-      const updatedCandidate = await updateCandidate(candidateId, updateData)
-      setCandidate(updatedCandidate)
-      setIsEditingComparison(false)
-      setComparisonSkills([])
-      setComparisonExperience(null)
-      success('Compétences et expérience mises à jour avec succès !')
+      
+      // Créer une nouvelle analyse (qui sera automatiquement sauvegardée par le backend)
+      const analysis = await compareCandidateWithJob(candidate.id!, selectedJobForComparison.id)
+      setAiAnalysis(analysis)
+      success(forceNew ? 'Analyse IA régénérée et sauvegardée avec succès !' : 'Analyse IA effectuée et sauvegardée avec succès !')
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la sauvegarde'
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'analyse IA'
       showError(errorMessage)
     } finally {
-      setIsSavingComparison(false)
+      setIsLoadingAiAnalysis(false)
     }
   }
 
-  const handleCancelComparison = () => {
-    setIsEditingComparison(false)
-    setComparisonSkills([])
-    setComparisonExperience(null)
-  }
+  // Charger l'analyse sauvegardée ou créer une nouvelle quand le modal s'ouvre
+  useEffect(() => {
+    if (showComparisonModal && selectedJobForComparison && candidate && candidate.cv_file_path && !aiAnalysis && !isLoadingAiAnalysis) {
+      // Réinitialiser l'analyse quand on change de job
+      setAiAnalysis(null)
+      handleAiAnalysis(false) // false = essayer de charger l'analyse sauvegardée d'abord
+    }
+  }, [showComparisonModal, selectedJobForComparison?.id, candidate?.id])
+  
+  // Réinitialiser l'analyse quand on ferme le modal
+  useEffect(() => {
+    if (!showComparisonModal) {
+      setAiAnalysis(null)
+    }
+  }, [showComparisonModal])
 
   const handleStatusChange = async (newStatus: string) => {
     if (!candidate) return
@@ -1402,43 +1465,39 @@ export default function ManagerCandidateDetailPage() {
                         if (!job) return null
                         
                         const appInterviews = interviews.filter(i => i.application_id === app.id)
-                        const candidateSkills = Array.isArray(candidate.skills) 
-                          ? candidate.skills 
-                          : (typeof candidate.skills === 'string' ? candidate.skills.split(',').map(s => s.trim().toLowerCase()) : [])
+                        const jobAnalysis = jobAnalyses[app.job_id]
+                        const isLoadingAnalysis = loadingJobAnalyses[app.job_id]
                         
-                        const jobRequiredSkills = Array.isArray(job.competences_techniques_obligatoires)
-                          ? job.competences_techniques_obligatoires.map(s => s.toLowerCase())
-                          : []
-                        const jobPreferredSkills = Array.isArray(job.competences_techniques_souhaitees)
-                          ? job.competences_techniques_souhaitees.map(s => s.toLowerCase())
-                          : []
-                        
-                        const matchingRequiredSkills = jobRequiredSkills.filter(skill => 
-                          candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                        )
-                        const matchingPreferredSkills = jobPreferredSkills.filter(skill => 
-                          candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                        )
-                        
-                        const experienceMatch = job.experience_requise 
-                          ? (candidate.years_of_experience || 0) >= job.experience_requise
-                          : null
-                        
-                        const matchScore = jobRequiredSkills.length > 0 
-                          ? Math.round((matchingRequiredSkills.length / jobRequiredSkills.length) * 100)
-                          : 0
+                        // Utiliser l'analyse IA si disponible
+                        const overallScore = jobAnalysis?.overall_score
+                        const hasAiAnalysis = !!jobAnalysis
 
                         return (
                           <div
                             key={app.id}
-                            className="bg-gradient-to-br from-white to-gray-50 rounded-xl border-2 border-gray-200 hover:border-indigo-300 shadow-lg hover:shadow-xl transition-all overflow-hidden"
+                            className={`bg-gradient-to-br rounded-xl border-2 shadow-lg hover:shadow-xl transition-all overflow-hidden ${
+                              hasAiAnalysis 
+                                ? overallScore && overallScore >= 80 
+                                  ? 'from-green-50 to-white border-green-200 hover:border-green-300'
+                                  : overallScore && overallScore >= 50
+                                  ? 'from-yellow-50 to-white border-yellow-200 hover:border-yellow-300'
+                                  : overallScore
+                                  ? 'from-red-50 to-white border-red-200 hover:border-red-300'
+                                  : 'from-white to-gray-50 border-gray-200 hover:border-indigo-300'
+                                : 'from-white to-gray-50 border-gray-200 hover:border-indigo-300'
+                            }`}
                           >
                             <div className="p-6">
                               <div className="flex items-start justify-between mb-4">
                                 <div className="flex-1">
-                                  <h3 className="text-lg font-bold text-gray-900 mb-1">
-                                    {job.title}
-                                  </h3>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="text-lg font-bold text-gray-900">
+                                      {job.title}
+                                    </h3>
+                                    {hasAiAnalysis && (
+                                      <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0" title="Analyse IA disponible" />
+                                    )}
+                                  </div>
                                   {job.department && (
                                     <p className="text-sm text-gray-600">{job.department}</p>
                                   )}
@@ -1454,58 +1513,156 @@ export default function ManagerCandidateDetailPage() {
                                 </span>
                               </div>
 
-                              {/* Score de correspondance */}
-                              <div className="mb-4">
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-sm font-medium text-gray-700">Correspondance</span>
-                                  <span className={`text-lg font-bold ${
-                                    matchScore >= 80 ? 'text-green-600' :
-                                    matchScore >= 50 ? 'text-yellow-600' :
-                                    'text-red-600'
-                                  }`}>
-                                    {matchScore}%
-                                  </span>
+                              {/* Score de correspondance IA */}
+                              {isLoadingAnalysis ? (
+                                <div className="mb-4 flex items-center justify-center py-4">
+                                  <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                                  <span className="ml-2 text-sm text-gray-600">Chargement de l'analyse IA...</span>
                                 </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                  <div
-                                    className={`h-2.5 rounded-full transition-all ${
-                                      matchScore >= 80 ? 'bg-green-600' :
-                                      matchScore >= 50 ? 'bg-yellow-600' :
-                                      'bg-red-600'
-                                    }`}
-                                    style={{ width: `${matchScore}%` }}
-                                  />
+                              ) : hasAiAnalysis && jobAnalysis && overallScore !== undefined ? (
+                                <div className="mb-4 space-y-3">
+                                  {/* Score global IA */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-purple-600" />
+                                        <span className="text-sm font-medium text-gray-700">Score IA global</span>
+                                      </div>
+                                      <span className={`text-2xl font-bold ${
+                                        overallScore >= 80 ? 'text-green-600' :
+                                        overallScore >= 50 ? 'text-yellow-600' :
+                                        'text-red-600'
+                                      }`}>
+                                        {overallScore}%
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-3">
+                                      <div
+                                        className={`h-3 rounded-full transition-all ${
+                                          overallScore >= 80 ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                                          overallScore >= 50 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
+                                          'bg-gradient-to-r from-red-500 to-red-600'
+                                        }`}
+                                        style={{ width: `${overallScore}%` }}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Scores par catégorie */}
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-white/60 rounded-lg p-2 border border-gray-200">
+                                      <div className="text-xs text-gray-500 mb-1">Compétences</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {jobAnalysis.technical_skills_match_score}%
+                                      </div>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-2 border border-gray-200">
+                                      <div className="text-xs text-gray-500 mb-1">Expérience</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {jobAnalysis.experience_match_score}%
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Points forts (premiers 2) */}
+                                  {jobAnalysis.strengths && jobAnalysis.strengths.length > 0 && (
+                                    <div className="bg-green-50 rounded-lg p-2 border border-green-200">
+                                      <div className="text-xs font-semibold text-green-900 mb-1 flex items-center gap-1">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Points forts
+                                      </div>
+                                      <ul className="text-xs text-green-800 space-y-0.5">
+                                        {jobAnalysis.strengths.slice(0, 2).map((strength, idx) => (
+                                          <li key={idx} className="flex items-start gap-1">
+                                            <span className="text-green-600 mt-0.5">•</span>
+                                            <span className="line-clamp-1">{strength}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
+                              ) : (
+                                <div className="mb-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-700">Analyse IA non disponible</span>
+                                    {candidate?.cv_file_path && (
+                                      <button
+                                        onClick={async () => {
+                                          if (!candidate || !candidate.cv_file_path) {
+                                            showError('Le candidat doit avoir un CV pour l\'analyse IA')
+                                            return
+                                          }
+                                          try {
+                                            setLoadingJobAnalyses(prev => ({ ...prev, [app.job_id]: true }))
+                                            const analysis = await compareCandidateWithJob(candidate.id!, app.job_id)
+                                            setJobAnalyses(prev => ({ ...prev, [app.job_id]: analysis }))
+                                            success('Analyse IA générée avec succès !')
+                                          } catch (err) {
+                                            showError(err instanceof Error ? err.message : 'Erreur lors de la génération de l\'analyse IA')
+                                          } finally {
+                                            setLoadingJobAnalyses(prev => ({ ...prev, [app.job_id]: false }))
+                                          }
+                                        }}
+                                        disabled={!candidate?.cv_file_path || isLoadingAnalysis}
+                                        className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                      >
+                                        <Sparkles className="w-3 h-3" />
+                                        Générer
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div className="h-2.5 rounded-full bg-gray-400" style={{ width: '0%' }} />
+                                  </div>
+                                </div>
+                              )}
 
                               {/* Statistiques rapides */}
                               <div className="grid grid-cols-3 gap-3 mb-4">
-                                <div className="text-center p-2 bg-white rounded-lg border border-gray-200">
-                                  <div className="text-xs text-gray-500">Compétences</div>
-                                  <div className="text-sm font-bold text-gray-900">
-                                    {matchingRequiredSkills.length}/{jobRequiredSkills.length}
-                                  </div>
-                                </div>
-                                <div className="text-center p-2 bg-white rounded-lg border border-gray-200">
-                                  <div className="text-xs text-gray-500">Entretiens</div>
-                                  <div className="text-sm font-bold text-gray-900">
-                                    {appInterviews.length}
-                                  </div>
-                                </div>
-                                <div className="text-center p-2 bg-white rounded-lg border border-gray-200">
-                                  <div className="text-xs text-gray-500">Expérience</div>
-                                  <div className="text-sm font-bold text-gray-900">
-                                    {experienceMatch !== null ? (
-                                      experienceMatch ? (
-                                        <CheckCircle2 className="w-4 h-4 text-green-600 mx-auto" />
-                                      ) : (
-                                        <XCircle className="w-4 h-4 text-red-600 mx-auto" />
-                                      )
-                                    ) : (
-                                      <span className="text-gray-400">-</span>
-                                    )}
-                                  </div>
-                                </div>
+                                {hasAiAnalysis && jobAnalysis ? (
+                                  <>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Compétences</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {jobAnalysis.technical_skills_match_score}%
+                                      </div>
+                                    </div>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Entretiens</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {appInterviews.length}
+                                      </div>
+                                    </div>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Expérience</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {jobAnalysis.experience_match_score}%
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Entretiens</div>
+                                      <div className="text-sm font-bold text-gray-900">
+                                        {appInterviews.length}
+                                      </div>
+                                    </div>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Statut</div>
+                                      <div className="text-xs font-bold text-gray-900 capitalize">
+                                        {app.status}
+                                      </div>
+                                    </div>
+                                    <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500">Date</div>
+                                      <div className="text-xs font-bold text-gray-900">
+                                        {new Date(app.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
                               </div>
 
                               {/* Actions */}
@@ -1518,7 +1675,7 @@ export default function ManagerCandidateDetailPage() {
                                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
                                 >
                                   <BarChart3 className="w-4 h-4" />
-                                  Voir le comparatif
+                                  {hasAiAnalysis ? 'Voir l\'analyse IA' : 'Voir le comparatif'}
                                 </button>
                                 <Link
                                   href={`/manager/jobs/${job.id}`}
@@ -2817,36 +2974,33 @@ export default function ManagerCandidateDetailPage() {
                   <span className="truncate">Comparatif Besoin vs Candidat</span>
                 </h2>
                 <p className="text-indigo-100 text-xs sm:text-sm line-clamp-2">
-                  {isEditingComparison 
-                    ? 'Modifiez les compétences et l\'expérience pour améliorer la correspondance'
-                    : 'Analyse détaillée de la correspondance entre le poste et le profil'}
+                  Analyse détaillée de la correspondance entre le poste et le profil par IA
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {!isEditingComparison ? (
-                  <button
-                    onClick={() => {
-                      // Initialiser les états d'édition avec les valeurs actuelles
-                      const currentSkills = Array.isArray(candidate.skills) 
-                        ? candidate.skills 
-                        : (typeof candidate.skills === 'string' ? candidate.skills.split(',').map(s => s.trim()) : [])
-                      setComparisonSkills(currentSkills)
-                      setComparisonExperience(candidate.years_of_experience)
-                      setIsEditingComparison(true)
-                    }}
-                    className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors font-medium text-xs sm:text-sm"
-                  >
-                    <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">Modifier</span>
-                  </button>
-                ) : null}
+                <button
+                  onClick={handleAiAnalysis}
+                  disabled={isLoadingAiAnalysis || !candidate.cv_file_path}
+                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg transition-colors font-medium text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={!candidate.cv_file_path ? 'Le candidat doit avoir un CV pour l\'analyse IA' : 'Analyser avec l\'IA'}
+                >
+                  {isLoadingAiAnalysis ? (
+                    <>
+                      <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+                      <span className="hidden sm:inline">Analyse...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Analyse IA</span>
+                    </>
+                  )}
+                </button>
                 <button
                   onClick={() => {
                     setShowComparisonModal(false)
                     setSelectedJobForComparison(null)
-                    setIsEditingComparison(false)
-                    setComparisonSkills([])
-                    setComparisonExperience(null)
+                    setAiAnalysis(null)
                   }}
                   className="text-white hover:text-gray-200 transition-colors p-1.5 sm:p-2 hover:bg-white/10 rounded-lg flex-shrink-0"
                 >
@@ -2880,703 +3034,204 @@ export default function ManagerCandidateDetailPage() {
                 </div>
               </div>
 
-              {/* Score global de correspondance */}
-              {(() => {
-                // Utiliser les compétences en mode édition si on est en train d'éditer
-                const skillsToUse = isEditingComparison && comparisonSkills.length > 0
-                  ? comparisonSkills.map(s => s.toLowerCase())
-                  : (Array.isArray(candidate.skills) 
-                      ? candidate.skills.map(s => s.toLowerCase())
-                      : (typeof candidate.skills === 'string' ? candidate.skills.split(',').map(s => s.trim().toLowerCase()) : []))
-                
-                const candidateSkills = skillsToUse
-                const experienceToUse = isEditingComparison && comparisonExperience !== null
-                  ? comparisonExperience
-                  : (candidate.years_of_experience || 0)
-                
-                const jobRequiredSkills = Array.isArray(selectedJobForComparison.competences_techniques_obligatoires)
-                  ? selectedJobForComparison.competences_techniques_obligatoires.map(s => s.toLowerCase())
-                  : []
-                const jobPreferredSkills = Array.isArray(selectedJobForComparison.competences_techniques_souhaitees)
-                  ? selectedJobForComparison.competences_techniques_souhaitees.map(s => s.toLowerCase())
-                  : []
-                
-                const matchingRequiredSkills = jobRequiredSkills.filter(skill => 
-                  candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                )
-                const matchingPreferredSkills = jobPreferredSkills.filter(skill => 
-                  candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                )
-                
-                const experienceMatch = selectedJobForComparison.experience_requise 
-                  ? experienceToUse >= selectedJobForComparison.experience_requise
-                  : null
-                
-                // Calcul du score pour le niveau de formation
-                const educationMatch = selectedJobForComparison.niveau_formation 
-                  ? (candidate.profile_title?.toLowerCase().includes(selectedJobForComparison.niveau_formation.toLowerCase()) || false)
-                  : null
-                const educationScore = educationMatch !== null ? (educationMatch ? 100 : 0) : null
-                
-                // Calcul du score pour les langues
-                const requiredLanguages = selectedJobForComparison.langues_requises 
-                  ? selectedJobForComparison.langues_requises.toLowerCase().split(',').map(l => l.trim())
-                  : []
-                // Pour simplifier, on vérifie si les langues requises sont mentionnées dans les notes ou le profil
-                const candidateText = `${candidate.notes || ''} ${candidate.profile_title || ''}`.toLowerCase()
-                const matchingLanguages = requiredLanguages.filter(lang => 
-                  candidateText.includes(lang.split(' ')[0]) // Vérifie au moins le nom de la langue
-                )
-                const languageScore = requiredLanguages.length > 0
-                  ? Math.round((matchingLanguages.length / requiredLanguages.length) * 100)
-                  : null
-                
-                const requiredScore = jobRequiredSkills.length > 0 
-                  ? Math.round((matchingRequiredSkills.length / jobRequiredSkills.length) * 100)
-                  : 0
-                const preferredScore = jobPreferredSkills.length > 0
-                  ? Math.round((matchingPreferredSkills.length / jobPreferredSkills.length) * 100)
-                  : 0
-                
-                // Calcul du score global avec pondération
-                // Compétences obligatoires: 40%, Compétences souhaitées: 20%, Expérience: 15%, Formation: 15%, Langues: 10%
-                let overallScore = 0
-                let totalWeight = 0
-                
-                if (jobRequiredSkills.length > 0) {
-                  overallScore += requiredScore * 0.4
-                  totalWeight += 0.4
-                }
-                if (jobPreferredSkills.length > 0) {
-                  overallScore += preferredScore * 0.2
-                  totalWeight += 0.2
-                }
-                if (experienceMatch !== null) {
-                  overallScore += (experienceMatch ? 100 : 0) * 0.15
-                  totalWeight += 0.15
-                }
-                if (educationScore !== null) {
-                  overallScore += educationScore * 0.15
-                  totalWeight += 0.15
-                }
-                if (languageScore !== null) {
-                  overallScore += languageScore * 0.1
-                  totalWeight += 0.1
-                }
-                
-                // Normaliser le score si certains critères ne sont pas définis
-                overallScore = totalWeight > 0 ? Math.round(overallScore / totalWeight) : 0
-                
-                // Comparaison salariale
-                const jobBudget = selectedJobForComparison.budget || selectedJobForComparison.salaire_maximum || selectedJobForComparison.salaire_minimum
-                const jobMinSalary = selectedJobForComparison.salaire_minimum
-                const jobMaxSalary = selectedJobForComparison.salaire_maximum
-                const salaryMatch = jobBudget ? {
-                  budget: jobBudget,
-                  minSalary: jobMinSalary,
-                  maxSalary: jobMaxSalary,
-                  candidateSalary: null, // Le candidat n'a pas de champ salaire pour l'instant
-                  isWithinRange: null
-                } : null
-
-                return (
-                  <>
-                    {/* Score global */}
-                    <div className="bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-xl p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h3 className="text-lg font-bold text-gray-900 mb-1">Score global de correspondance</h3>
-                          <p className="text-sm text-gray-600">Évaluation complète de l'adéquation</p>
-                        </div>
-                        <div className={`text-5xl font-bold ${
-                          overallScore >= 80 ? 'text-green-600' :
-                          overallScore >= 50 ? 'text-yellow-600' :
-                          'text-red-600'
-                        }`}>
-                          {overallScore}%
-                        </div>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
-                        <div
-                          className={`h-4 rounded-full transition-all ${
-                            overallScore >= 80 ? 'bg-gradient-to-r from-green-500 to-green-600' :
-                            overallScore >= 50 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
-                            'bg-gradient-to-r from-red-500 to-red-600'
-                          }`}
-                          style={{ width: `${overallScore}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-gray-600">
-                        <span>0%</span>
-                        <span className="font-medium">Correspondance parfaite</span>
-                        <span>100%</span>
+              {/* Analyse IA uniquement */}
+              {isLoadingAiAnalysis ? (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-4 sm:p-6">
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+                    <span className="ml-3 text-purple-700 font-medium">Analyse IA en cours...</span>
+                  </div>
+                </div>
+              ) : aiAnalysis ? (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-4 sm:p-6">
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Sparkles className="w-6 h-6 text-purple-600" />
+                      <h3 className="text-xl font-bold text-gray-900">Analyse IA approfondie</h3>
+                      <div className={`ml-auto text-3xl font-bold ${
+                        aiAnalysis.overall_score >= 80 ? 'text-green-600' :
+                        aiAnalysis.overall_score >= 50 ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {aiAnalysis.overall_score}%
                       </div>
                     </div>
 
-                    {/* Détails par catégorie */}
+                    {/* Évaluation globale */}
+                    <div className="bg-white rounded-lg p-4 border border-purple-100">
+                      <h4 className="font-semibold text-gray-900 mb-2">Évaluation globale</h4>
+                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                        {aiAnalysis.overall_assessment}
+                      </p>
+                    </div>
+
+                    {/* Analyses détaillées */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-white rounded-lg p-4 border border-purple-100">
+                        <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                          <Award className="w-4 h-4 text-purple-600" />
+                          Compétences techniques
+                        </h4>
+                        <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.technical_score}%</p>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                          {aiAnalysis.technical_skills_analysis}
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-lg p-4 border border-purple-100">
+                        <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                          <Briefcase className="w-4 h-4 text-purple-600" />
+                          Expérience
+                        </h4>
+                        <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.experience_score}%</p>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                          {aiAnalysis.experience_analysis}
+                        </p>
+                      </div>
+
+                      {aiAnalysis.soft_skills_analysis && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-100">
+                          <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                            <Users className="w-4 h-4 text-purple-600" />
+                            Compétences comportementales
+                          </h4>
+                          <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.soft_skills_score || 'N/A'}%</p>
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                            {aiAnalysis.soft_skills_analysis}
+                          </p>
+                        </div>
+                      )}
+
+                      {aiAnalysis.education_analysis && (
+                        <div className="bg-white rounded-lg p-4 border border-purple-100">
+                          <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                            <FileCheck className="w-4 h-4 text-purple-600" />
+                            Formation
+                          </h4>
+                          <p className="text-xs text-gray-600 mb-2">Score: {aiAnalysis.education_score || 'N/A'}%</p>
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                            {aiAnalysis.education_analysis}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Points forts et faibles */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                        <h4 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5" />
+                          Points forts
+                        </h4>
+                        <ul className="space-y-2">
+                          {aiAnalysis.strengths.map((strength, idx) => (
+                            <li key={idx} className="text-sm text-green-800 flex items-start gap-2">
+                              <span className="text-green-600 mt-1">•</span>
+                              <span>{strength}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                        <h4 className="font-semibold text-red-900 mb-3 flex items-center gap-2">
+                          <XCircle className="w-5 h-5" />
+                          Points à améliorer
+                        </h4>
+                        <ul className="space-y-2">
+                          {aiAnalysis.weaknesses.map((weakness, idx) => (
+                            <li key={idx} className="text-sm text-red-800 flex items-start gap-2">
+                              <span className="text-red-600 mt-1">•</span>
+                              <span>{weakness}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Compétences */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-3 sm:p-4">
-                        <div className="flex items-center justify-between mb-2 gap-2">
-                          <span className="text-xs sm:text-sm font-medium text-gray-700 flex-1 min-w-0">Compétences obligatoires</span>
-                          <span className={`text-base sm:text-lg font-bold flex-shrink-0 ${
-                            requiredScore >= 80 ? 'text-green-600' :
-                            requiredScore >= 50 ? 'text-yellow-600' :
-                            'text-red-600'
-                          }`}>
-                            {requiredScore}%
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-600 mb-2">
-                          {matchingRequiredSkills.length}/{jobRequiredSkills.length} correspondances
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className={`h-2 rounded-full ${
-                              requiredScore >= 80 ? 'bg-green-500' :
-                              requiredScore >= 50 ? 'bg-yellow-500' :
-                              'bg-red-500'
-                            }`}
-                            style={{ width: `${requiredScore}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-3 sm:p-4">
-                        <div className="flex items-center justify-between mb-2 gap-2">
-                          <span className="text-xs sm:text-sm font-medium text-gray-700 flex-1 min-w-0">Compétences souhaitées</span>
-                          <span className={`text-base sm:text-lg font-bold flex-shrink-0 ${
-                            preferredScore >= 50 ? 'text-blue-600' : 'text-gray-600'
-                          }`}>
-                            {preferredScore}%
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-600 mb-2">
-                          {matchingPreferredSkills.length}/{jobPreferredSkills.length} correspondances
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className={`h-2 rounded-full ${
-                              preferredScore >= 50 ? 'bg-blue-500' : 'bg-gray-400'
-                            }`}
-                            style={{ width: `${preferredScore}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-3 sm:p-4 sm:col-span-2 md:col-span-1">
-                        <div className="flex items-center justify-between mb-2 gap-2">
-                          <span className="text-xs sm:text-sm font-medium text-gray-700 flex-1 min-w-0">Expérience</span>
-                          {experienceMatch !== null && (
-                            <div className={`flex items-center gap-1 flex-shrink-0 ${
-                              experienceMatch ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {experienceMatch ? (
-                                <>
-                                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                                  <span className="text-xs sm:text-sm font-bold">OK</span>
-                                </>
-                              ) : (
-                                <>
-                                  <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                                  <span className="text-xs sm:text-sm font-bold">Insuffisant</span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-600 mb-2">
-                          {selectedJobForComparison.experience_requise 
-                            ? `Requis: ${selectedJobForComparison.experience_requise} ans`
-                            : 'Non spécifié'}
-                        </div>
-                        {isEditingComparison ? (
-                          <div className="mt-2">
-                            <input
-                              type="number"
-                              min="0"
-                              value={comparisonExperience || ''}
-                              onChange={(e) => setComparisonExperience(e.target.value ? parseInt(e.target.value) : null)}
-                              className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border-2 border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm"
-                              placeholder="Années"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Modifiez l&apos;expérience
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="text-xs text-gray-600">
-                            Candidat: {experienceToUse} ans
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Compétences techniques obligatoires */}
-                    {jobRequiredSkills.length > 0 && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <Award className="w-5 h-5 text-indigo-600" />
-                            Compétences techniques obligatoires
-                          </h3>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                              matchingRequiredSkills.length === jobRequiredSkills.length
-                                ? 'bg-green-100 text-green-800'
-                                : matchingRequiredSkills.length > 0
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {matchingRequiredSkills.length}/{jobRequiredSkills.length}
-                            </span>
-                            {isEditingComparison && matchingRequiredSkills.length < jobRequiredSkills.length && (
-                              <button
-                                onClick={() => {
-                                  // Ajouter toutes les compétences manquantes
-                                  const missingSkills = jobRequiredSkills.filter(skill => 
-                                    !candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                                  )
-                                  const newSkills = [...new Set([...comparisonSkills, ...missingSkills])]
-                                  setComparisonSkills(newSkills)
-                                }}
-                                className="px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs font-medium"
-                              >
-                                <Plus className="w-3 h-3 inline mr-1" />
-                                Ajouter manquantes
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {jobRequiredSkills.map((skill, idx) => {
-                            const matches = candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                            return (
-                              <div
-                                key={idx}
-                                className={`flex items-center justify-between p-2 sm:p-3 rounded-lg border-2 gap-2 ${
-                                  matches
-                                    ? 'bg-green-50 border-green-300'
-                                    : 'bg-red-50 border-red-300'
-                                }`}
-                              >
-                                <span className={`text-sm sm:text-base font-medium flex-1 min-w-0 break-words ${
-                                  matches ? 'text-green-900' : 'text-red-900'
-                                }`}>
-                                  {skill}
-                                </span>
-                                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                                  {isEditingComparison && !matches && (
-                                    <button
-                                      onClick={() => {
-                                        const newSkills = [...new Set([...comparisonSkills, skill])]
-                                        setComparisonSkills(newSkills)
-                                      }}
-                                      className="px-1.5 sm:px-2 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-colors"
-                                      title="Ajouter cette compétence"
-                                    >
-                                      <Plus className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                  {matches ? (
-                                    <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-                                  ) : (
-                                    <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Compétences techniques souhaitées */}
-                    {jobPreferredSkills.length > 0 && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <Star className="w-5 h-5 text-blue-600" />
-                            Compétences techniques souhaitées
-                          </h3>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                              matchingPreferredSkills.length > 0
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              {matchingPreferredSkills.length}/{jobPreferredSkills.length}
-                            </span>
-                            {isEditingComparison && matchingPreferredSkills.length < jobPreferredSkills.length && (
-                              <button
-                                onClick={() => {
-                                  // Ajouter toutes les compétences souhaitées manquantes
-                                  const missingSkills = jobPreferredSkills.filter(skill => 
-                                    !candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                                  )
-                                  const newSkills = [...new Set([...comparisonSkills, ...missingSkills])]
-                                  setComparisonSkills(newSkills)
-                                }}
-                                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
-                              >
-                                <Plus className="w-3 h-3 inline mr-1" />
-                                Ajouter manquantes
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {jobPreferredSkills.map((skill, idx) => {
-                            const matches = candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))
-                            return (
-                              <div
-                                key={idx}
-                                className={`flex items-center justify-between p-3 rounded-lg border-2 ${
-                                  matches
-                                    ? 'bg-blue-50 border-blue-300'
-                                    : 'bg-gray-50 border-gray-300'
-                                }`}
-                              >
-                                <span className={`font-medium ${
-                                  matches ? 'text-blue-900' : 'text-gray-700'
-                                }`}>
-                                  {skill}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  {isEditingComparison && !matches && (
-                                    <button
-                                      onClick={() => {
-                                        const newSkills = [...new Set([...comparisonSkills, skill])]
-                                        setComparisonSkills(newSkills)
-                                      }}
-                                      className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
-                                      title="Ajouter cette compétence"
-                                    >
-                                      <Plus className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                  {matches ? (
-                                    <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                                  ) : (
-                                    <span className="text-gray-400 text-sm">—</span>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Expérience */}
-                    {selectedJobForComparison.experience_requise !== null && selectedJobForComparison.experience_requise !== undefined && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                          <Clock className="w-5 h-5 text-indigo-600" />
-                          Expérience requise
-                        </h3>
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-4 mb-3">
-                              <div className="flex-1">
-                                <p className="text-sm text-gray-600 mb-1">Requis</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                  {selectedJobForComparison.experience_requise} ans
-                                </p>
-                              </div>
-                              <div className="w-px h-12 bg-gray-300" />
-                              <div className="flex-1">
-                                <p className="text-sm text-gray-600 mb-1">Candidat</p>
-                                {isEditingComparison ? (
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={comparisonExperience || ''}
-                                    onChange={(e) => setComparisonExperience(e.target.value ? parseInt(e.target.value) : null)}
-                                    className="w-full px-3 py-2 border-2 border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-lg font-bold"
-                                  />
-                                ) : (
-                                  <p className={`text-2xl font-bold ${
-                                    experienceMatch ? 'text-green-600' : 'text-red-600'
-                                  }`}>
-                                    {experienceToUse} ans
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          {experienceMatch !== null && !isEditingComparison && (
-                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-                              experienceMatch ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                              {experienceMatch ? (
-                                <>
-                                  <TrendingUp className="w-5 h-5" />
-                                  <span className="font-semibold">Correspond</span>
-                                </>
-                              ) : (
-                                <>
-                                  <TrendingDown className="w-5 h-5" />
-                                  <span className="font-semibold">Insuffisant</span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Formation */}
-                    {selectedJobForComparison.niveau_formation && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-4 sm:p-5 md:p-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <FileCheck className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
-                            <span>Niveau de formation</span>
-                          </h3>
-                          {educationScore !== null && (
-                            <div className={`flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold ${
-                              educationMatch
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {educationMatch ? (
-                                <>
-                                  <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                  <span>Correspond</span>
-                                </>
-                              ) : (
-                                <>
-                                  <XCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                                  <span>Non correspond</span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-sm sm:text-base text-gray-700 break-words">
-                            <span className="font-semibold">Requis:</span> {selectedJobForComparison.niveau_formation}
-                          </p>
-                          {candidate.profile_title && (
-                            <p className="text-xs sm:text-sm text-gray-600">
-                              <span className="font-semibold">Candidat:</span> {candidate.profile_title}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Langues */}
-                    {selectedJobForComparison.langues_requises && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-4 sm:p-5 md:p-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <Users className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
-                            <span>Langues requises</span>
-                          </h3>
-                          {languageScore !== null && (
-                            <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold ${
-                              languageScore >= 80
-                                ? 'bg-green-100 text-green-800'
-                                : languageScore >= 50
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {languageScore}%
-                            </span>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-sm sm:text-base text-gray-700 break-words">
-                            <span className="font-semibold">Requis:</span> {selectedJobForComparison.langues_requises}
-                          </p>
-                          {requiredLanguages.length > 0 && (
-                            <div className="text-xs sm:text-sm text-gray-600">
-                              {matchingLanguages.length}/{requiredLanguages.length} langues correspondantes
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Comparaison salariale */}
-                    {salaryMatch && (
-                      <div className="bg-white border-2 border-gray-200 rounded-xl p-4 sm:p-5 md:p-6">
-                        <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                          <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
-                          <span>Budget et rémunération</span>
-                        </h3>
-                        <div className="space-y-4">
-                          {salaryMatch.budget && (
-                            <div className="bg-indigo-50 border-2 border-indigo-200 rounded-lg p-3 sm:p-4">
-                              <p className="text-xs sm:text-sm text-gray-600 mb-1">Budget prévu</p>
-                              <p className="text-lg sm:text-xl md:text-2xl font-bold text-indigo-900">
-                                {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', minimumFractionDigits: 0 }).format(salaryMatch.budget)}
-                              </p>
-                            </div>
-                          )}
-                          {(salaryMatch.minSalary || salaryMatch.maxSalary) && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                              {salaryMatch.minSalary && (
-                                <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-3">
-                                  <p className="text-xs sm:text-sm text-gray-600 mb-1">Salaire minimum</p>
-                                  <p className="text-base sm:text-lg font-bold text-gray-900">
-                                    {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', minimumFractionDigits: 0 }).format(salaryMatch.minSalary)}
-                                  </p>
-                                </div>
-                              )}
-                              {salaryMatch.maxSalary && (
-                                <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-3">
-                                  <p className="text-xs sm:text-sm text-gray-600 mb-1">Salaire maximum</p>
-                                  <p className="text-base sm:text-lg font-bold text-gray-900">
-                                    {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', minimumFractionDigits: 0 }).format(salaryMatch.maxSalary)}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {!salaryMatch.candidateSalary && (
-                            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-3">
-                              <p className="text-xs sm:text-sm text-yellow-800 flex items-center gap-1">
-                                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                                <span>Les prétentions salariales du candidat ne sont pas renseignées</span>
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Compétences complètes du candidat */}
-                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-xl p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                          <User className="w-5 h-5 text-indigo-600" />
-                          Compétences complètes du candidat
-                        </h3>
-                        {isEditingComparison && (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              placeholder="Ajouter une compétence"
-                              onKeyPress={(e) => {
-                                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                                  const newSkill = e.currentTarget.value.trim()
-                                  if (!comparisonSkills.some(s => s.toLowerCase() === newSkill.toLowerCase())) {
-                                    setComparisonSkills([...comparisonSkills, newSkill])
-                                    e.currentTarget.value = ''
-                                  }
-                                }
-                              }}
-                              className="px-3 py-1.5 border-2 border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                            />
-                            <button
-                              onClick={(e) => {
-                                const input = e.currentTarget.previousElementSibling as HTMLInputElement
-                                if (input && input.value.trim()) {
-                                  const newSkill = input.value.trim()
-                                  if (!comparisonSkills.some(s => s.toLowerCase() === newSkill.toLowerCase())) {
-                                    setComparisonSkills([...comparisonSkills, newSkill])
-                                    input.value = ''
-                                  }
-                                }
-                              }}
-                              className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(isEditingComparison ? comparisonSkills : candidateSkills).map((skill, idx) => {
-                          const skillLower = skill.toLowerCase()
-                          const isRequired = jobRequiredSkills.some(rs => 
-                            skillLower.includes(rs) || rs.includes(skillLower)
-                          )
-                          const isPreferred = jobPreferredSkills.some(ps => 
-                            skillLower.includes(ps) || ps.includes(skillLower)
-                          )
-                          
-                          return (
-                            <span
-                              key={idx}
-                              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium ${
-                                isRequired
-                                  ? 'bg-green-100 text-green-800 border-2 border-green-300'
-                                  : isPreferred
-                                  ? 'bg-blue-100 text-blue-800 border-2 border-blue-300'
-                                  : 'bg-white text-gray-700 border-2 border-gray-300'
-                              }`}
-                            >
+                      <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <h4 className="font-semibold text-blue-900 mb-2 text-sm">Correspondances</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiAnalysis.matching_skills.map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
                               {skill}
-                              {isRequired && <CheckCircle2 className="w-3 h-3" />}
-                              {isPreferred && !isRequired && <Star className="w-3 h-3 fill-blue-600 text-blue-600" />}
-                              {isEditingComparison && (
-                                <button
-                                  onClick={() => {
-                                    setComparisonSkills(comparisonSkills.filter((_, i) => i !== idx))
-                                  }}
-                                  className="ml-1 hover:text-red-600 transition-colors"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              )}
                             </span>
-                          )
-                        })}
-                        {(!isEditingComparison ? candidateSkills : comparisonSkills).length === 0 && (
-                          <p className="text-sm text-gray-500 italic">Aucune compétence renseignée</p>
-                        )}
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                        <h4 className="font-semibold text-yellow-900 mb-2 text-sm">Manquantes</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiAnalysis.missing_skills.map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                        <h4 className="font-semibold text-purple-900 mb-2 text-sm">Complémentaires</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {aiAnalysis.complementary_skills.map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </>
-                )
-              })()}
+
+                    {/* Recommandations */}
+                    <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                      <h4 className="font-semibold text-indigo-900 mb-3 flex items-center gap-2">
+                        <MessageSquare className="w-5 h-5" />
+                        Recommandations
+                      </h4>
+                      <ul className="space-y-2">
+                        {aiAnalysis.recommendations.map((rec, idx) => (
+                          <li key={idx} className="text-sm text-indigo-800 flex items-start gap-2">
+                            <span className="text-indigo-600 mt-1">→</span>
+                            <span>{rec}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-4 sm:p-6">
+                  <div className="text-center py-8">
+                    <Sparkles className="w-12 h-12 text-purple-400 mx-auto mb-4" />
+                    <p className="text-purple-700 font-medium mb-4">Cliquez sur "Analyse IA" pour lancer l'analyse approfondie</p>
+                    <button
+                      onClick={handleAiAnalysis}
+                      disabled={isLoadingAiAnalysis || !candidate.cv_file_path}
+                      className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+                    >
+                      <Sparkles className="w-5 h-5" />
+                      Lancer l'analyse IA
+                    </button>
+                  </div>
+                </div>
+              )}
+
             </div>
 
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3 rounded-b-xl">
-              {isEditingComparison ? (
-                <>
-                  <button
-                    onClick={handleCancelComparison}
-                    disabled={isSavingComparison}
-                    className="px-6 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium disabled:opacity-50"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    onClick={handleSaveComparison}
-                    disabled={isSavingComparison}
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {isSavingComparison ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Enregistrement...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        Enregistrer les modifications
-                      </>
-                    )}
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => {
-                    setShowComparisonModal(false)
-                    setSelectedJobForComparison(null)
-                    setIsEditingComparison(false)
-                    setComparisonSkills([])
-                    setComparisonExperience(null)
-                  }}
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-                >
-                  Fermer
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setShowComparisonModal(false)
+                  setSelectedJobForComparison(null)
+                  setAiAnalysis(null)
+                }}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+              >
+                Fermer
+              </button>
             </div>
           </div>
         </div>

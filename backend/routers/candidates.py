@@ -32,8 +32,8 @@ except ImportError:
     OpenAI = None
 
 from database import get_session, engine
-from models import Candidate, User, UserRole, Interview, Application
-from schemas import CandidateCreate, CandidateUpdate, CandidateResponse, CandidateParseResponse
+from models import Candidate, User, UserRole, Interview, Application, Job, CandidateJobComparison
+from schemas import CandidateCreate, CandidateUpdate, CandidateResponse, CandidateParseResponse, JobCandidateComparisonResponse
 from auth import get_current_active_user, require_recruteur, require_client
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
@@ -641,31 +641,12 @@ def list_candidates(
         
         candidates = session.exec(statement).all()
         
-        # Logs de debug pour voir ce que la base de données renvoie
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"🔍 [DEBUG] Nombre de candidats récupérés: {len(candidates)}")
-        if candidates:
-            first_candidate = candidates[0]
-            logger.info(f"🔍 [DEBUG] Premier candidat - ID: {first_candidate.id}")
-            logger.info(f"🔍 [DEBUG] Premier candidat - Nom: {first_candidate.first_name} {first_candidate.last_name}")
-            logger.info(f"🔍 [DEBUG] Premier candidat - profile_picture_url: {first_candidate.profile_picture_url}")
-            logger.info(f"🔍 [DEBUG] Premier candidat - skills (type: {type(first_candidate.skills)}): {first_candidate.skills}")
-            logger.info(f"🔍 [DEBUG] Premier candidat - tags (type: {type(first_candidate.tags)}): {first_candidate.tags}")
-            logger.info(f"🔍 [DEBUG] Premier candidat - status: {first_candidate.status}")
-        
-        # Filtrer par tag en Python si nécessaire (pour éviter les problèmes SQL)
-        if tag_filter and user_role != UserRole.CLIENT.value:
-            candidates = [
-                c for c in candidates 
-                if c.tags and tag_filter in c.tags
-            ]
-        
-        # Normaliser les données avant de retourner (gérer les cas où skills est NULL)
-        normalized_candidates = []
+        # Convertir explicitement en CandidateResponse pour éviter les problèmes de sérialisation
+        from schemas import CandidateResponse
+        candidates_list = []
         for candidate in candidates:
             try:
-                # Créer un dictionnaire avec toutes les valeurs
+                # Créer un dictionnaire avec tous les champs nécessaires
                 candidate_dict = {
                     "id": candidate.id,
                     "first_name": candidate.first_name,
@@ -676,9 +657,9 @@ def list_candidates(
                     "phone": candidate.phone,
                     "cv_file_path": candidate.cv_file_path,
                     "profile_picture_url": candidate.profile_picture_url,
-                    "photo_url": candidate.profile_picture_url,  # Alias de profile_picture_url (non mappé en DB)
-                    "tags": candidate.tags if candidate.tags else None,
-                    "skills": candidate.skills if candidate.skills else [],  # Convertir None en []
+                    "photo_url": candidate.profile_picture_url,  # Alias pour compatibilité
+                    "tags": candidate.tags or [],
+                    "skills": candidate.skills or [],
                     "source": candidate.source,
                     "status": candidate.status,
                     "notes": candidate.notes,
@@ -686,39 +667,32 @@ def list_candidates(
                     "created_at": candidate.created_at,
                     "updated_at": candidate.updated_at,
                 }
-                # Valider avec le schéma Pydantic
-                normalized_candidate = CandidateResponse.model_validate(candidate_dict)
-                normalized_candidates.append(normalized_candidate)
-            except Exception as candidate_error:
-                logger.warning(f"Erreur lors de la normalisation d'un candidat (ID: {candidate.id}): {str(candidate_error)}")
-                # Essayer de créer une réponse minimale
-                try:
-                    normalized_candidate = CandidateResponse(
-                        id=candidate.id,
-                        first_name=candidate.first_name,
-                        last_name=candidate.last_name,
-                        profile_title=candidate.profile_title,
-                        years_of_experience=candidate.years_of_experience,
-                        email=candidate.email,
-                        phone=candidate.phone,
-                        cv_file_path=candidate.cv_file_path,
-                        profile_picture_url=candidate.profile_picture_url,
-                        photo_url=candidate.profile_picture_url,  # Alias de profile_picture_url (non mappé en DB)
-                        tags=candidate.tags if candidate.tags else None,
-                        skills=[],  # Valeur par défaut si erreur
-                        source=candidate.source,
-                        status=candidate.status or "sourcé",
-                        notes=candidate.notes,
-                        created_by=candidate.created_by,
-                        created_at=candidate.created_at,
-                        updated_at=candidate.updated_at,
-                    )
-                    normalized_candidates.append(normalized_candidate)
-                except Exception as fallback_error:
-                    logger.error(f"Impossible de créer une réponse minimale pour le candidat {candidate.id}: {str(fallback_error)}")
-                    continue
+                candidates_list.append(CandidateResponse.model_validate(candidate_dict))
+            except Exception as e:
+                logger.warning(f"Erreur lors de la conversion du candidat {candidate.id}: {e}")
+                continue
         
-        return normalized_candidates
+        # Logs de debug pour voir ce que la base de données renvoie
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"🔍 [DEBUG] Nombre de candidats récupérés: {len(candidates_list)}")
+        if candidates_list:
+            first_candidate = candidates_list[0]
+            logger.info(f"🔍 [DEBUG] Premier candidat - ID: {first_candidate.id}")
+            logger.info(f"🔍 [DEBUG] Premier candidat - Nom: {first_candidate.first_name} {first_candidate.last_name}")
+            logger.info(f"🔍 [DEBUG] Premier candidat - profile_picture_url: {first_candidate.profile_picture_url}")
+            logger.info(f"🔍 [DEBUG] Premier candidat - skills: {first_candidate.skills}")
+            logger.info(f"🔍 [DEBUG] Premier candidat - tags: {first_candidate.tags}")
+            logger.info(f"🔍 [DEBUG] Premier candidat - status: {first_candidate.status}")
+        
+        # Filtrer par tag en Python si nécessaire (pour éviter les problèmes SQL)
+        if tag_filter and user_role != UserRole.CLIENT.value:
+            candidates_list = [
+                c for c in candidates_list 
+                if c.tags and tag_filter in c.tags
+            ]
+        
+        return candidates_list
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
@@ -1110,3 +1084,317 @@ def download_cv(
         filename=f"CV_{candidate.first_name}_{candidate.last_name}{Path(candidate.cv_file_path).suffix}",
         media_type="application/pdf"
     )
+
+
+def analyze_job_candidate_match_with_llm(cv_text: str, job_data: dict) -> dict:
+    """Utilise un LLM pour analyser en profondeur la correspondance entre un CV et un besoin de recrutement"""
+    if OpenAI is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI n'est pas installé. Installez-le avec: pip install openai"
+        )
+    
+    # Récupérer la clé API depuis les variables d'environnement
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OPENAI_API_KEY n'est pas configurée dans les variables d'environnement"
+        )
+    
+    client = OpenAI(api_key=api_key)
+    
+    # Construire une description structurée du besoin
+    job_description = f"""
+POSTE: {job_data.get('title', 'N/A')}
+Département: {job_data.get('department', 'N/A')}
+Type de contrat: {job_data.get('contract_type', 'N/A')}
+
+MISSIONS PRINCIPALES:
+{job_data.get('missions_principales', 'Non spécifié')}
+
+MISSIONS SECONDAIRES:
+{job_data.get('missions_secondaires', 'Non spécifié')}
+
+PROFIL RECHERCHÉ:
+- Niveau de formation: {job_data.get('niveau_formation', 'Non spécifié')}
+- Expérience requise: {job_data.get('experience_requise', 'Non spécifié')} ans
+- Compétences techniques obligatoires: {', '.join(job_data.get('competences_techniques_obligatoires', []) or [])}
+- Compétences techniques souhaitées: {', '.join(job_data.get('competences_techniques_souhaitees', []) or [])}
+- Compétences comportementales: {', '.join(job_data.get('competences_comportementales', []) or [])}
+- Langues requises: {job_data.get('langues_requises', 'Non spécifié')}
+- Certifications requises: {job_data.get('certifications_requises', 'Non spécifié')}
+
+CONTRAINTES:
+- Localisation: {job_data.get('localisation', 'Non spécifié')}
+- Mobilité: {job_data.get('mobilite_deplacements', 'Non spécifié')}
+- Télétravail: {job_data.get('teletravail', 'Non spécifié')}
+- Critères éliminatoires: {job_data.get('criteres_eliminatoires', 'Aucun')}
+"""
+    
+    # Prompt pour l'analyse approfondie
+    prompt = f"""Tu es un expert en recrutement et en analyse de profils. Analyse en profondeur la correspondance entre le CV d'un candidat et un besoin de recrutement.
+
+BESOIN DE RECRUTEMENT:
+{job_description}
+
+CV DU CANDIDAT:
+{cv_text}
+
+Effectue une analyse approfondie et détaillée de la correspondance. Retourne un JSON avec la structure suivante:
+
+{{
+  "overall_score": nombre entre 0 et 100 (score global de correspondance),
+  "overall_assessment": "Évaluation globale détaillée de l'adéquation du candidat au poste (2-3 paragraphes)",
+  "technical_skills_analysis": "Analyse approfondie des compétences techniques: correspondances exactes, compétences similaires, lacunes, niveau de maîtrise estimé (3-4 paragraphes)",
+  "experience_analysis": "Analyse de l'expérience: pertinence, durée, secteurs, projets similaires, progression de carrière (2-3 paragraphes)",
+  "soft_skills_analysis": "Analyse des compétences comportementales si disponibles dans le CV (1-2 paragraphes, ou null si non applicable)",
+  "education_analysis": "Analyse de la formation: adéquation du niveau, pertinence du cursus, certifications (1-2 paragraphes, ou null si non applicable)",
+  "language_analysis": "Analyse des langues si mentionnées (1 paragraphe, ou null si non applicable)",
+  "strengths": ["point fort 1", "point fort 2", ...] (liste de 3-5 points forts),
+  "weaknesses": ["point faible 1", "point faible 2", ...] (liste de 2-4 points faibles ou manquants),
+  "recommendations": ["recommandation 1", "recommandation 2", ...] (liste de 3-5 recommandations pour l'entretien ou le recrutement),
+  "matching_skills": ["compétence 1", "compétence 2", ...] (liste des compétences qui correspondent parfaitement),
+  "missing_skills": ["compétence 1", "compétence 2", ...] (liste des compétences manquantes ou à développer),
+  "complementary_skills": ["compétence 1", "compétence 2", ...] (liste des compétences complémentaires du candidat non demandées mais utiles),
+  "technical_score": nombre entre 0 et 100,
+  "experience_score": nombre entre 0 et 100,
+  "soft_skills_score": nombre entre 0 et 100 ou null,
+  "education_score": nombre entre 0 et 100 ou null,
+  "language_score": nombre entre 0 et 100 ou null
+}}
+
+Règles importantes:
+- Sois précis et détaillé dans tes analyses
+- Base-toi sur le contenu réel du CV et du besoin
+- Identifie les correspondances exactes ET les compétences transférables
+- Mentionne les projets ou expériences pertinents du CV
+- Les analyses doivent être en français
+- Retourne UNIQUEMENT le JSON, sans texte avant ou après
+"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # Modèle économique et rapide
+            messages=[
+                {"role": "system", "content": "Tu es un expert en recrutement spécialisé dans l'analyse approfondie de CV et de besoins de recrutement. Tu retournes uniquement du JSON valide."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,  # Température modérée pour un bon équilibre créativité/cohérence
+            max_tokens=4000
+        )
+        
+        # Extraire le JSON de la réponse
+        response_text = response.choices[0].message.content.strip()
+        
+        # Nettoyer la réponse (enlever les markdown code blocks si présents)
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+        
+        # Parser le JSON
+        parsed_data = json.loads(response_text)
+        
+        # Valider les champs obligatoires
+        required_fields = ["overall_score", "overall_assessment", "technical_skills_analysis", 
+                          "experience_analysis", "strengths", "weaknesses", "recommendations",
+                          "matching_skills", "missing_skills", "complementary_skills",
+                          "technical_score", "experience_score"]
+        for field in required_fields:
+            if field not in parsed_data:
+                raise ValueError(f"Champ obligatoire manquant: {field}")
+        
+        return parsed_data
+        
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors du parsing JSON de la réponse LLM: {str(e)}. Réponse reçue: {response_text[:500]}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'analyse IA: {str(e)}"
+        )
+
+
+@router.post("/{candidate_id}/compare-with-job/{job_id}", response_model=JobCandidateComparisonResponse)
+def compare_candidate_with_job(
+    candidate_id: UUID,
+    job_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Analyse IA approfondie de la correspondance entre un candidat et un besoin de recrutement
+    
+    Cette fonction analyse en profondeur le CV du candidat et le besoin de recrutement
+    pour fournir une évaluation détaillée de l'adéquation.
+    """
+    # Récupérer le candidat
+    candidate = session.get(Candidate, candidate_id)
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidat non trouvé"
+        )
+    
+    # Récupérer le besoin
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Besoin de recrutement non trouvé"
+        )
+    
+    # Vérifier que le candidat a un CV
+    if not candidate.cv_file_path or not os.path.exists(candidate.cv_file_path):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le candidat doit avoir un CV pour effectuer l'analyse"
+        )
+    
+    # Extraire le texte du CV
+    try:
+        file_extension = Path(candidate.cv_file_path).suffix.lower()
+        if file_extension == ".pdf":
+            cv_text = extract_text_from_pdf(candidate.cv_file_path)
+        elif file_extension in {".doc", ".docx"}:
+            cv_text = extract_text_from_docx(candidate.cv_file_path)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Format de CV non supporté: {file_extension}"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'extraction du texte du CV: {str(e)}"
+        )
+    
+    # Préparer les données du besoin pour l'analyse
+    job_data = {
+        "title": job.title,
+        "department": job.department,
+        "contract_type": job.contract_type,
+        "missions_principales": job.missions_principales,
+        "missions_secondaires": job.missions_secondaires,
+        "niveau_formation": job.niveau_formation,
+        "experience_requise": job.experience_requise,
+        "competences_techniques_obligatoires": job.competences_techniques_obligatoires or [],
+        "competences_techniques_souhaitees": job.competences_techniques_souhaitees or [],
+        "competences_comportementales": job.competences_comportementales or [],
+        "langues_requises": job.langues_requises,
+        "certifications_requises": job.certifications_requises,
+        "localisation": job.localisation,
+        "mobilite_deplacements": job.mobilite_deplacements,
+        "teletravail": job.teletravail,
+        "criteres_eliminatoires": job.criteres_eliminatoires,
+    }
+    
+    # Vérifier si une analyse existe déjà
+    existing_comparison = session.exec(
+        select(CandidateJobComparison).where(
+            CandidateJobComparison.candidate_id == candidate_id,
+            CandidateJobComparison.job_id == job_id
+        )
+    ).first()
+    
+    # Effectuer l'analyse IA
+    analysis_result = analyze_job_candidate_match_with_llm(cv_text, job_data)
+    
+    # Sauvegarder ou mettre à jour l'analyse
+    analysis_json = json.dumps(analysis_result, ensure_ascii=False)
+    
+    try:
+        if existing_comparison:
+            # Mettre à jour l'analyse existante
+            existing_comparison.analysis_data = analysis_json
+            existing_comparison.updated_at = datetime.utcnow()
+            existing_comparison.created_by = current_user.id
+            session.add(existing_comparison)
+            session.commit()
+            session.refresh(existing_comparison)
+        else:
+            # Créer une nouvelle analyse
+            new_comparison = CandidateJobComparison(
+                candidate_id=candidate_id,
+                job_id=job_id,
+                created_by=current_user.id,
+                analysis_data=analysis_json
+            )
+            session.add(new_comparison)
+            session.commit()
+            session.refresh(new_comparison)
+    except Exception as save_error:
+        # Logger l'erreur et lever une exception pour que l'utilisateur soit informé
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"❌ ERREUR CRITIQUE lors de la sauvegarde de l'analyse IA pour candidat {candidate_id} et job {job_id}: {str(save_error)}", exc_info=True)
+        # Rollback et lever une exception pour informer l'utilisateur
+        try:
+            session.rollback()
+        except:
+            pass
+        # Lever une exception pour que l'utilisateur sache que la sauvegarde a échoué
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"L'analyse IA a été générée mais n'a pas pu être sauvegardée. Erreur: {str(save_error)}. Veuillez vérifier que la table 'candidate_job_comparisons' existe dans la base de données."
+        )
+    
+    # Convertir en réponse
+    return JobCandidateComparisonResponse(**analysis_result)
+
+
+@router.get("/{candidate_id}/compare-with-job/{job_id}", response_model=JobCandidateComparisonResponse)
+def get_saved_comparison(
+    candidate_id: UUID,
+    job_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Récupère une analyse IA sauvegardée pour un candidat et un besoin
+    """
+    # Vérifier que le candidat et le besoin existent
+    candidate = session.get(Candidate, candidate_id)
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidat non trouvé"
+        )
+    
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Besoin de recrutement non trouvé"
+        )
+    
+    # Récupérer l'analyse sauvegardée
+    comparison = session.exec(
+        select(CandidateJobComparison).where(
+            CandidateJobComparison.candidate_id == candidate_id,
+            CandidateJobComparison.job_id == job_id
+        )
+    ).first()
+    
+    if not comparison:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aucune analyse sauvegardée trouvée. Veuillez effectuer une analyse d'abord."
+        )
+    
+    # Désérialiser les données JSON
+    try:
+        analysis_data = json.loads(comparison.analysis_data)
+        return JobCandidateComparisonResponse(**analysis_data)
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la lecture de l'analyse sauvegardée: {str(e)}"
+        )

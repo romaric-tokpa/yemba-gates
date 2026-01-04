@@ -68,6 +68,7 @@ class User(SQLModel, table=True):
     interviews_conducted: Interview = Relationship(back_populates="interviewer", sa_relationship_kwargs={"lazy": "select", "foreign_keys": "Interview.interviewer_id"})
     notifications: Notification = Relationship(back_populates="user", sa_relationship_kwargs={"lazy": "select"})
 
+
 class Job(SQLModel, table=True):
     """Modèle besoin de recrutement"""
     __tablename__ = "jobs"
@@ -133,6 +134,22 @@ class Job(SQLModel, table=True):
     notifications: Notification = Relationship(back_populates="related_job", sa_relationship_kwargs={"lazy": "select"})
 
 
+class JobRecruiter(SQLModel, table=True):
+    """Table de liaison pour attribuer des recruteurs aux besoins"""
+    __tablename__ = "job_recruiters"
+    
+    id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
+    job_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE")))
+    recruiter_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")))
+    assigned_at: datetime = Field(default_factory=datetime.utcnow)
+    assigned_by: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id")))  # Manager qui a attribué
+    
+    # Relationships
+    # Note: La relation job sera ajoutée après la définition de toutes les classes
+    recruiter: User = Relationship(sa_relationship_kwargs={"lazy": "select", "foreign_keys": "[JobRecruiter.recruiter_id]"})
+    assigner: User = Relationship(sa_relationship_kwargs={"lazy": "select", "foreign_keys": "[JobRecruiter.assigned_by]"})
+
+
 class CandidateStatus(str, Enum):
     """Statut d'un candidat"""
     NOUVEAU = "Nouveau"
@@ -175,13 +192,14 @@ class Interview(SQLModel, table=True):
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
     application_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE")))
-    interview_type: str = Field(max_length=50)  # 'rh', 'technique', 'client', 'prequalification', 'qualification', 'autre'
+    interviewer_id: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")))
     scheduled_at: datetime
     scheduled_end_at: datetime | None = None
-    location: str | None = Field(default=None, max_length=255)
-    interviewer_id: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id")))
-    preparation_notes: str | None = Field(default=None)
-    feedback: str | None = Field(default=None)  # Feedback post-entretien (obligatoire pour passer à shortlist)
+    interview_type: str = Field(max_length=50)  # 'prequalification', 'qualification', 'client', 'technique', etc.
+    location: str | None = Field(default=None, max_length=255)  # Lieu de l'entretien (physique ou virtuel)
+    meeting_link: str | None = Field(default=None, max_length=500)  # Lien de visioconférence si virtuel
+    notes: str | None = Field(default=None, sa_column=Column(Text))  # Notes préparatoires
+    feedback: str | None = Field(default=None, sa_column=Column(Text))  # Feedback après l'entretien
     feedback_provided_at: datetime | None = None
     decision: str | None = Field(default=None, max_length=20)  # 'positif', 'négatif', 'en_attente'
     score: int | None = Field(default=None)  # Score sur 10
@@ -215,10 +233,6 @@ class Application(SQLModel, table=True):
     client_validated: bool | None = None
     client_validated_at: datetime | None = None
     offer_sent_at: datetime | None = None
-    offer_accepted: bool | None = None
-    offer_accepted_at: datetime | None = None
-    onboarding_completed: bool = Field(default=False)
-    onboarding_completed_at: datetime | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -227,8 +241,6 @@ class Application(SQLModel, table=True):
     job: Job = Relationship(back_populates="applications", sa_relationship_kwargs={"lazy": "select"})
     creator_user: User = Relationship(back_populates="applications_created", sa_relationship_kwargs={"lazy": "select"})
     interviews: Interview = Relationship(back_populates="application", sa_relationship_kwargs={"lazy": "select"})
-    offers: Offer = Relationship(back_populates="application", sa_relationship_kwargs={"lazy": "select"})
-    onboarding_checklist: OnboardingChecklist = Relationship(back_populates="application", sa_relationship_kwargs={"uselist": False, "lazy": "select"})
     history: ApplicationHistory = Relationship(back_populates="application", sa_relationship_kwargs={"lazy": "select"})
     notifications: Notification = Relationship(back_populates="related_application", sa_relationship_kwargs={"lazy": "select"})
 
@@ -303,56 +315,51 @@ class Offer(SQLModel, table=True):
     salary: float | None = Field(default=None)  # Salaire proposé
     contract_type: str | None = Field(default=None, max_length=50)  # Type de contrat
     start_date: datetime | None = None  # Date de début prévue
-    notes: str | None = Field(default=None)  # Notes additionnelles pour l'offre
-    sent_at: datetime = Field(default_factory=datetime.utcnow)  # Date d'envoi de l'offre
-    accepted: bool | None = None  # True = acceptée, False = refusée, None = en attente
-    accepted_at: datetime | None = None  # Date d'acceptation/refus
-    decision_notes: str | None = Field(default=None)  # Commentaires sur la décision
+    benefits: str | None = Field(default=None, sa_column=Column(Text))  # Avantages proposés
+    notes: str | None = Field(default=None, sa_column=Column(Text))  # Notes additionnelles
+    status: str = Field(default="sent", max_length=20)  # 'sent', 'accepted', 'rejected', 'negotiating'
+    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    responded_at: datetime | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    application: Application = Relationship(back_populates="offers", sa_relationship_kwargs={"lazy": "select"})
+    application: Application = Relationship(sa_relationship_kwargs={"lazy": "select"})
     sender: User = Relationship(sa_relationship_kwargs={"lazy": "select"})
 
 
 class OnboardingChecklist(SQLModel, table=True):
-    """Modèle checklist onboarding"""
+    """Modèle checklist d'onboarding"""
     __tablename__ = "onboarding_checklists"
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
-    application_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), unique=True))
-    contract_signed: bool = Field(default=False)
-    contract_signed_at: datetime | None = None
-    equipment_ready: bool = Field(default=False)
-    equipment_ready_at: datetime | None = None
-    training_scheduled: bool = Field(default=False)
-    training_scheduled_at: datetime | None = None
-    access_granted: bool = Field(default=False)
-    access_granted_at: datetime | None = None
-    welcome_meeting_scheduled: bool = Field(default=False)
-    welcome_meeting_scheduled_at: datetime | None = None
-    onboarding_completed: bool = Field(default=False)
-    onboarding_completed_at: datetime | None = None
-    notes: str | None = Field(default=None)
+    application_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE")))
+    document_signed: bool = Field(default=False)
+    document_signed_at: datetime | None = None
+    background_check: bool = Field(default=False)
+    background_check_at: datetime | None = None
+    equipment_provided: bool = Field(default=False)
+    equipment_provided_at: datetime | None = None
+    training_completed: bool = Field(default=False)
+    training_completed_at: datetime | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    application: Application = Relationship(back_populates="onboarding_checklist", sa_relationship_kwargs={"lazy": "select"})
+    application: Application = Relationship(sa_relationship_kwargs={"lazy": "select"})
 
 
 class SecurityLog(SQLModel, table=True):
-    """Modèle log de sécurité (connexions)"""
+    """Modèle log de sécurité"""
     __tablename__ = "security_logs"
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
     user_id: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")))
-    action: str = Field(max_length=50)  # 'login', 'logout', 'failed_login', 'password_change', etc.
-    ip_address: str | None = Field(default=None, max_length=45)  # IPv4 ou IPv6
-    user_agent: str | None = Field(default=None, max_length=500)
-    success: bool = Field(default=True)  # True si l'action a réussi, False sinon
-    details: str | None = Field(default=None)  # Détails supplémentaires (message d'erreur, etc.)
+    action: str = Field(max_length=100)  # 'login', 'logout', 'failed_login', 'password_change', etc.
+    ip_address: str | None = Field(default=None, max_length=45)
+    user_agent: str | None = Field(default=None, sa_column=Column(Text))
+    success: bool = Field(default=True)
+    details: str | None = Field(default=None, sa_column=Column(Text))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
@@ -360,20 +367,15 @@ class SecurityLog(SQLModel, table=True):
 
 
 class Setting(SQLModel, table=True):
-    """Modèle paramétrage système"""
+    """Modèle paramètres système"""
     __tablename__ = "settings"
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
-    key: str = Field(unique=True, index=True, max_length=100)  # Clé unique du paramètre
-    value: str = Field(max_length=1000)  # Valeur du paramètre (JSON string si nécessaire)
-    category: str = Field(max_length=50)  # 'department', 'contract_type', 'kpi_threshold', etc.
-    description: str | None = Field(default=None, max_length=500)
-    updated_by: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")))
+    key: str = Field(unique=True, max_length=100)
+    value: str = Field(sa_column=Column(Text))
+    description: str | None = Field(default=None, sa_column=Column(Text))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    updater: User = Relationship(sa_relationship_kwargs={"lazy": "select"})
 
 
 class Team(SQLModel, table=True):
@@ -381,27 +383,27 @@ class Team(SQLModel, table=True):
     __tablename__ = "teams"
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
-    name: str = Field(max_length=255, index=True)  # Nom de l'équipe
-    description: str | None = Field(default=None, sa_column=Column(Text))  # Description de l'équipe
-    department: str | None = Field(default=None, max_length=100)  # Département
-    manager_id: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")))  # Manager de l'équipe
-    is_active: bool = Field(default=True)  # Équipe active ou non
+    name: str = Field(max_length=255)
+    description: Optional[str] = Field(default=None, sa_column=Column(Text))
+    department: Optional[str] = Field(default=None, max_length=100)
+    manager_id: Optional[UUID] = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")))
+    is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    manager: User = Relationship(sa_relationship_kwargs={"lazy": "select", "foreign_keys": "[Team.manager_id]"})
+    # Note: La relation manager sera ajoutée après la définition de toutes les classes
 
 
 class TeamMember(SQLModel, table=True):
-    """Modèle membre d'équipe (table de liaison many-to-many entre User et Team)"""
+    """Modèle membre d'équipe"""
     __tablename__ = "team_members"
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
-    team_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), primary_key=False))
-    user_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=False))
-    role: str | None = Field(default=None, max_length=50)  # Rôle dans l'équipe (membre, lead, etc.)
-    joined_at: datetime = Field(default_factory=datetime.utcnow)  # Date d'ajout à l'équipe
+    team_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE")))
+    user_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")))
+    role: str = Field(default="member", max_length=50)  # 'member', 'lead', etc.
+    joined_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
     team: Team = Relationship(sa_relationship_kwargs={"lazy": "select"})
@@ -409,7 +411,7 @@ class TeamMember(SQLModel, table=True):
 
 
 class ClientInterviewRequest(SQLModel, table=True):
-    """Modèle pour les demandes d'entretien client avec disponibilités"""
+    """Modèle demande d'entretien client"""
     __tablename__ = "client_interview_requests"
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
@@ -425,3 +427,25 @@ class ClientInterviewRequest(SQLModel, table=True):
     # Relationships - définies sans type annotation pour éviter les problèmes de résolution
     # Les relations peuvent être accédées via les IDs (application_id, client_id, scheduled_interview_id)
     # et chargées manuellement si nécessaire dans les routers
+
+
+class CandidateJobComparison(SQLModel, table=True):
+    """Modèle pour stocker les analyses IA de correspondance candidat-besoin"""
+    __tablename__ = "candidate_job_comparisons"
+    
+    id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
+    candidate_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("candidates.id", ondelete="CASCADE")))
+    job_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE")))
+    created_by: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id")))
+    
+    # Résultats de l'analyse IA (stockés en JSON)
+    analysis_data: str = Field(sa_column=Column(Text))  # JSON string contenant JobCandidateComparisonResponse
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# Ajouter la relation manager à Team après la définition de toutes les classes
+# pour éviter les problèmes de résolution de références forward
+Team.__annotations__["manager"] = "User"
+Team.manager = Relationship(sa_relationship_kwargs={"lazy": "select", "foreign_keys": "[Team.manager_id]"})

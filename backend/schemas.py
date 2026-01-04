@@ -307,3 +307,33 @@ class TeamResponse(BaseModel):
     members: Optional[list[TeamMemberResponse]] = []
     members_count: int = 0
 
+
+class JobCandidateComparisonResponse(BaseModel):
+    """Schéma de réponse pour l'analyse IA du comparatif Besoin vs Candidat"""
+    overall_score: int = Field(..., ge=0, le=100, description="Score global de correspondance (0-100)")
+    overall_assessment: str = Field(..., description="Évaluation globale de l'adéquation")
+    
+    # Analyse détaillée par catégorie
+    technical_skills_analysis: str = Field(..., description="Analyse approfondie des compétences techniques")
+    experience_analysis: str = Field(..., description="Analyse de l'expérience")
+    soft_skills_analysis: Optional[str] = Field(None, description="Analyse des compétences comportementales")
+    education_analysis: Optional[str] = Field(None, description="Analyse de la formation")
+    language_analysis: Optional[str] = Field(None, description="Analyse des langues")
+    
+    # Points forts et faibles
+    strengths: list[str] = Field(..., description="Points forts du candidat par rapport au besoin")
+    weaknesses: list[str] = Field(..., description="Points faibles ou manquants")
+    recommendations: list[str] = Field(..., description="Recommandations pour l'entretien ou le recrutement")
+    
+    # Correspondances détaillées
+    matching_skills: list[str] = Field(..., description="Compétences qui correspondent parfaitement")
+    missing_skills: list[str] = Field(..., description="Compétences manquantes ou à développer")
+    complementary_skills: list[str] = Field(..., description="Compétences complémentaires du candidat")
+    
+    # Score par catégorie
+    technical_score: int = Field(..., ge=0, le=100)
+    experience_score: int = Field(..., ge=0, le=100)
+    soft_skills_score: Optional[int] = Field(None, ge=0, le=100)
+    education_score: Optional[int] = Field(None, ge=0, le=100)
+    language_score: Optional[int] = Field(None, ge=0, le=100)
+

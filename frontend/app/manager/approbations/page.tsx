@@ -13,7 +13,8 @@ import {
   markJobAsWon,
   deleteJob,
   getDeletedJobs,
-  DeletedJobItem
+  DeletedJobItem,
+  getAvailableRecruiters
 } from '@/lib/api'
 import { getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
@@ -136,6 +137,12 @@ export default function ManagerApprovalsPage() {
   const [error, setError] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [showDeleted, setShowDeleted] = useState(false)
+  const [showValidationModal, setShowValidationModal] = useState(false)
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+  const [selectedRecruiters, setSelectedRecruiters] = useState<string[]>([])
+  const [availableRecruiters, setAvailableRecruiters] = useState<Array<{ id: string; first_name: string; last_name: string; email: string; department?: string }>>([])
+  const [validationFeedback, setValidationFeedback] = useState<string>('')
+  const [isLoadingRecruiters, setIsLoadingRecruiters] = useState(false)
   
   // Filtres et recherche
   const [searchQuery, setSearchQuery] = useState<string>('')
@@ -183,12 +190,45 @@ export default function ManagerApprovalsPage() {
     }
   }
 
-  const handleValidateJob = async (jobId: string, validated: boolean) => {
+  const openValidationModal = async (jobId: string, validated: boolean) => {
+    setSelectedJobId(jobId)
+    setSelectedRecruiters([])
+    setValidationFeedback(validated ? 'Besoin approuvé par le manager' : 'Besoin rejeté par le manager')
+    
+    if (validated) {
+      // Charger les recruteurs disponibles uniquement si on valide
+      setIsLoadingRecruiters(true)
+      try {
+        const recruiters = await getAvailableRecruiters()
+        setAvailableRecruiters(recruiters)
+      } catch (err: any) {
+        showError(err.message || 'Erreur lors du chargement des recruteurs')
+      } finally {
+        setIsLoadingRecruiters(false)
+      }
+    }
+    
+    setShowValidationModal(true)
+    setOpenMenuId(null)
+  }
+
+  const handleValidateJob = async () => {
+    if (!selectedJobId) return
+    
+    const validated = validationFeedback.includes('approuvé')
+    
     try {
-      await validateJob(jobId, { validated, feedback: validated ? 'Besoin approuvé par le manager' : 'Besoin rejeté par le manager' })
+      await validateJob(selectedJobId, { 
+        validated, 
+        feedback: validationFeedback,
+        recruiter_ids: validated && selectedRecruiters.length > 0 ? selectedRecruiters : undefined
+      })
       success(validated ? 'Besoin approuvé avec succès' : 'Besoin rejeté')
       await loadJobs()
-      setOpenMenuId(null)
+      setShowValidationModal(false)
+      setSelectedJobId(null)
+      setSelectedRecruiters([])
+      setValidationFeedback('')
     } catch (err: any) {
       showError(err.message || 'Erreur lors de la validation du besoin')
     }
@@ -764,7 +804,7 @@ export default function ManagerApprovalsPage() {
                                   <div className="border-t border-gray-200 my-1" />
                                   
                                   <button
-                                    onClick={() => handleValidateJob(job.id!, true)}
+                                    onClick={() => openValidationModal(job.id!, true)}
                                     className="w-full px-4 py-2 text-left text-sm text-green-700 hover:bg-green-50 flex items-center gap-2"
                                   >
                                     <Check className="w-4 h-4" />
@@ -772,7 +812,7 @@ export default function ManagerApprovalsPage() {
                                   </button>
                                   
                                   <button
-                                    onClick={() => handleValidateJob(job.id!, false)}
+                                    onClick={() => openValidationModal(job.id!, false)}
                                     className="w-full px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50 flex items-center gap-2"
                                   >
                                     <X className="w-4 h-4" />
@@ -967,6 +1007,114 @@ export default function ManagerApprovalsPage() {
                 <p className="text-sm text-gray-400">L'historique des besoins supprimés apparaîtra ici</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de validation avec attribution de recruteurs */}
+      {showValidationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">
+                {validationFeedback.includes('approuvé') ? 'Approuver le besoin' : 'Rejeter le besoin'}
+              </h2>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Commentaire */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Commentaire {validationFeedback.includes('approuvé') ? '(optionnel)' : ''}
+                </label>
+                <textarea
+                  value={validationFeedback}
+                  onChange={(e) => setValidationFeedback(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder={validationFeedback.includes('approuvé') ? 'Ajouter un commentaire...' : 'Raison du rejet...'}
+                />
+              </div>
+
+              {/* Sélection des recruteurs (uniquement si validation) */}
+              {validationFeedback.includes('approuvé') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Attribuer à un ou plusieurs recruteurs <span className="text-gray-500">(optionnel)</span>
+                  </label>
+                  
+                  {isLoadingRecruiters ? (
+                    <div className="text-center py-4 text-gray-500">
+                      <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
+                      <p className="text-sm">Chargement des recruteurs...</p>
+                    </div>
+                  ) : availableRecruiters.length > 0 ? (
+                    <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                      {availableRecruiters.map((recruiter) => (
+                        <label
+                          key={recruiter.id}
+                          className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedRecruiters.includes(recruiter.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedRecruiters([...selectedRecruiters, recruiter.id])
+                              } else {
+                                setSelectedRecruiters(selectedRecruiters.filter(id => id !== recruiter.id))
+                              }
+                            }}
+                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900">
+                              {recruiter.first_name} {recruiter.last_name}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {recruiter.email}
+                              {recruiter.department && ` • ${recruiter.department}`}
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Aucun recruteur disponible</p>
+                  )}
+                  
+                  {selectedRecruiters.length > 0 && (
+                    <p className="mt-2 text-sm text-indigo-600">
+                      {selectedRecruiters.length} recruteur{selectedRecruiters.length > 1 ? 's' : ''} sélectionné{selectedRecruiters.length > 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowValidationModal(false)
+                  setSelectedJobId(null)
+                  setSelectedRecruiters([])
+                  setValidationFeedback('')
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleValidateJob}
+                className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                  validationFeedback.includes('approuvé')
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {validationFeedback.includes('approuvé') ? 'Approuver' : 'Rejeter'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from database import get_session, engine
-from models import Job, JobStatus, UrgencyLevel, User, UserRole, JobHistory, Application
+from models import Job, JobStatus, UrgencyLevel, User, UserRole, JobHistory, Application, JobRecruiter
 from schemas import JobCreate, JobUpdate, JobResponse, JobResponseWithCreator, JobSubmitForValidation
 from auth import get_current_active_user, require_recruteur, require_manager
 from datetime import datetime, date
@@ -484,12 +484,19 @@ def list_jobs(
         statement = select(Job)
         
         # Filtrer selon le rôle de l'utilisateur
-        if current_user.role == UserRole.RECRUTEUR:
-            # Les recruteurs ne voient que les besoins validés (exclure "en_attente")
-            statement = statement.where(
+        # Convertir le rôle en string pour la comparaison
+        user_role = current_user.role if isinstance(current_user.role, str) else current_user.role.value
+        
+        if user_role == UserRole.RECRUTEUR.value:
+            # Les recruteurs ne voient que les besoins validés qui leur sont attribués
+            statement = statement.join(
+                JobRecruiter, Job.id == JobRecruiter.job_id
+            ).where(
+                JobRecruiter.recruiter_id == current_user.id
+            ).where(
                 (Job.status == "validé") | (Job.status == "en_cours") | (Job.status == "clôturé")
-            ).where(Job.status != "en_attente")  # Exclure les besoins en attente de validation
-        elif current_user.role == UserRole.CLIENT:
+            )
+        elif user_role == UserRole.CLIENT.value:
             # Les clients voient uniquement leurs propres besoins
             statement = statement.where(Job.created_by == current_user.id)
         # Les managers et admins voient tous les besoins (pas de filtre supplémentaire)
@@ -501,7 +508,8 @@ def list_jobs(
         statement = statement.offset(skip).limit(limit).order_by(Job.created_at.desc())
         
         jobs = session.exec(statement).all()
-        return jobs
+        # Convertir explicitement en JobResponse pour éviter les problèmes de sérialisation
+        return [JobResponse.model_validate(job) for job in jobs]
     except Exception as e:
         # Gérer les erreurs de colonnes manquantes
         error_message = str(e)
@@ -1048,6 +1056,7 @@ class JobValidation(BaseModel):
     """Schéma pour valider/rejeter un besoin"""
     validated: bool  # True = validé, False = rejeté
     feedback: Optional[str] = None  # Commentaire du manager
+    recruiter_ids: Optional[List[UUID]] = None  # Liste des IDs des recruteurs à attribuer
 
 
 @router.post("/{job_id}/validate", response_model=JobResponse)
@@ -1089,9 +1098,49 @@ def validate_job(
         )
         session.add(history_entry)
         
-        # TODO: Envoyer une notification au recruteur
-        # from services.notifications import create_notification
-        # create_notification(...)
+        # Attribuer les recruteurs si fournis
+        if validation.recruiter_ids:
+            # Supprimer les attributions existantes pour ce job
+            existing_assignments = session.exec(
+                select(JobRecruiter).where(JobRecruiter.job_id == job.id)
+            ).all()
+            for assignment in existing_assignments:
+                session.delete(assignment)
+            
+            # Vérifier que tous les IDs sont des recruteurs valides
+            for recruiter_id in validation.recruiter_ids:
+                recruiter = session.get(User, recruiter_id)
+                if not recruiter:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Recruteur avec l'ID {recruiter_id} non trouvé"
+                    )
+                if recruiter.role != UserRole.RECRUTEUR.value:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"L'utilisateur {recruiter_id} n'est pas un recruteur"
+                    )
+                
+                # Créer l'attribution
+                job_recruiter = JobRecruiter(
+                    job_id=job.id,
+                    recruiter_id=recruiter_id,
+                    assigned_by=current_user.id
+                )
+                session.add(job_recruiter)
+            
+            # Envoyer des notifications aux recruteurs attribués
+            from services.notifications import create_notification
+            for recruiter_id in validation.recruiter_ids:
+                create_notification(
+                    session=session,
+                    user_id=recruiter_id,
+                    title="Nouveau besoin attribué",
+                    message=f"Le besoin '{job.title}' vous a été attribué par {current_user.first_name} {current_user.last_name}.",
+                    notification_type="job_assigned",
+                    related_job_id=job.id,
+                    send_email=True
+                )
         
     else:
         # Rejeter le besoin (retour en brouillon)
@@ -1117,6 +1166,35 @@ def validate_job(
     session.refresh(job)
     
     return job
+
+
+@router.get("/recruiters/available", response_model=List[dict])
+def get_available_recruiters(
+    current_user: User = Depends(require_manager),
+    session: Session = Depends(get_session)
+):
+    """
+    Récupérer la liste des recruteurs disponibles pour attribution
+    
+    Réservé aux managers
+    """
+    recruiters = session.exec(
+        select(User)
+        .where(User.role == UserRole.RECRUTEUR.value)
+        .where(User.is_active == True)
+        .order_by(User.last_name, User.first_name)
+    ).all()
+    
+    return [
+        {
+            "id": str(recruiter.id),
+            "first_name": recruiter.first_name,
+            "last_name": recruiter.last_name,
+            "email": recruiter.email,
+            "department": recruiter.department
+        }
+        for recruiter in recruiters
+    ]
 
 
 @router.get("/{job_id}/history", response_model=List[dict])

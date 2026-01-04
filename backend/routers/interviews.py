@@ -107,39 +107,72 @@ class InterviewResponse(BaseModel):
 
 def build_interview_response(interview: Interview, session: Session) -> dict:
     """Helper pour construire une réponse InterviewResponse"""
-    application = session.get(Application, interview.application_id)
-    candidate = session.get(Candidate, application.candidate_id) if application else None
-    job = session.get(Job, application.job_id) if application else None
-    interviewer = session.get(User, interview.interviewer_id) if interview.interviewer_id else None
-    creator = session.get(User, interview.created_by) if interview.created_by else None
-    
-    return {
-        "id": str(interview.id),
-        "application_id": str(interview.application_id),
-        "interview_type": interview.interview_type,
-        "scheduled_at": interview.scheduled_at,
-        "scheduled_end_at": interview.scheduled_end_at,
-        "location": interview.location,
-        "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
-        "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
-        "preparation_notes": interview.preparation_notes,
-        "feedback": interview.feedback,
-        "feedback_provided_at": interview.feedback_provided_at,
-        "decision": interview.decision,
-        "score": interview.score,
-        "status": interview.status if hasattr(interview, 'status') else "planifié",
-        "rescheduled_at": interview.rescheduled_at if hasattr(interview, 'rescheduled_at') else None,
-        "rescheduling_reason": interview.rescheduling_reason if hasattr(interview, 'rescheduling_reason') else None,
-        "cancellation_reason": interview.cancellation_reason if hasattr(interview, 'cancellation_reason') else None,
-        "cancelled_at": interview.cancelled_at if hasattr(interview, 'cancelled_at') else None,
-        "completed_at": interview.completed_at if hasattr(interview, 'completed_at') else None,
-        "created_by": str(interview.created_by) if interview.created_by else None,
-        "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
-        "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
-        "job_title": job.title if job else "",
-        "created_at": interview.created_at,
-        "updated_at": interview.updated_at
-    }
+    try:
+        application = session.get(Application, interview.application_id)
+        candidate = session.get(Candidate, application.candidate_id) if application and application.candidate_id else None
+        job = session.get(Job, application.job_id) if application and application.job_id else None
+        interviewer = session.get(User, interview.interviewer_id) if interview.interviewer_id else None
+        creator = session.get(User, interview.created_by) if interview.created_by else None
+        
+        return {
+            "id": str(interview.id),
+            "application_id": str(interview.application_id),
+            "interview_type": interview.interview_type,
+            "scheduled_at": interview.scheduled_at,
+            "scheduled_end_at": interview.scheduled_end_at,
+            "location": interview.location,
+            "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
+            "interviewer_name": f"{interviewer.first_name} {interviewer.last_name}" if interviewer else None,
+            "preparation_notes": interview.notes,
+            "feedback": interview.feedback,
+            "feedback_provided_at": interview.feedback_provided_at,
+            "decision": getattr(interview, 'decision', None),
+            "score": getattr(interview, 'score', None),
+            "status": getattr(interview, 'status', 'planifié'),
+            "rescheduled_at": getattr(interview, 'rescheduled_at', None),
+            "rescheduling_reason": getattr(interview, 'rescheduling_reason', None),
+            "cancellation_reason": getattr(interview, 'cancellation_reason', None),
+            "cancelled_at": getattr(interview, 'cancelled_at', None),
+            "completed_at": getattr(interview, 'completed_at', None),
+            "created_by": str(interview.created_by) if interview.created_by else None,
+            "created_by_name": f"{creator.first_name} {creator.last_name}" if creator else "",
+            "candidate_name": f"{candidate.first_name} {candidate.last_name}" if candidate else "",
+            "job_title": job.title if job else "",
+            "created_at": interview.created_at,
+            "updated_at": interview.updated_at
+        }
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erreur lors de la construction de la réponse pour l'entretien {interview.id}: {str(e)}", exc_info=True)
+        # Retourner une réponse minimale en cas d'erreur
+        return {
+            "id": str(interview.id),
+            "application_id": str(interview.application_id),
+            "interview_type": interview.interview_type,
+            "scheduled_at": interview.scheduled_at,
+            "scheduled_end_at": interview.scheduled_end_at,
+            "location": interview.location,
+            "interviewer_id": str(interview.interviewer_id) if interview.interviewer_id else None,
+            "interviewer_name": None,
+            "preparation_notes": interview.notes,
+            "feedback": interview.feedback,
+            "feedback_provided_at": interview.feedback_provided_at,
+            "decision": getattr(interview, 'decision', None),
+            "score": getattr(interview, 'score', None),
+            "status": getattr(interview, 'status', 'planifié'),
+            "rescheduled_at": getattr(interview, 'rescheduled_at', None),
+            "rescheduling_reason": getattr(interview, 'rescheduling_reason', None),
+            "cancellation_reason": getattr(interview, 'cancellation_reason', None),
+            "cancelled_at": getattr(interview, 'cancelled_at', None),
+            "completed_at": getattr(interview, 'completed_at', None),
+            "created_by": str(interview.created_by) if interview.created_by else None,
+            "created_by_name": "",
+            "candidate_name": "",
+            "job_title": "",
+            "created_at": interview.created_at,
+            "updated_at": interview.updated_at
+        }
 
 
 @router.post("/", response_model=InterviewResponse, status_code=status.HTTP_201_CREATED)
@@ -191,7 +224,7 @@ def create_interview(
             scheduled_end_at=interview_data.scheduled_end_at,
             location=interview_data.location,
             interviewer_id=interview_data.interviewer_id,
-            preparation_notes=interview_data.preparation_notes,
+            notes=interview_data.preparation_notes,
             created_by=current_user.id
         )
         
@@ -236,58 +269,62 @@ def list_interviews(
     Les recruteurs et managers voient tous les entretiens.
     Les autres utilisateurs voient uniquement les entretiens liés à leurs candidatures/jobs.
     """
-    # Construire la requête de base
-    statement = select(Interview)
+    import logging
+    logger = logging.getLogger(__name__)
     
-    # Appliquer les filtres
-    if application_id:
-        statement = statement.where(Interview.application_id == application_id)
-    
-    if interview_type:
-        statement = statement.where(Interview.interview_type == interview_type)
-    
-    if interviewer_id:
-        statement = statement.where(Interview.interviewer_id == interviewer_id)
-    
-    # Règles d'accès selon le rôle
-    if current_user.role not in [UserRole.RECRUTEUR.value, UserRole.MANAGER.value, UserRole.ADMINISTRATEUR.value]:
-        # Pour les clients, on ne montre que les entretiens des candidatures de leurs jobs
-        # Cette logique peut être affinée selon les besoins
-        pass
-    
-    # Appliquer les filtres qui nécessitent une jointure avec Application
-    if job_id or candidate_id:
-        statement = statement.join(Application, Interview.application_id == Application.id)
-        if job_id:
-            statement = statement.where(Application.job_id == job_id)
-        if candidate_id:
-            statement = statement.where(Application.candidate_id == candidate_id)
-    
-    statement = statement.offset(skip).limit(limit).order_by(Interview.scheduled_at.desc())
-    interviews = session.exec(statement).all()
-    
-    # Construire les réponses avec les informations complètes
-    results = []
-    for interview in interviews:
-        try:
-            application = session.get(Application, interview.application_id)
-            if not application:
+    try:
+        # Construire la requête de base
+        statement = select(Interview)
+        
+        # Appliquer les filtres
+        if application_id:
+            statement = statement.where(Interview.application_id == application_id)
+        
+        if interview_type:
+            statement = statement.where(Interview.interview_type == interview_type)
+        
+        if interviewer_id:
+            statement = statement.where(Interview.interviewer_id == interviewer_id)
+        
+        # Règles d'accès selon le rôle
+        # Convertir le rôle en string pour la comparaison
+        user_role = current_user.role if isinstance(current_user.role, str) else current_user.role.value
+        if user_role not in [UserRole.RECRUTEUR.value, UserRole.MANAGER.value, UserRole.ADMINISTRATEUR.value]:
+            # Pour les clients, on ne montre que les entretiens des candidatures de leurs jobs
+            # Cette logique peut être affinée selon les besoins
+            pass
+        
+        # Appliquer les filtres qui nécessitent une jointure avec Application
+        if job_id or candidate_id:
+            # Utiliser distinct() pour éviter les doublons lors de la jointure
+            statement = statement.join(Application, Interview.application_id == Application.id).distinct()
+            if job_id:
+                statement = statement.where(Application.job_id == job_id)
+            if candidate_id:
+                statement = statement.where(Application.candidate_id == candidate_id)
+        
+        statement = statement.offset(skip).limit(limit).order_by(Interview.scheduled_at.desc())
+        interviews = session.exec(statement).all()
+        
+        # Construire les réponses avec les informations complètes
+        results = []
+        for interview in interviews:
+            try:
+                # Convertir explicitement en InterviewResponse pour éviter les problèmes de sérialisation
+                interview_response = build_interview_response(interview, session)
+                results.append(InterviewResponse.model_validate(interview_response))
+            except Exception as e:
+                # Logger l'erreur et continuer avec les autres entretiens
+                logger.error(f"Erreur lors du traitement de l'entretien {interview.id}: {str(e)}", exc_info=True)
                 continue
-            
-            candidate = session.get(Candidate, application.candidate_id) if application.candidate_id else None
-            job = session.get(Job, application.job_id) if application.job_id else None
-            interviewer = session.get(User, interview.interviewer_id) if interview.interviewer_id else None
-            creator = session.get(User, interview.created_by) if interview.created_by else None
-            
-            results.append(build_interview_response(interview, session))
-        except Exception as e:
-            # Logger l'erreur et continuer avec les autres entretiens
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Erreur lors du traitement de l'entretien {interview.id}: {str(e)}")
-            continue
-    
-    return results
+        
+        return results
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des entretiens: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la récupération des entretiens: {str(e)}"
+        )
 
 
 @router.get("/{interview_id}", response_model=InterviewResponse)
@@ -402,7 +439,7 @@ def update_interview(
     if interview_data.interviewer_id is not None:
         interview.interviewer_id = interview_data.interviewer_id
     if interview_data.preparation_notes is not None:
-        interview.preparation_notes = interview_data.preparation_notes
+        interview.notes = interview_data.preparation_notes
     
     interview.updated_at = datetime.utcnow()
     
