@@ -5,12 +5,12 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Building2, Users, BarChart3, Shield, ArrowRight, Check, 
-  TrendingUp, Clock, Target, Zap, Star, Menu, X,
+  TrendingUp, Clock, Target, Zap, Menu, X,
   Briefcase, FileText, MessageSquare, PieChart, 
   Award, Globe, Lock, Smartphone, ChevronDown, Play,
   CheckCircle2, Rocket, Sparkles, Trophy, Heart,
   ArrowUpRight, BarChart, Calendar, UserCheck, 
-  ThumbsUp, Award as AwardIcon, Timer, DollarSign
+  ThumbsUp, Award as AwardIcon, Timer, DollarSign, Eye, Settings
 } from 'lucide-react'
 
 export default function LandingPage() {
@@ -139,7 +139,7 @@ export default function LandingPage() {
         'Suivi des délais et alertes automatiques',
         'Historique complet des modifications'
       ],
-      color: 'from-blue-500 to-cyan-500',
+      color: 'from-emerald-500 to-teal-500',
       delay: '0'
     },
     {
@@ -152,7 +152,7 @@ export default function LandingPage() {
         'Recherche intelligente dans la base de candidats',
         'Export des données en un clic'
       ],
-      color: 'from-green-500 to-emerald-500',
+      color: 'from-emerald-500 to-teal-500',
       delay: '100'
     },
     {
@@ -165,7 +165,7 @@ export default function LandingPage() {
         'Feedback structuré après chaque entretien',
         'Statistiques de taux de présence'
       ],
-      color: 'from-purple-500 to-pink-500',
+      color: 'from-emerald-600 to-teal-600',
       delay: '200'
     },
     {
@@ -178,7 +178,7 @@ export default function LandingPage() {
         'Performance des recruteurs individuels',
         'Rapports personnalisables et exportables'
       ],
-      color: 'from-orange-500 to-red-500',
+      color: 'from-[#F7941D] to-[#FDBA4D]',
       delay: '300'
     },
     {
@@ -191,7 +191,7 @@ export default function LandingPage() {
         'Validation et feedback en ligne',
         'Historique des shortlists partagées'
       ],
-      color: 'from-indigo-500 to-blue-500',
+      color: 'from-teal-500 to-emerald-500',
       delay: '400'
     },
     {
@@ -204,7 +204,7 @@ export default function LandingPage() {
         'Documentation centralisée',
         'Évaluation post-intégration'
       ],
-      color: 'from-pink-500 to-rose-500',
+      color: 'from-emerald-600 to-teal-600',
       delay: '500'
     },
     {
@@ -217,7 +217,7 @@ export default function LandingPage() {
         'Vue d\'ensemble en temps réel',
         'Alertes et notifications intelligentes'
       ],
-      color: 'from-teal-500 to-cyan-500',
+      color: 'from-emerald-500 to-teal-500',
       delay: '600'
     },
     {
@@ -230,7 +230,7 @@ export default function LandingPage() {
         'Optimisation automatique des créneaux',
         'Synchronisation avec calendriers externes'
       ],
-      color: 'from-amber-500 to-orange-500',
+      color: 'from-[#F7941D] to-[#FDBA4D]',
       delay: '700'
     },
     {
@@ -243,7 +243,7 @@ export default function LandingPage() {
         'Comparaison côte à côte des candidats',
         'Historique des évaluations'
       ],
-      color: 'from-violet-500 to-purple-500',
+      color: 'from-emerald-600 to-teal-600',
       delay: '800'
     },
   ]
@@ -254,7 +254,7 @@ export default function LandingPage() {
       title: 'Gain de Temps Exceptionnel',
       description: 'Automatisez vos processus et économisez jusqu\'à 40% de votre temps de recrutement. Concentrez-vous sur ce qui compte vraiment : trouver les meilleurs talents.',
       stat: '40%',
-      color: 'from-blue-500 to-cyan-500',
+      color: 'from-emerald-500 to-teal-500',
       details: [
         'Automatisation des tâches répétitives',
         'Templates de communication pré-remplis',
@@ -267,7 +267,7 @@ export default function LandingPage() {
       title: 'Qualité Améliorée',
       description: 'Améliorez significativement la qualité de vos recrutements grâce à un suivi détaillé et des outils d\'évaluation avancés. Recrutez les bons profils dès le premier essai.',
       stat: '+25%',
-      color: 'from-green-500 to-emerald-500',
+      color: 'from-emerald-500 to-teal-500',
       details: [
         'Meilleure adéquation candidat-poste',
         'Réduction du taux de turnover',
@@ -280,7 +280,7 @@ export default function LandingPage() {
       title: 'Précision Maximale',
       description: 'Ciblez les meilleurs candidats avec des outils d\'analyse avancés et des filtres intelligents. Ne perdez plus de temps avec des profils non pertinents.',
       stat: '95%',
-      color: 'from-purple-500 to-pink-500',
+      color: 'from-emerald-600 to-teal-600',
       details: [
         'Matching intelligent candidat-poste',
         'Filtres multicritères avancés',
@@ -293,7 +293,7 @@ export default function LandingPage() {
       title: 'Rapidité Accrue',
       description: 'Réduisez votre time-to-hire de manière drastique et recrutez les talents plus rapidement. Ne laissez pas passer les meilleurs candidats à vos concurrents.',
       stat: '-30%',
-      color: 'from-orange-500 to-red-500',
+      color: 'from-[#F7941D] to-[#FDBA4D]',
       details: [
         'Processus optimisés et accélérés',
         'Notifications en temps réel',
@@ -319,7 +319,7 @@ export default function LandingPage() {
       title: 'Satisfaction Client',
       description: 'Améliorez la satisfaction de vos clients internes et externes avec un service de recrutement plus rapide, plus transparent et plus efficace.',
       stat: '98%',
-      color: 'from-pink-500 to-rose-500',
+      color: 'from-emerald-600 to-teal-600',
       details: [
         'Feedback client en temps réel',
         'Transparence totale du processus',
@@ -332,7 +332,7 @@ export default function LandingPage() {
       title: 'Excellence Opérationnelle',
       description: 'Atteignez l\'excellence opérationnelle avec des processus standardisés, des meilleures pratiques intégrées et une qualité constante.',
       stat: '99%',
-      color: 'from-indigo-500 to-blue-500',
+      color: 'from-teal-500 to-emerald-500',
       details: [
         'Processus standardisés et reproductibles',
         'Meilleures pratiques intégrées',
@@ -345,7 +345,7 @@ export default function LandingPage() {
       title: 'Accessibilité Totale',
       description: 'Accédez à votre plateforme depuis n\'importe où, à tout moment, sur tous vos appareils. Travaillez efficacement en mobilité.',
       stat: '24/7',
-      color: 'from-cyan-500 to-blue-500',
+      color: 'from-teal-500 to-emerald-500',
       details: [
         'Accès multi-appareils (mobile, tablette, desktop)',
         'Synchronisation en temps réel',
@@ -355,93 +355,142 @@ export default function LandingPage() {
     },
   ]
 
-  const testimonials = [
-    {
-      name: 'Sophie Martin',
-      role: 'Directrice RH',
-      company: 'TechCorp',
-      content: 'RecruitPro a transformé notre processus de recrutement. Nous avons réduit notre temps de recrutement de 35% et amélioré la qualité de nos embauches. L\'interface est intuitive et les fonctionnalités répondent parfaitement à nos besoins.',
-      rating: 5,
-      image: 'SM'
-    },
-    {
-      name: 'Jean Dupont',
-      role: 'Manager Recrutement',
-      company: 'InnovateLab',
-      content: 'L\'interface est intuitive, les fonctionnalités sont complètes. C\'est exactement ce dont nous avions besoin pour gérer nos recrutements efficacement. Le support client est également excellent et très réactif.',
-      rating: 5,
-      image: 'JD'
-    },
-    {
-      name: 'Marie Leclerc',
-      role: 'CEO',
-      company: 'StartupHub',
-      content: 'Les KPI en temps réel nous permettent de prendre des décisions éclairées. Un outil indispensable pour notre croissance. Nous avons multiplié nos recrutements par 3 sans augmenter notre équipe.',
-      rating: 5,
-      image: 'ML'
-    },
-    {
-      name: 'Pierre Dubois',
-      role: 'Directeur des Talents',
-      company: 'GrowthCo',
-      content: 'La plateforme nous a permis d\'automatiser 60% de nos processus de recrutement. Nos recruteurs peuvent maintenant se concentrer sur ce qui compte vraiment : rencontrer et évaluer les candidats.',
-      rating: 5,
-      image: 'PD'
-    },
-    {
-      name: 'Camille Bernard',
-      role: 'Responsable Recrutement',
-      company: 'DigitalAgency',
-      content: 'Les tableaux de bord personnalisés sont un vrai plus. Nous avons une vision claire de nos performances et pouvons ajuster notre stratégie en temps réel. Un gain de productivité énorme !',
-      rating: 5,
-      image: 'CB'
-    },
-    {
-      name: 'Thomas Moreau',
-      role: 'VP People',
-      company: 'ScaleUp',
-      content: 'RecruitPro a révolutionné notre façon de recruter. Le pipeline de candidats est visuel et efficace, les entretiens sont mieux organisés, et nos managers sont ravis de la qualité des shortlists.',
-      rating: 5,
-      image: 'TM'
-    },
-  ]
-
   const roles = [
     {
       id: 'recruteur',
       title: 'Recruteur',
-      description: 'L\'outil complet pour gérer tous vos besoins de recrutement',
+      description: 'L\'outil complet pour gérer tous vos besoins de recrutement de A à Z',
+      detailedDescription: 'Optimisez votre quotidien avec une interface pensée pour les recruteurs. Gérez vos besoins, suivez vos candidats, planifiez vos entretiens et créez des shortlists efficaces.',
       icon: Users,
-      color: 'from-blue-500 via-cyan-500 to-blue-600',
-      features: ['Gestion des besoins', 'Pipeline candidats', 'Entretiens', 'Shortlists'],
-      gradient: 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 50%, #2563eb 100%)'
+      color: 'from-emerald-500 via-teal-500 to-emerald-600',
+      features: [
+        'Gestion complète des besoins de recrutement',
+        'Pipeline de candidats avec vue Kanban interactive',
+        'Planification et suivi des entretiens',
+        'Création et partage de shortlists',
+        'Analyse de CV avec intelligence artificielle',
+        'Communication centralisée avec candidats',
+        'Statistiques personnelles de performance',
+        'Export de données et rapports'
+      ],
+      advantages: [
+        { icon: Zap, text: 'Gain de temps jusqu\'à 40%' },
+        { icon: Target, text: 'Taux de matching amélioré' },
+        { icon: TrendingUp, text: 'Productivité accrue' }
+      ],
+      stats: [
+        { label: 'Besoins gérés', value: '50+', icon: Briefcase },
+        { label: 'Candidats suivis', value: '200+', icon: Users },
+        { label: 'Temps économisé', value: '15h/sem', icon: Clock }
+      ],
+      useCases: [
+        'Gérer plusieurs besoins simultanément sans confusion',
+        'Suivre l\'avancement de chaque candidat en temps réel',
+        'Créer des shortlists qualifiées en quelques minutes'
+      ],
+      gradient: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)'
     },
     {
       id: 'manager',
       title: 'Manager',
-      description: 'Pilotez votre équipe avec des données en temps réel',
+      description: 'Pilotez votre équipe avec des données en temps réel et des insights actionnables',
+      detailedDescription: 'Prenez des décisions éclairées grâce à des tableaux de bord complets. Suivez les performances de votre équipe, validez les besoins stratégiques et optimisez vos processus de recrutement.',
       icon: BarChart3,
-      color: 'from-purple-500 via-pink-500 to-purple-600',
-      features: ['Tableaux de bord KPI', 'Validation besoins', 'Suivi équipe', 'Rapports'],
-      gradient: 'linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #9333ea 100%)'
+      color: 'from-emerald-600 via-teal-600 to-emerald-700',
+      features: [
+        'Tableaux de bord KPI en temps réel',
+        'Validation et approbation des besoins',
+        'Suivi détaillé de l\'équipe de recrutement',
+        'Rapports analytiques personnalisables',
+        'Gestion des utilisateurs et permissions',
+        'Analyse comparative des performances',
+        'Alertes et notifications intelligentes',
+        'Export de données pour reporting'
+      ],
+      advantages: [
+        { icon: BarChart3, text: 'Vision 360° de l\'activité' },
+        { icon: Users, text: 'Optimisation des ressources' },
+        { icon: TrendingUp, text: 'ROI mesurable' }
+      ],
+      stats: [
+        { label: 'Équipe pilotée', value: '10+', icon: Users },
+        { label: 'KPI suivis', value: '25+', icon: BarChart3 },
+        { label: 'Décisions/jour', value: '50+', icon: Target }
+      ],
+      useCases: [
+        'Identifier rapidement les goulots d\'étranglement',
+        'Valider les besoins stratégiques en toute confiance',
+        'Optimiser la répartition des ressources de recrutement'
+      ],
+      gradient: 'linear-gradient(135deg, #047857 0%, #0d9488 50%, #059669 100%)'
     },
     {
       id: 'client',
       title: 'Client',
-      description: 'Validez vos candidats en toute simplicité',
+      description: 'Validez vos candidats en toute simplicité et suivez vos recrutements en temps réel',
+      detailedDescription: 'Accédez facilement aux shortlists partagées, consultez les profils détaillés, donnez votre feedback et suivez l\'avancement de vos recrutements. Une interface simple et intuitive pour une validation rapide.',
       icon: Building2,
-      color: 'from-green-500 via-emerald-500 to-green-600',
-      features: ['Consultation shortlists', 'Validation candidats', 'Feedback', 'Suivi'],
-      gradient: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)'
+      color: 'from-emerald-500 via-teal-500 to-emerald-600',
+      features: [
+        'Consultation des shortlists partagées',
+        'Validation rapide des candidats',
+        'Feedback structuré et commentaires',
+        'Suivi en temps réel des recrutements',
+        'Prévisualisation des CV en un clic',
+        'Historique des décisions prises',
+        'Statistiques de vos besoins',
+        'Notifications des nouvelles candidatures'
+      ],
+      advantages: [
+        { icon: Clock, text: 'Décisions accélérées' },
+        { icon: CheckCircle2, text: 'Processus simplifié' },
+        { icon: Eye, text: 'Transparence totale' }
+      ],
+      stats: [
+        { label: 'Shortlists consultées', value: '30+', icon: FileText },
+        { label: 'Temps de réponse', value: '<24h', icon: Clock },
+        { label: 'Taux de validation', value: '85%', icon: CheckCircle2 }
+      ],
+      useCases: [
+        'Valider des candidats en quelques clics',
+        'Suivre l\'avancement de vos recrutements en direct',
+        'Donner un feedback structuré et actionnable'
+      ],
+      gradient: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)'
     },
     {
       id: 'administrateur',
       title: 'Administrateur',
-      description: 'Gérez votre plateforme en toute sécurité',
+      description: 'Gérez votre plateforme en toute sécurité avec un contrôle total sur les configurations',
+      detailedDescription: 'Administrez votre plateforme avec des outils puissants de gestion. Configurez les paramètres, gérez les utilisateurs, surveillez la sécurité et optimisez les performances de votre système.',
       icon: Shield,
-      color: 'from-red-500 via-rose-500 to-red-600',
-      features: ['Gestion utilisateurs', 'Paramètres', 'Logs sécurité', 'Configuration'],
-      gradient: 'linear-gradient(135deg, #ef4444 0%, #f43f5e 50%, #dc2626 100%)'
+      color: 'from-[#F7941D] via-[#FDBA4D] to-[#F7941D]',
+      features: [
+        'Gestion complète des utilisateurs et rôles',
+        'Configuration des paramètres système',
+        'Logs de sécurité et audit trail',
+        'Gestion des permissions et accès',
+        'Monitoring des performances',
+        'Sauvegardes et restauration',
+        'Intégrations et API management',
+        'Support et maintenance avancée'
+      ],
+      advantages: [
+        { icon: Shield, text: 'Sécurité renforcée' },
+        { icon: Settings, text: 'Contrôle total' },
+        { icon: Lock, text: 'Conformité garantie' }
+      ],
+      stats: [
+        { label: 'Utilisateurs gérés', value: '100+', icon: Users },
+        { label: 'Sécurité', value: '99.9%', icon: Shield },
+        { label: 'Uptime', value: '99.9%', icon: Globe }
+      ],
+      useCases: [
+        'Configurer et personnaliser la plateforme selon vos besoins',
+        'Gérer les accès et permissions avec précision',
+        'Surveiller la sécurité et la conformité en continu'
+      ],
+      gradient: 'linear-gradient(135deg, #F7941D 0%, #FDBA4D 50%, #F7941D 100%)'
     },
   ]
 
@@ -452,54 +501,50 @@ export default function LandingPage() {
         isScrolled ? 'bg-white/95 backdrop-blur-md shadow-lg' : 'bg-white/80 backdrop-blur-sm'
       }`}>
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 lg:h-20">
+          <div className="flex items-center justify-between h-14 lg:h-16">
             <div className="flex items-center">
-              <Link href="/" className="flex items-center space-x-3 group">
-                <div className="bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 p-2.5 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <Briefcase className="w-6 h-6 lg:w-8 lg:h-8 text-white" />
+              <Link href="/" className="flex items-center space-x-2 group">
+                <div className="bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 p-2 rounded-lg shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <Briefcase className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
                 </div>
-                <span className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  RecruitPro
+                <span className="text-lg lg:text-xl font-bold bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 bg-clip-text text-transparent">
+                  Yemma-Gates
                 </span>
               </Link>
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center space-x-8">
-              <a href="#features" className="text-gray-700 hover:text-blue-600 transition-colors font-medium relative group">
+            <div className="hidden md:flex items-center space-x-6">
+              <a href="#features" className="text-sm text-gray-700 hover:text-emerald-600 transition-colors font-medium relative group">
                 Fonctionnalités
-                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 group-hover:w-full transition-all duration-300"></span>
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-600 group-hover:w-full transition-all duration-300"></span>
               </a>
-              <a href="#benefits" className="text-gray-700 hover:text-blue-600 transition-colors font-medium relative group">
+              <a href="#benefits" className="text-sm text-gray-700 hover:text-emerald-600 transition-colors font-medium relative group">
                 Avantages
-                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 group-hover:w-full transition-all duration-300"></span>
-              </a>
-              <a href="#testimonials" className="text-gray-700 hover:text-blue-600 transition-colors font-medium relative group">
-                Témoignages
-                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 group-hover:w-full transition-all duration-300"></span>
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-600 group-hover:w-full transition-all duration-300"></span>
               </a>
               <Link 
                 href="/auth/login" 
-                className="px-4 py-2 text-blue-600 font-medium hover:text-blue-700 transition-colors"
+                className="px-3 py-1.5 text-sm text-emerald-600 font-medium hover:text-emerald-700 transition-colors"
               >
                 Connexion
               </Link>
               <Link 
                 href="/auth/choice" 
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-2xl transition-all transform hover:scale-105 relative overflow-hidden group"
+                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-lg font-semibold text-sm hover:shadow-xl transition-all transform hover:scale-105 relative overflow-hidden group"
               >
                 <span className="relative z-10 flex items-center">
                   Commencer
-                  <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover:translate-x-1 transition-transform" />
                 </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-teal-600 via-emerald-700 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </Link>
             </div>
 
             {/* Mobile Menu Button */}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden p-2 text-gray-700 hover:text-blue-600 transition-colors"
+              className="md:hidden p-2 text-gray-700 hover:text-emerald-600 transition-colors"
             >
               {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -507,22 +552,19 @@ export default function LandingPage() {
 
           {/* Mobile Menu */}
           {isMenuOpen && (
-            <div className="md:hidden py-4 space-y-4 animate-in slide-in-from-top-5 duration-300">
-              <a href="#features" className="block text-gray-700 hover:text-blue-600 transition-colors py-2">
+            <div className="md:hidden py-3 space-y-3 animate-in slide-in-from-top-5 duration-300">
+              <a href="#features" className="block text-sm text-gray-700 hover:text-emerald-600 transition-colors py-1.5">
                 Fonctionnalités
               </a>
-              <a href="#benefits" className="block text-gray-700 hover:text-blue-600 transition-colors py-2">
+              <a href="#benefits" className="block text-sm text-gray-700 hover:text-emerald-600 transition-colors py-1.5">
                 Avantages
               </a>
-              <a href="#testimonials" className="block text-gray-700 hover:text-blue-600 transition-colors py-2">
-                Témoignages
-              </a>
-              <Link href="/auth/login" className="block text-blue-600 font-medium py-2">
+              <Link href="/auth/login" className="block text-sm text-emerald-600 font-medium py-1.5">
                 Connexion
               </Link>
               <Link 
                 href="/auth/choice" 
-                className="block px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold text-center"
+                className="block px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg font-semibold text-sm text-center"
               >
                 Commencer
               </Link>
@@ -532,77 +574,77 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section ref={heroRef} className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 px-4 sm:px-6 lg:px-8 overflow-hidden">
+      <section ref={heroRef} className="relative pt-24 pb-12 lg:pt-28 lg:pb-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
         {/* Animated Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
-          <div className="absolute top-20 left-10 w-72 h-72 bg-blue-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-          <div className="absolute top-40 right-10 w-72 h-72 bg-purple-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
-          <div className="absolute -bottom-8 left-1/2 w-72 h-72 bg-pink-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50">
+          <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
+          <div className="absolute top-40 right-10 w-72 h-72 bg-teal-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
+          <div className="absolute -bottom-8 left-1/2 w-72 h-72 bg-emerald-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
         </div>
 
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="text-center max-w-4xl mx-auto" data-animate id="hero">
-            <div className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 rounded-full text-sm font-medium mb-6 animate-fade-in-up">
-              <Sparkles className="w-4 h-4 mr-2 animate-pulse" />
+            <div className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 rounded-full text-xs font-medium mb-4 animate-fade-in-up">
+              <Sparkles className="w-3.5 h-3.5 mr-1.5 animate-pulse" />
               Plateforme de recrutement nouvelle génération
             </div>
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-gray-900 mb-6 leading-tight animate-fade-in-up animation-delay-200">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 mb-4 leading-tight animate-fade-in-up animation-delay-200">
               Recrutez plus vite,
               <br />
-              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent animate-gradient">
+              <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 bg-clip-text text-transparent animate-gradient">
                 recrutez mieux
               </span>
             </h1>
-            <p className="text-xl sm:text-2xl text-gray-600 mb-10 leading-relaxed animate-fade-in-up animation-delay-400 max-w-3xl mx-auto">
+            <p className="text-lg sm:text-xl text-gray-600 mb-8 leading-relaxed animate-fade-in-up animation-delay-400 max-w-2xl mx-auto">
               La solution tout-en-un pour transformer votre processus de recrutement. 
               <span className="font-semibold text-gray-700"> Gagnez du temps, améliorez la qualité, recrutez les meilleurs talents.</span>
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16 animate-fade-in-up animation-delay-600">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-10 animate-fade-in-up animation-delay-600">
               <Link
                 href="/auth/choice"
-                className="group relative px-8 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-2xl font-bold text-lg shadow-2xl hover:shadow-blue-500/50 transition-all transform hover:scale-105 overflow-hidden"
+                className="group relative px-6 py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-xl font-bold text-base shadow-xl hover:shadow-emerald-500/50 transition-all transform hover:scale-105 overflow-hidden"
               >
                 <span className="relative z-10 flex items-center">
-                  <Rocket className="w-5 h-5 mr-2" />
+                  <Rocket className="w-4 h-4 mr-2" />
                   Commencer gratuitement
-                  <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                 </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-teal-600 via-emerald-700 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </Link>
               <a
                 href="#features"
-                className="group px-8 py-4 bg-white text-gray-700 rounded-2xl font-semibold text-lg border-2 border-gray-200 hover:border-blue-300 transition-all shadow-lg hover:shadow-xl flex items-center space-x-2"
+                className="group px-6 py-3 bg-white text-gray-700 rounded-xl font-semibold text-base border-2 border-gray-200 hover:border-emerald-300 transition-all shadow-md hover:shadow-lg flex items-center space-x-2"
               >
-                <Play className="w-5 h-5 text-blue-600" />
+                <Play className="w-4 h-4 text-emerald-600" />
                 <span>Voir la démo</span>
               </a>
             </div>
 
             {/* Stats avec animations */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 animate-fade-in-up animation-delay-800">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 animate-fade-in-up animation-delay-800">
               <div className="text-center transform hover:scale-110 transition-transform">
-                <div className="text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-2">
+                <div className="text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-1">
                   {counters.candidates}+
                 </div>
-                <div className="text-gray-600 font-medium">Candidats gérés</div>
+                <div className="text-sm text-gray-600 font-medium">Candidats gérés</div>
               </div>
               <div className="text-center transform hover:scale-110 transition-transform">
-                <div className="text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+                <div className="text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent mb-1">
                   {counters.jobs}+
                 </div>
-                <div className="text-gray-600 font-medium">Besoins traités</div>
+                <div className="text-sm text-gray-600 font-medium">Besoins traités</div>
               </div>
               <div className="text-center transform hover:scale-110 transition-transform">
-                <div className="text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
+                <div className="text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-1">
                   {counters.satisfaction}%
                 </div>
-                <div className="text-gray-600 font-medium">Satisfaction</div>
+                <div className="text-sm text-gray-600 font-medium">Satisfaction</div>
               </div>
               <div className="text-center transform hover:scale-110 transition-transform">
-                <div className="text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent mb-2">
+                <div className="text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-[#F7941D] to-[#FDBA4D] bg-clip-text text-transparent mb-1">
                   {counters.time}%
                 </div>
-                <div className="text-gray-600 font-medium">Gain de temps</div>
+                <div className="text-sm text-gray-600 font-medium">Gain de temps</div>
               </div>
             </div>
           </div>
@@ -610,21 +652,21 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="features" ref={featuresRef} className="py-20 lg:py-32 px-4 sm:px-6 lg:px-8 bg-white relative">
+      <section id="features" ref={featuresRef} className="py-12 lg:py-16 px-4 sm:px-6 lg:px-8 bg-white relative">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16" data-animate id="features-header">
-            <div className="inline-block px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium mb-4">
+          <div className="text-center mb-10" data-animate id="features-header">
+            <div className="inline-block px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium mb-3">
               Fonctionnalités
             </div>
-            <h2 className="text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4">
+            <h2 className="text-3xl lg:text-4xl font-extrabold text-gray-900 mb-3">
               Tout ce dont vous avez besoin
             </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Des outils puissants pour transformer votre processus de recrutement
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
             {features.map((feature, index) => {
               const Icon = feature.icon
               const elementId = `feature-${index}`
@@ -635,21 +677,21 @@ export default function LandingPage() {
                   data-animate
                   data-animate-id={elementId}
                   id={elementId}
-                  className={`p-8 rounded-3xl border-2 border-gray-100 hover:border-transparent hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 bg-white group ${
+                  className={`p-5 lg:p-6 rounded-2xl border-2 border-gray-100 hover:border-transparent hover:shadow-xl transition-all duration-500 transform hover:-translate-y-2 bg-white group ${
                     isVisible ? 'animate-fade-in-up' : 'opacity-100'
                   }`}
                   style={{ animationDelay: `${feature.delay}ms` }}
                 >
-                  <div className={`bg-gradient-to-br ${feature.color} w-16 h-16 rounded-2xl flex items-center justify-center mb-6 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-lg`}>
-                    <Icon className="w-8 h-8 text-white" />
+                  <div className={`bg-gradient-to-br ${feature.color} w-12 h-12 rounded-xl flex items-center justify-center mb-4 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-lg`}>
+                    <Icon className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors">
+                  <h3 className="text-lg lg:text-xl font-bold text-gray-900 mb-2 group-hover:text-emerald-600 transition-colors">
                     {feature.title}
                   </h3>
-                  <p className="text-gray-600 leading-relaxed">{feature.description}</p>
-                  <div className="mt-6 flex items-center text-blue-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                  <p className="text-sm text-gray-600 leading-relaxed">{feature.description}</p>
+                  <div className="mt-4 flex items-center text-emerald-600 font-semibold text-sm opacity-0 group-hover:opacity-100 transition-opacity">
                     En savoir plus
-                    <ArrowUpRight className="w-4 h-4 ml-2" />
+                    <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
                   </div>
                 </div>
               )
@@ -659,22 +701,22 @@ export default function LandingPage() {
       </section>
 
       {/* Benefits Section */}
-      <section id="benefits" className="py-20 lg:py-32 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 relative overflow-hidden">
+      <section id="benefits" className="py-12 lg:py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-gray-50 via-emerald-50 to-teal-50 relative overflow-hidden">
         <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
         <div className="max-w-7xl mx-auto relative z-10">
-          <div className="text-center mb-16" data-animate data-animate-id="benefits-header" id="benefits-header">
-            <div className="inline-block px-4 py-2 bg-purple-100 text-purple-700 rounded-full text-sm font-medium mb-4">
+          <div className="text-center mb-10" data-animate data-animate-id="benefits-header" id="benefits-header">
+            <div className="inline-block px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium mb-3">
               Résultats Mesurables
             </div>
-            <h2 className="text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4">
-              Pourquoi choisir RecruitPro ?
+            <h2 className="text-3xl lg:text-4xl font-extrabold text-gray-900 mb-3">
+              Pourquoi choisir Yemma-Gates ?
             </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Des résultats concrets et mesurables pour votre équipe
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
             {benefits.map((benefit, index) => {
               const Icon = benefit.icon
               const elementId = `benefit-${index}`
@@ -685,26 +727,26 @@ export default function LandingPage() {
                   data-animate
                   data-animate-id={elementId}
                   id={elementId}
-                  className={`bg-white p-8 rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-4 group ${
+                  className={`bg-white p-5 lg:p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-500 transform hover:-translate-y-2 group ${
                     isVisible ? 'animate-fade-in-up' : 'opacity-100'
                   }`}
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
-                  <div className="text-center mb-6">
-                    <div className={`bg-gradient-to-br ${benefit.color} w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-lg`}>
-                      <Icon className="w-10 h-10 text-white" />
+                  <div className="text-center mb-4">
+                    <div className={`bg-gradient-to-br ${benefit.color} w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-lg`}>
+                      <Icon className="w-7 h-7 text-white" />
                     </div>
-                    <div className={`text-5xl font-extrabold bg-gradient-to-r ${benefit.color} bg-clip-text text-transparent mb-3`}>
+                    <div className={`text-3xl lg:text-4xl font-extrabold bg-gradient-to-r ${benefit.color} bg-clip-text text-transparent mb-2`}>
                       {benefit.stat}
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-3">{benefit.title}</h3>
-                    <p className="text-gray-600 leading-relaxed mb-4">{benefit.description}</p>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{benefit.title}</h3>
+                    <p className="text-sm text-gray-600 leading-relaxed mb-3">{benefit.description}</p>
                   </div>
                   {benefit.details && (
-                    <ul className="space-y-2 border-t border-gray-100 pt-4">
+                    <ul className="space-y-1.5 border-t border-gray-100 pt-3">
                       {benefit.details.map((detail, idx) => (
-                        <li key={idx} className="flex items-start text-sm text-gray-600">
-                          <CheckCircle2 className="w-4 h-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
+                        <li key={idx} className="flex items-start text-xs text-gray-600">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-500 mr-1.5 mt-0.5 flex-shrink-0" />
                           <span>{detail}</span>
                         </li>
                       ))}
@@ -717,120 +759,184 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section id="testimonials" className="py-20 lg:py-32 px-4 sm:px-6 lg:px-8 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16" data-animate data-animate-id="testimonials-header" id="testimonials-header">
-            <div className="inline-block px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-medium mb-4">
-              Témoignages
-            </div>
-            <h2 className="text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4">
-              Ils nous font confiance
-            </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Découvrez ce que nos clients disent de RecruitPro
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => {
-              const elementId = `testimonial-${index}`
-              const isVisible = visibleSections.has(elementId) || visibleSections.has('testimonials-header')
-              return (
-                <div
-                  key={index}
-                  data-animate
-                  data-animate-id={elementId}
-                  id={elementId}
-                  className={`bg-gradient-to-br from-gray-50 to-white p-8 rounded-3xl border-2 border-gray-100 hover:border-blue-200 hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 group ${
-                    isVisible ? 'animate-fade-in-up' : 'opacity-100'
-                  }`}
-                  style={{ animationDelay: `${index * 150}ms` }}
-                >
-                  <div className="flex items-center mb-4">
-                    {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                    ))}
-                  </div>
-                  <div className="mb-6">
-                    <p className="text-gray-700 leading-relaxed italic text-lg mb-4">
-                      "{testimonial.content}"
-                    </p>
-                  </div>
-                  <div className="flex items-center pt-4 border-t border-gray-200">
-                    <div className="w-14 h-14 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-lg mr-4 shadow-lg transform group-hover:scale-110 transition-transform">
-                      {testimonial.image}
-                    </div>
-                    <div>
-                      <div className="font-bold text-gray-900 text-lg">{testimonial.name}</div>
-                      <div className="text-sm text-gray-600">{testimonial.role}</div>
-                      <div className="text-sm font-semibold text-blue-600">{testimonial.company}</div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
       {/* Roles Section */}
-      <section id="roles" className="py-20 lg:py-32 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 relative overflow-hidden">
+      <section id="roles" className="py-12 lg:py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-gray-900 via-emerald-900 to-teal-900 relative overflow-hidden">
+        {/* Animated Background Elements */}
         <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
+        <div className="absolute top-20 left-10 w-96 h-96 bg-emerald-500/20 rounded-full mix-blend-screen filter blur-3xl animate-blob-float"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-teal-500/20 rounded-full mix-blend-screen filter blur-3xl animate-blob-float animation-delay-2000"></div>
+        
         <div className="max-w-7xl mx-auto relative z-10">
-          <div className="text-center mb-16" data-animate id="roles-header">
-            <div className="inline-block px-4 py-2 bg-white/20 text-white rounded-full text-sm font-medium mb-4">
+          <div className="text-center mb-12" data-animate id="roles-header">
+            <div className="inline-block px-3 py-1.5 bg-white/20 text-white rounded-full text-xs font-medium mb-4 animate-fade-in-up animate-float-subtle">
               Espaces Dédiés
             </div>
-            <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-4">
+            <h2 className="text-3xl lg:text-4xl font-extrabold text-white mb-4 animate-fade-in-up animation-delay-200">
               Une interface pour chaque rôle
             </h2>
-            <p className="text-xl text-white/80 max-w-2xl mx-auto">
-              Des espaces personnalisés adaptés à vos besoins
+            <p className="text-lg text-white/90 max-w-3xl mx-auto mb-2 animate-fade-in-up animation-delay-400">
+              Chaque rôle a ses propres défis et besoins. C'est pourquoi nous avons conçu des espaces entièrement personnalisés, 
+              optimisés pour votre quotidien et vos objectifs spécifiques.
+            </p>
+            <p className="text-base text-white/70 max-w-2xl mx-auto animate-fade-in-up animation-delay-600">
+              Découvrez comment chaque interface s'adapte parfaitement à votre fonction et maximise votre productivité.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6">
             {roles.map((role, index) => {
               const Icon = role.icon
-              const isVisible = visibleSections.has('roles')
+              const elementId = `role-${index}`
+              const isVisible = visibleSections.has(elementId) || visibleSections.has('roles-header')
               return (
                 <div
                   key={role.id}
                   data-animate
-                  id={`role-${index}`}
-                  className={`relative p-8 rounded-3xl text-white overflow-hidden group hover:shadow-2xl transition-all duration-500 transform hover:scale-105 ${
-                    isVisible ? 'animate-fade-in-up' : 'opacity-0'
+                  data-animate-id={elementId}
+                  id={elementId}
+                  className={`relative p-5 lg:p-6 rounded-2xl text-white overflow-hidden group hover:shadow-2xl transition-all duration-700 transform hover:scale-[1.02] hover:-translate-y-2 ${
+                    isVisible ? 'animate-role-card-in' : 'opacity-0'
                   }`}
                   style={{
                     background: role.gradient,
-                    animationDelay: `${index * 150}ms`
+                    animationDelay: `${index * 200}ms`
                   }}
                 >
+                  {/* Animated background glow */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/0 via-white/5 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 group-hover:scale-150 group-hover:opacity-50 transition-all duration-1000"></div>
+                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24 group-hover:scale-125 group-hover:opacity-30 transition-all duration-1000"></div>
+                  
                   <div className="relative z-10">
-                    <div className="bg-white/20 backdrop-blur-sm w-20 h-20 rounded-2xl flex items-center justify-center mb-6 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                      <Icon className="w-10 h-10" />
+                    <div className="bg-white/20 backdrop-blur-sm w-14 h-14 rounded-xl flex items-center justify-center mb-4 transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-500 shadow-lg group-hover:shadow-xl group-hover:bg-white/30 animate-icon-float">
+                      <Icon className="w-7 h-7 transform group-hover:scale-110 transition-transform duration-300" />
                     </div>
-                    <h3 className="text-3xl font-bold mb-3">{role.title}</h3>
-                    <p className="text-white/90 mb-6 text-lg">{role.description}</p>
-                    <ul className="space-y-3 mb-8">
-                      {role.features.map((feature, idx) => (
-                        <li key={idx} className="flex items-center text-white/90">
-                          <CheckCircle2 className="w-5 h-5 mr-3 flex-shrink-0" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
+                    <h3 className="text-2xl font-bold mb-2 transform group-hover:translate-x-1 transition-transform duration-300">{role.title}</h3>
+                    <p className="text-white/90 mb-3 text-sm lg:text-base font-medium">{role.description}</p>
+                    {role.detailedDescription && (
+                      <p className="text-white/80 mb-4 text-xs lg:text-sm leading-relaxed">{role.detailedDescription}</p>
+                    )}
+                    
+                    <div className="mb-4">
+                      <h4 className="text-white font-semibold text-sm mb-3 flex items-center transform group-hover:translate-x-1 transition-transform duration-300">
+                        <Briefcase className="w-4 h-4 mr-2 animate-pulse-slow" />
+                        Fonctionnalités principales
+                      </h4>
+                      <ul className="space-y-1.5 mb-4">
+                        {role.features.slice(0, 4).map((feature, idx) => (
+                          <li 
+                            key={idx} 
+                            className="flex items-start text-white/90 text-xs transform group-hover:translate-x-1 transition-all duration-300"
+                            style={{ transitionDelay: `${idx * 50}ms` }}
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 mr-2 mt-0.5 flex-shrink-0 transform group-hover:scale-110 transition-transform duration-200" />
+                            <span className="group-hover:text-white transition-colors duration-200">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {role.features.length > 4 && (
+                        <details className="group/details">
+                          <summary className="text-white/80 text-xs cursor-pointer hover:text-white transition-all duration-200 flex items-center transform hover:translate-x-1">
+                            <ChevronDown className="w-3 h-3 mr-1 group-open/details:rotate-180 transition-transform duration-300" />
+                            Voir {role.features.length - 4} fonctionnalités supplémentaires
+                          </summary>
+                          <ul className="space-y-1.5 mt-2 ml-5 animate-fade-in">
+                            {role.features.slice(4).map((feature, idx) => (
+                              <li 
+                                key={idx + 4} 
+                                className="flex items-start text-white/80 text-xs transform hover:translate-x-1 hover:text-white/90 transition-all duration-200"
+                                style={{ animationDelay: `${idx * 50}ms` }}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-2 mt-0.5 flex-shrink-0 transform hover:scale-110 transition-transform duration-200" />
+                                <span>{feature}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
+
+                    {role.stats && role.stats.length > 0 && (
+                      <div className="mb-4 pt-4 border-t border-white/20">
+                        <h4 className="text-white font-semibold text-xs mb-3 flex items-center transform group-hover:translate-x-1 transition-transform duration-300">
+                          <BarChart className="w-3.5 h-3.5 mr-2 animate-pulse-slow" />
+                          En chiffres
+                        </h4>
+                        <div className="grid grid-cols-3 gap-2">
+                          {role.stats.map((stat, idx) => {
+                            const StatIcon = stat.icon
+                            return (
+                              <div 
+                                key={idx} 
+                                className="text-center bg-white/10 rounded-lg px-2 py-2 backdrop-blur-sm transform group-hover:scale-105 transition-all duration-300 hover:bg-white/20 cursor-default"
+                                style={{ transitionDelay: `${idx * 100}ms` }}
+                              >
+                                <StatIcon className="w-3.5 h-3.5 text-white/80 mx-auto mb-1 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300" />
+                                <div className="text-white font-bold text-xs transform group-hover:scale-110 transition-transform duration-300">{stat.value}</div>
+                                <div className="text-white/70 text-[10px] leading-tight group-hover:text-white/90 transition-colors duration-300">{stat.label}</div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {role.advantages && role.advantages.length > 0 && (
+                      <div className="mb-4 pt-4 border-t border-white/20">
+                        <h4 className="text-white font-semibold text-sm mb-3 flex items-center transform group-hover:translate-x-1 transition-transform duration-300">
+                          <Trophy className="w-4 h-4 mr-2 animate-pulse-slow" />
+                          Avantages clés
+                        </h4>
+                        <div className="grid grid-cols-1 gap-2">
+                          {role.advantages.map((advantage, idx) => {
+                            const AdvantageIcon = advantage.icon
+                            return (
+                              <div 
+                                key={idx} 
+                                className="flex items-center text-white/90 text-xs bg-white/10 rounded-lg px-3 py-2 backdrop-blur-sm transform group-hover:translate-x-2 hover:bg-white/20 transition-all duration-300 cursor-default"
+                                style={{ transitionDelay: `${idx * 100}ms` }}
+                              >
+                                <AdvantageIcon className="w-4 h-4 mr-2 flex-shrink-0 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300" />
+                                <span className="group-hover:text-white transition-colors duration-300">{advantage.text}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {role.useCases && role.useCases.length > 0 && (
+                      <div className="mb-5 pt-4 border-t border-white/20">
+                        <h4 className="text-white font-semibold text-sm mb-3 flex items-center transform group-hover:translate-x-1 transition-transform duration-300">
+                          <Target className="w-4 h-4 mr-2 animate-pulse-slow" />
+                          Cas d'usage
+                        </h4>
+                        <ul className="space-y-1.5">
+                          {role.useCases.map((useCase, idx) => (
+                            <li 
+                              key={idx} 
+                              className="flex items-start text-white/80 text-xs transform group-hover:translate-x-2 hover:text-white/90 transition-all duration-300"
+                              style={{ transitionDelay: `${idx * 80}ms` }}
+                            >
+                              <ArrowRight className="w-3 h-3 mr-2 mt-0.5 flex-shrink-0 text-white/60 transform group-hover:translate-x-1 group-hover:text-white transition-all duration-300" />
+                              <span>{useCase}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
                     <Link
                       href={`/auth/login?role=${encodeURIComponent(role.id)}`}
-                      className="inline-flex items-center px-6 py-3 bg-white text-gray-900 rounded-xl font-bold hover:bg-gray-100 transition-all transform hover:scale-105 shadow-lg"
+                      className="inline-flex items-center px-5 py-2.5 bg-white text-gray-900 rounded-lg font-bold text-sm hover:bg-gray-100 transition-all transform hover:scale-105 hover:shadow-2xl shadow-lg w-full justify-center group/button relative overflow-hidden"
                     >
-                      Accéder à l'espace
-                      <ArrowRight className="w-5 h-5 ml-2" />
+                      <span className="relative z-10 flex items-center">
+                        Accéder à l'espace {role.title}
+                        <ArrowRight className="w-4 h-4 ml-2 transform group-hover/button:translate-x-1 transition-transform duration-300" />
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-white via-gray-50 to-white opacity-0 group-hover/button:opacity-100 group-hover/button:animate-shimmer transition-opacity duration-500"></div>
                     </Link>
                   </div>
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 group-hover:scale-150 transition-transform duration-700"></div>
-                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24 group-hover:scale-125 transition-transform duration-700"></div>
                 </div>
               )
             })}
@@ -839,43 +945,43 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 lg:py-32 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 relative overflow-hidden">
+      <section className="py-12 lg:py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 relative overflow-hidden">
         <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
         <div className="max-w-4xl mx-auto text-center relative z-10" data-animate id="cta">
-          <Trophy className="w-16 h-16 text-white mx-auto mb-6 animate-bounce" />
-          <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-6">
+          <Trophy className="w-12 h-12 text-white mx-auto mb-4 animate-bounce" />
+          <h2 className="text-3xl lg:text-4xl font-extrabold text-white mb-4">
             Prêt à transformer votre recrutement ?
           </h2>
-          <p className="text-xl text-white/90 mb-10 max-w-2xl mx-auto">
-            Rejoignez des centaines d'entreprises qui font confiance à RecruitPro pour recruter les meilleurs talents
+          <p className="text-lg text-white/90 mb-8 max-w-2xl mx-auto">
+            Rejoignez des centaines d'entreprises qui font confiance à Yemma-Gates pour recruter les meilleurs talents
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
             <Link
               href="/auth/choice"
-              className="group px-10 py-5 bg-white text-blue-600 rounded-2xl font-bold text-lg shadow-2xl hover:shadow-white/50 transition-all transform hover:scale-105 flex items-center space-x-2"
+              className="group px-8 py-4 bg-white text-emerald-600 rounded-xl font-bold text-base shadow-xl hover:shadow-white/50 transition-all transform hover:scale-105 flex items-center space-x-2"
             >
-              <Rocket className="w-6 h-6" />
+              <Rocket className="w-5 h-5" />
               <span>Commencer gratuitement</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
             <a
               href="#features"
-              className="px-10 py-5 bg-white/10 backdrop-blur-sm text-white rounded-2xl font-semibold text-lg border-2 border-white/30 hover:bg-white/20 transition-all"
+              className="px-8 py-4 bg-white/10 backdrop-blur-sm text-white rounded-xl font-semibold text-base border-2 border-white/30 hover:bg-white/20 transition-all"
             >
               Voir les fonctionnalités
             </a>
           </div>
-          <div className="mt-12 flex items-center justify-center space-x-8 text-white/80">
+          <div className="mt-8 flex items-center justify-center space-x-6 text-white/80 text-sm">
             <div className="flex items-center">
-              <CheckCircle2 className="w-5 h-5 mr-2" />
+              <CheckCircle2 className="w-4 h-4 mr-1.5" />
               <span>Sans engagement</span>
             </div>
             <div className="flex items-center">
-              <CheckCircle2 className="w-5 h-5 mr-2" />
+              <CheckCircle2 className="w-4 h-4 mr-1.5" />
               <span>Essai gratuit</span>
             </div>
             <div className="flex items-center">
-              <CheckCircle2 className="w-5 h-5 mr-2" />
+              <CheckCircle2 className="w-4 h-4 mr-1.5" />
               <span>Support 24/7</span>
             </div>
           </div>
@@ -883,63 +989,62 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-300 py-16 px-4 sm:px-6 lg:px-8">
+      <footer className="bg-gray-900 text-gray-300 py-8 lg:py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5 lg:gap-6 mb-6">
             <div>
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg">
-                  <Briefcase className="w-6 h-6 text-white" />
+              <div className="flex items-center space-x-2 mb-3">
+                <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-1.5 rounded-lg">
+                  <Briefcase className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-xl font-bold text-white">RecruitPro</span>
+                <span className="text-lg font-bold text-white">Yemma-Gates</span>
               </div>
-              <p className="text-gray-400 mb-4">
+              <p className="text-sm text-gray-400 mb-3">
                 La plateforme de recrutement nouvelle génération pour transformer votre processus d'embauche.
               </p>
-              <div className="flex space-x-4">
-                <a href="#" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors">
+              <div className="flex space-x-3">
+                <a href="#" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-emerald-600 transition-colors">
                   <span className="sr-only">LinkedIn</span>
-                  <Building2 className="w-5 h-5" />
+                  <Building2 className="w-4 h-4" />
                 </a>
-                <a href="#" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors">
+                <a href="#" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-emerald-600 transition-colors">
                   <span className="sr-only">Twitter</span>
-                  <MessageSquare className="w-5 h-5" />
+                  <MessageSquare className="w-4 h-4" />
                 </a>
               </div>
             </div>
             <div>
-              <h4 className="text-white font-bold mb-4">Produit</h4>
-              <ul className="space-y-2">
-                <li><a href="#features" className="hover:text-white transition-colors">Fonctionnalités</a></li>
-                <li><a href="#benefits" className="hover:text-white transition-colors">Avantages</a></li>
-                <li><a href="#testimonials" className="hover:text-white transition-colors">Témoignages</a></li>
-                <li><a href="#roles" className="hover:text-white transition-colors">Espaces</a></li>
+              <h4 className="text-white font-bold mb-3 text-sm">Produit</h4>
+              <ul className="space-y-1.5">
+                <li><a href="#features" className="text-sm hover:text-white transition-colors">Fonctionnalités</a></li>
+                <li><a href="#benefits" className="text-sm hover:text-white transition-colors">Avantages</a></li>
+                <li><a href="#roles" className="text-sm hover:text-white transition-colors">Espaces</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="text-white font-bold mb-4">Entreprise</h4>
-              <ul className="space-y-2">
-                <li><a href="#" className="hover:text-white transition-colors">À propos</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Support</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
+              <h4 className="text-white font-bold mb-3 text-sm">Entreprise</h4>
+              <ul className="space-y-1.5">
+                <li><a href="#" className="text-sm hover:text-white transition-colors">À propos</a></li>
+                <li><a href="#" className="text-sm hover:text-white transition-colors">Contact</a></li>
+                <li><a href="#" className="text-sm hover:text-white transition-colors">Support</a></li>
+                <li><a href="#" className="text-sm hover:text-white transition-colors">Blog</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="text-white font-bold mb-4">Sécurité & Conformité</h4>
-              <ul className="space-y-2">
-                <li className="flex items-center"><Lock className="w-4 h-4 mr-2" />Données sécurisées</li>
-                <li className="flex items-center"><Shield className="w-4 h-4 mr-2" />Conforme RGPD</li>
-                <li className="flex items-center"><Globe className="w-4 h-4 mr-2" />Disponible partout</li>
-                <li className="flex items-center"><Smartphone className="w-4 h-4 mr-2" />Mobile-friendly</li>
+              <h4 className="text-white font-bold mb-3 text-sm">Sécurité & Conformité</h4>
+              <ul className="space-y-1.5">
+                <li className="flex items-center text-sm"><Lock className="w-3.5 h-3.5 mr-1.5" />Données sécurisées</li>
+                <li className="flex items-center text-sm"><Shield className="w-3.5 h-3.5 mr-1.5" />Conforme RGPD</li>
+                <li className="flex items-center text-sm"><Globe className="w-3.5 h-3.5 mr-1.5" />Disponible partout</li>
+                <li className="flex items-center text-sm"><Smartphone className="w-3.5 h-3.5 mr-1.5" />Mobile-friendly</li>
               </ul>
             </div>
           </div>
-          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-400 mb-4 md:mb-0">
-              &copy; {new Date().getFullYear()} RecruitPro. Tous droits réservés.
+          <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row justify-between items-center">
+            <p className="text-xs text-gray-400 mb-3 md:mb-0">
+              &copy; {new Date().getFullYear()} Yemma-Gates. Tous droits réservés.
             </p>
-            <div className="flex space-x-6">
+            <div className="flex space-x-4 text-xs">
               <a href="#" className="text-gray-400 hover:text-white transition-colors">Mentions légales</a>
               <a href="#" className="text-gray-400 hover:text-white transition-colors">Confidentialité</a>
               <a href="#" className="text-gray-400 hover:text-white transition-colors">CGU</a>
@@ -993,6 +1098,90 @@ export default function LandingPage() {
         .animate-gradient {
           background-size: 200% 200%;
           animation: gradient 3s ease infinite;
+        }
+        @keyframes blob-float {
+          0%, 100% {
+            transform: translate(0, 0) scale(1);
+          }
+          33% {
+            transform: translate(30px, -50px) scale(1.1);
+          }
+          66% {
+            transform: translate(-20px, 20px) scale(0.9);
+          }
+        }
+        .animate-blob-float {
+          animation: blob-float 8s ease-in-out infinite;
+        }
+        @keyframes float-subtle {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-5px);
+          }
+        }
+        .animate-float-subtle {
+          animation: float-subtle 3s ease-in-out infinite;
+        }
+        @keyframes role-card-in {
+          from {
+            opacity: 0;
+            transform: translateY(30px) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        .animate-role-card-in {
+          animation: role-card-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        @keyframes icon-float {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-3px);
+          }
+        }
+        .animate-icon-float {
+          animation: icon-float 4s ease-in-out infinite;
+        }
+        @keyframes pulse-slow {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.7;
+          }
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 3s ease-in-out infinite;
+        }
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.4s ease-out forwards;
+        }
+        @keyframes shimmer {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
+        }
+        .animate-shimmer {
+          animation: shimmer 1.5s ease-in-out infinite;
         }
         .bg-grid-pattern {
           background-image: 
