@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Fichiers de configuration locaux
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Base de données
+*.db
+*.sqlite
+*.sqlite3
+
+# Fichiers temporaires
+*.tmp
+*.temp
+.DS_Store
+
+# Documentation
+*.md
+!README.md
+
+# Scripts de migration locaux
+migrate_*.py
+test_*.py
+
+# Fichiers de test
+tests/
+test_*.py
+
+# Alembic (garder seulement les fichiers nécessaires)
+alembic/versions/*.pyc
