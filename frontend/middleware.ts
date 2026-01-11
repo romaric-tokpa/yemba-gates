@@ -4,9 +4,15 @@ import type { NextRequest } from 'next/server'
 // Routes protégées qui nécessitent une authentification
 const PROTECTED_ROUTES = [
   '/admin',
+  '/admin-secure', // Route admin sécurisée avec authentification renforcée
   '/manager',
   '/recruiter',
   '/client',
+]
+
+// Routes admin sécurisées nécessitant une vérification supplémentaire
+const ADMIN_SECURE_ROUTES = [
+  '/admin-secure',
 ]
 
 // Routes publiques (accessibles sans authentification)
@@ -36,11 +42,22 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
+  // Autoriser l'accès à la page de login admin sécurisée sans authentification
+  if (pathname === '/admin-secure/login' || pathname.startsWith('/admin-secure/login')) {
+    return NextResponse.next()
+  }
+
   // Vérifier si la route est protégée
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route))
+  const isAdminSecureRoute = ADMIN_SECURE_ROUTES.some(route => pathname.startsWith(route))
   
   if (isProtectedRoute && !token) {
-    // Log pour debug (peut être retiré en production)
+    // Pour les routes admin sécurisées (sauf le login), rediriger vers la page de login admin sécurisée
+    if (isAdminSecureRoute) {
+      console.log(`[Middleware] Route admin sécurisée: ${pathname}, Token absent - Redirection vers /admin-secure/login`)
+      return NextResponse.redirect(new URL('/admin-secure/login', request.url))
+    }
+    // Pour les autres routes protégées, rediriger vers le choix de profil
     console.log(`[Middleware] Route protégée: ${pathname}, Token absent - Redirection vers /auth/choice`)
     return NextResponse.redirect(new URL('/auth/choice', request.url))
   }

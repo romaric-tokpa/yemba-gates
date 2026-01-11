@@ -108,7 +108,7 @@ export default function ClientNewJobPage() {
         evolution_poste: parsedData.evolution_poste || '',
       })
       
-      success('Fiche de poste analysée avec succès ! Vérifiez et complétez les informations ci-dessous.')
+      success('Texte extrait avec succès ! Le contenu du fichier a été placé dans "Missions principales". Vérifiez et complétez les informations ci-dessous.')
       
       // Passer en mode manuel après le parsing pour permettre l'édition
       setUploadMode('manual')
@@ -225,7 +225,7 @@ export default function ClientNewJobPage() {
         </h1>
         <p className="text-gray-600 mt-2">
           {uploadMode === 'upload' 
-            ? 'Importez une fiche de poste pour extraire automatiquement les informations'
+            ? 'Importez une fiche de poste pour extraire automatiquement le texte (PDF ou Word). Le texte sera placé dans "Missions principales" et vous pourrez compléter les autres champs.'
             : 'Remplissez le formulaire pour créer un nouveau besoin de recrutement. Le besoin sera soumis à validation par le manager.'}
         </p>
       </div>
@@ -245,7 +245,7 @@ export default function ClientNewJobPage() {
           <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           {isParsingJobDescription ? (
             <div>
-              <div className="text-lg font-medium text-gray-700 mb-2">Analyse de la fiche de poste en cours...</div>
+              <div className="text-lg font-medium text-gray-700 mb-2">Extraction du texte en cours...</div>
               <div className="text-sm text-gray-500">Veuillez patienter</div>
             </div>
           ) : (
@@ -254,7 +254,7 @@ export default function ClientNewJobPage() {
                 Glissez-déposez votre fiche de poste ici
               </div>
               <div className="text-sm text-gray-500 mb-4">
-                ou cliquez pour sélectionner un fichier (PDF ou Word)
+                ou cliquez pour sélectionner un fichier (PDF ou Word). Le texte sera extrait automatiquement.
               </div>
               <label className="inline-flex items-center gap-2 bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 cursor-pointer transition-colors">
                 <Upload className="w-5 h-5" />
@@ -291,7 +291,7 @@ export default function ClientNewJobPage() {
             className="flex items-center gap-2 text-emerald-600 hover:text-emerald-700 underline"
           >
             <FileText className="w-4 h-4" />
-            Créer via une fiche de poste (extraction automatique)
+            Créer via une fiche de poste (extraction de texte)
           </button>
         </div>
       )}
