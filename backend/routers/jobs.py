@@ -32,11 +32,11 @@ try:
 except ImportError:
     Document = None
 
-# Import pour OpenAI
+# Import pour Google Gemini
 try:
-    from openai import OpenAI
+    import google.generativeai as genai
 except ImportError:
-    OpenAI = None
+    genai = None
 
 logger = logging.getLogger(__name__)
 
@@ -127,21 +127,24 @@ async def extract_text_from_job_description(file: UploadFile) -> tuple[str, str]
 
 def parse_job_description_with_llm(job_text: str) -> dict:
     """Utilise un LLM pour parser le texte de la fiche de poste et extraire les informations structurées"""
-    if OpenAI is None:
+    if genai is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI n'est pas installé. Installez-le avec: pip install openai"
+            detail="google-generativeai n'est pas installé. Installez-le avec: pip install google-generativeai"
         )
     
     # Récupérer la clé API depuis les variables d'environnement
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")  # Compatibilité avec ancienne variable
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OPENAI_API_KEY n'est pas configurée dans les variables d'environnement"
+            detail="GEMINI_API_KEY n'est pas configurée dans les variables d'environnement"
         )
     
-    client = OpenAI(api_key=api_key)
+    # Configurer Gemini
+    genai.configure(api_key=api_key)
+    # Utiliser gemini-1.5-pro (modèle stable et disponible)
+    model = genai.GenerativeModel('gemini-1.5-pro')
     
     # Prompt pour extraire les informations de la fiche de poste
     prompt = f"""Tu es un assistant expert en recrutement. Analyse la fiche de poste suivante et extrais les informations pertinentes au format JSON.
@@ -190,18 +193,24 @@ Règles importantes:
 """
     
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Modèle économique et rapide
-            messages=[
-                {"role": "system", "content": "Tu es un assistant expert en extraction de données de fiches de poste. Tu retournes uniquement du JSON valide."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.1,  # Faible température pour plus de cohérence
-            max_tokens=4000
+        # Construire le prompt complet pour Gemini
+        full_prompt = f"""Tu es un assistant expert en extraction de données de fiches de poste. Tu retournes uniquement du JSON valide.
+
+{prompt}"""
+        
+        # Configuration pour la génération
+        generation_config = {
+            "temperature": 0.1,
+            "max_output_tokens": 4000,
+        }
+        
+        response = model.generate_content(
+            full_prompt,
+            generation_config=generation_config
         )
         
         # Extraire le JSON de la réponse
-        response_text = response.choices[0].message.content.strip()
+        response_text = response.text.strip()
         
         # Nettoyer la réponse (enlever les markdown code blocks si présents)
         if response_text.startswith("```json"):
@@ -238,7 +247,7 @@ Règles importantes:
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de l'appel à l'API OpenAI: {str(e)}"
+            detail=f"Erreur lors de l'appel à l'API Gemini: {str(e)}"
         )
 
 
@@ -336,10 +345,11 @@ async def parse_job_description(
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Parse une fiche de poste et extrait automatiquement les informations du besoin
+    Parse une fiche de poste et extrait le texte brut sans utiliser d'IA
     
-    Accepte un fichier PDF ou Word, extrait le texte, et utilise un LLM
-    pour structurer les données selon le modèle JobCreate.
+    Accepte un fichier PDF ou Word, extrait le texte et retourne les données
+    avec le texte dans le champ missions_principales pour permettre à l'utilisateur
+    de compléter manuellement le formulaire.
     """
     tmp_path = None
     try:
@@ -353,38 +363,50 @@ async def parse_job_description(
         # Réinitialiser le pointeur du fichier pour pouvoir le lire
         await job_description_file.seek(0)
         
-        # Extraire le texte de la fiche de poste
+        # Extraire le texte de la fiche de poste (sans IA)
         job_text, tmp_path = await extract_text_from_job_description(job_description_file)
         
-        if not job_text or len(job_text.strip()) < 50:
-            # Nettoyer le fichier temporaire
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+        # Nettoyer le fichier temporaire immédiatement après extraction
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        
+        if not job_text or not job_text.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La fiche de poste semble vide ou le texte n'a pas pu être extrait correctement"
+                detail="Impossible d'extraire le texte du fichier. Vérifiez que le fichier n'est pas vide ou corrompu."
             )
         
-        # Parser le texte avec le LLM
-        try:
-            parsed_data = parse_job_description_with_llm(job_text)
-        except ValueError as e:
-            # Nettoyer le fichier temporaire
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e)
-            )
-        except Exception as e:
-            # Nettoyer le fichier temporaire
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            logger.error(f"Erreur lors du parsing de la fiche de poste: {str(e)}", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Erreur lors de l'analyse de la fiche de poste: {str(e)}"
-            )
+        # Préparer les données avec le texte extrait dans missions_principales
+        # L'utilisateur pourra compléter les autres champs manuellement
+        parsed_data = {
+            "title": "À compléter",  # Titre par défaut - l'utilisateur devra le compléter
+            "missions_principales": job_text.strip(),  # Texte brut extrait du fichier
+            "department": None,
+            "manager_demandeur": None,
+            "entreprise": None,
+            "contract_type": None,
+            "motif_recrutement": None,
+            "urgency": "moyenne",  # Valeur par défaut
+            "date_prise_poste": None,
+            "missions_secondaires": None,
+            "kpi_poste": None,
+            "niveau_formation": None,
+            "experience_requise": None,
+            "competences_techniques_obligatoires": [],
+            "competences_techniques_souhaitees": [],
+            "competences_comportementales": [],
+            "langues_requises": None,
+            "certifications_requises": None,
+            "localisation": None,
+            "mobilite_deplacements": None,
+            "teletravail": None,
+            "contraintes_horaires": None,
+            "criteres_eliminatoires": None,
+            "salaire_minimum": None,
+            "salaire_maximum": None,
+            "avantages": [],
+            "evolution_poste": None,
+        }
         
         # Convertir experience_requise en int si présent
         if "experience_requise" in parsed_data and parsed_data["experience_requise"] is not None:
@@ -411,7 +433,7 @@ async def parse_job_description(
         
         # Créer la réponse avec le schéma JobCreate
         response_data = JobCreate(
-            title=parsed_data.get("title", ""),
+            title=parsed_data.get("title", "") or "",  # Titre vide par défaut
             department=parsed_data.get("department"),
             manager_demandeur=parsed_data.get("manager_demandeur"),
             entreprise=parsed_data.get("entreprise"),
@@ -419,7 +441,7 @@ async def parse_job_description(
             motif_recrutement=parsed_data.get("motif_recrutement"),
             urgency=parsed_data.get("urgency", "moyenne"),
             date_prise_poste=parsed_data.get("date_prise_poste"),
-            missions_principales=parsed_data.get("missions_principales"),
+            missions_principales=parsed_data.get("missions_principales"),  # Texte brut extrait
             missions_secondaires=parsed_data.get("missions_secondaires"),
             kpi_poste=parsed_data.get("kpi_poste"),
             niveau_formation=parsed_data.get("niveau_formation"),

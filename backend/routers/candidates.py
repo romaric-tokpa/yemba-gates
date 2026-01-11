@@ -25,24 +25,19 @@ try:
 except ImportError:
     Document = None
 
-# Import pour OpenAI
+# Import pour Google Gemini
 try:
-    from openai import OpenAI
+    import google.generativeai as genai
+    GeminiError = Exception
     try:
-        from openai import RateLimitError, APIError
+        # Tentative d'import des erreurs spécifiques de Gemini
+        from google.api_core import exceptions as google_exceptions
+        GeminiError = google_exceptions.GoogleAPIError
     except ImportError:
-        # Pour les versions plus anciennes d'OpenAI, utiliser OpenAIError
-        try:
-            from openai import OpenAIError
-            RateLimitError = OpenAIError
-            APIError = OpenAIError
-        except ImportError:
-            RateLimitError = Exception
-            APIError = Exception
+        pass
 except ImportError:
-    OpenAI = None
-    RateLimitError = Exception
-    APIError = Exception
+    genai = None
+    GeminiError = Exception
 
 from database import get_session, engine
 from models import Candidate, User, UserRole, Interview, Application, Job, CandidateJobComparison
@@ -322,21 +317,24 @@ async def extract_text_from_cv(file: UploadFile) -> tuple[str, str]:
 
 def parse_cv_with_llm(cv_text: str) -> dict:
     """Utilise un LLM pour parser le texte du CV et extraire les informations structurées"""
-    if OpenAI is None:
+    if genai is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI n'est pas installé. Installez-le avec: pip install openai"
+            detail="google-generativeai n'est pas installé. Installez-le avec: pip install google-generativeai"
         )
     
     # Récupérer la clé API depuis les variables d'environnement
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")  # Compatibilité avec ancienne variable
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OPENAI_API_KEY n'est pas configurée dans les variables d'environnement"
+            detail="GEMINI_API_KEY n'est pas configurée dans les variables d'environnement"
         )
     
-    client = OpenAI(api_key=api_key)
+    # Configurer Gemini
+    genai.configure(api_key=api_key)
+    # Utiliser gemini-1.5-pro (modèle stable et disponible)
+    model = genai.GenerativeModel('gemini-1.5-pro')
     
     # Prompt pour extraire les informations du CV
     prompt = f"""Tu es un assistant expert en recrutement. Analyse le CV suivant et extrais les informations pertinentes au format JSON.
@@ -366,18 +364,24 @@ Règles importantes:
 """
     
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Modèle économique et rapide
-            messages=[
-                {"role": "system", "content": "Tu es un assistant expert en extraction de données de CV. Tu retournes uniquement du JSON valide."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.1,  # Faible température pour plus de cohérence
-            max_tokens=2000
+        # Construire le prompt complet pour Gemini
+        full_prompt = f"""Tu es un assistant expert en extraction de données de CV. Tu retournes uniquement du JSON valide.
+
+{prompt}"""
+        
+        # Configuration pour la génération
+        generation_config = {
+            "temperature": 0.1,
+            "max_output_tokens": 2000,
+        }
+        
+        response = model.generate_content(
+            full_prompt,
+            generation_config=generation_config
         )
         
         # Extraire le JSON de la réponse
-        response_text = response.choices[0].message.content.strip()
+        response_text = response.text.strip()
         
         # Nettoyer la réponse (enlever les markdown code blocks si présents)
         if response_text.startswith("```json"):
@@ -407,10 +411,10 @@ Règles importantes:
         error_str = str(e)
         is_rate_limit = False
         
-        # Vérifier si c'est une RateLimitError ou si le message contient des indices de rate limit
-        if RateLimitError and RateLimitError != Exception and isinstance(e, RateLimitError):
-            is_rate_limit = True
-        elif "429" in error_str or "rate_limit" in error_str.lower() or "Rate limit" in error_str or "rate_limit_exceeded" in error_str.lower():
+        # Vérifier si c'est une erreur de rate limit Gemini
+        if GeminiError and GeminiError != Exception and isinstance(e, GeminiError):
+            is_rate_limit = "429" in error_str or "quota" in error_str.lower() or "rate_limit" in error_str.lower()
+        elif "429" in error_str or "rate_limit" in error_str.lower() or "Rate limit" in error_str or "quota" in error_str.lower() or "rate_limit_exceeded" in error_str.lower():
             is_rate_limit = True
         
         if is_rate_limit:
@@ -426,7 +430,7 @@ Règles importantes:
                 except:
                     pass
             
-            error_message = "Limite de requêtes OpenAI atteinte. Le service d'analyse automatique de CV est temporairement indisponible."
+            error_message = "Limite de requêtes Gemini API atteinte. Le service d'analyse automatique de CV est temporairement indisponible."
             if wait_time:
                 error_message += f" Veuillez réessayer dans {wait_time}."
             else:
@@ -439,13 +443,13 @@ Règles importantes:
                 detail=error_message
             )
         
-        # Autres erreurs OpenAI ou erreurs générales
+        # Autres erreurs Gemini ou erreurs générales
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de l'appel à l'API OpenAI: {str(e)}"
+            detail=f"Erreur lors de l'appel à l'API Gemini: {str(e)}"
         )
     except Exception as e:
-        # Gérer les autres exceptions (y compris les erreurs OpenAI non capturées)
+        # Gérer les autres exceptions (y compris les erreurs Gemini non capturées)
         error_str = str(e)
         if "429" in error_str or "rate_limit" in error_str.lower() or "Rate limit" in error_str:
             # Extraire le temps d'attente si disponible
@@ -459,7 +463,7 @@ Règles importantes:
                 except:
                     pass
             
-            error_message = "Limite de requêtes OpenAI atteinte. Le service d'analyse automatique de CV est temporairement indisponible."
+            error_message = "Limite de requêtes Gemini API atteinte. Le service d'analyse automatique de CV est temporairement indisponible."
             if wait_time:
                 error_message += f" Veuillez réessayer dans {wait_time}."
             else:
@@ -475,7 +479,7 @@ Règles importantes:
         # Autres erreurs
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de l'appel à l'API OpenAI: {str(e)}"
+            detail=f"Erreur lors de l'appel à l'API Gemini: {str(e)}"
         )
 
 
@@ -1315,21 +1319,24 @@ def download_cv(
 
 def analyze_job_candidate_match_with_llm(cv_text: str, job_data: dict) -> dict:
     """Utilise un LLM pour analyser en profondeur la correspondance entre un CV et un besoin de recrutement"""
-    if OpenAI is None:
+    if genai is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI n'est pas installé. Installez-le avec: pip install openai"
+            detail="google-generativeai n'est pas installé. Installez-le avec: pip install google-generativeai"
         )
     
     # Récupérer la clé API depuis les variables d'environnement
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")  # Compatibilité avec ancienne variable
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OPENAI_API_KEY n'est pas configurée dans les variables d'environnement"
+            detail="GEMINI_API_KEY n'est pas configurée dans les variables d'environnement"
         )
     
-    client = OpenAI(api_key=api_key)
+    # Configurer Gemini
+    genai.configure(api_key=api_key)
+    # Utiliser gemini-1.5-pro (modèle stable et disponible)
+    model = genai.GenerativeModel('gemini-1.5-pro')
     
     # Construire une description structurée du besoin
     job_description = f"""
@@ -1401,18 +1408,24 @@ Règles importantes:
 """
     
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Modèle économique et rapide
-            messages=[
-                {"role": "system", "content": "Tu es un expert en recrutement spécialisé dans l'analyse approfondie de CV et de besoins de recrutement. Tu retournes uniquement du JSON valide."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,  # Température modérée pour un bon équilibre créativité/cohérence
-            max_tokens=4000
+        # Construire le prompt complet pour Gemini
+        full_prompt = f"""Tu es un expert en recrutement spécialisé dans l'analyse approfondie de CV et de besoins de recrutement. Tu retournes uniquement du JSON valide.
+
+{prompt}"""
+        
+        # Configuration pour la génération
+        generation_config = {
+            "temperature": 0.3,
+            "max_output_tokens": 4000,
+        }
+        
+        response = model.generate_content(
+            full_prompt,
+            generation_config=generation_config
         )
         
         # Extraire le JSON de la réponse
-        response_text = response.choices[0].message.content.strip()
+        response_text = response.text.strip()
         
         # Nettoyer la réponse (enlever les markdown code blocks si présents)
         if response_text.startswith("```json"):

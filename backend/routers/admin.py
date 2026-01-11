@@ -323,11 +323,10 @@ def list_settings(
 ):
     """
     Liste tous les paramètres (réservé aux administrateurs)
+    Note: Le modèle Setting n'a pas de champ category, donc on ignore le filtre category
     """
-    if category:
-        statement = select(Setting).where(Setting.category == category).order_by(Setting.key)
-    else:
-        statement = select(Setting).order_by(Setting.category, Setting.key)
+    # Le modèle Setting n'a pas de champ category, donc on liste tous les settings
+    statement = select(Setting).order_by(Setting.key)
     
     settings = session.exec(statement).all()
     
@@ -336,9 +335,9 @@ def list_settings(
             id=str(setting.id),
             key=setting.key,
             value=setting.value,
-            category=setting.category,
+            category='other',  # Valeur par défaut car le modèle n'a pas de champ category
             description=setting.description,
-            updated_by=str(setting.updated_by) if setting.updated_by else None,
+            updated_by=None,  # Valeur par défaut car le modèle n'a pas de champ updated_by
             created_at=setting.created_at,
             updated_at=setting.updated_at
         )
@@ -367,9 +366,8 @@ def create_setting(
     new_setting = Setting(
         key=setting_data.key,
         value=setting_data.value,
-        category=setting_data.category,
-        description=setting_data.description,
-        updated_by=current_user.id
+        description=setting_data.description
+        # Note: Le modèle Setting n'a pas de champs category et updated_by
     )
     
     session.add(new_setting)
@@ -380,9 +378,9 @@ def create_setting(
         id=str(new_setting.id),
         key=new_setting.key,
         value=new_setting.value,
-        category=new_setting.category,
+        category=setting_data.category,  # Utiliser la valeur du formulaire
         description=new_setting.description,
-        updated_by=str(new_setting.updated_by) if new_setting.updated_by else None,
+        updated_by=None,  # Le modèle n'a pas de champ updated_by
         created_at=new_setting.created_at,
         updated_at=new_setting.updated_at
     )
@@ -412,7 +410,6 @@ def update_setting(
     if setting_data.description is not None:
         setting.description = setting_data.description
     
-    setting.updated_by = current_user.id
     setting.updated_at = datetime.utcnow()
     
     session.add(setting)
@@ -423,9 +420,9 @@ def update_setting(
         id=str(setting.id),
         key=setting.key,
         value=setting.value,
-        category=setting.category,
+        category='other',  # Valeur par défaut car le modèle n'a pas de champ category
         description=setting.description,
-        updated_by=str(setting.updated_by) if setting.updated_by else None,
+        updated_by=None,  # Le modèle n'a pas de champ updated_by
         created_at=setting.created_at,
         updated_at=setting.updated_at
     )

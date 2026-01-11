@@ -16,11 +16,11 @@ from database import get_session
 from models import User, UserRole, Candidate, Job, Application, Interview, ApplicationHistory
 from auth import get_current_active_user, require_manager, require_recruteur, require_client
 
-# Import pour OpenAI
+# Import pour Google Gemini
 try:
-    from openai import OpenAI
+    import google.generativeai as genai
 except ImportError:
-    OpenAI = None
+    genai = None
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
 
@@ -907,7 +907,7 @@ def get_manager_kpis(
     
     total_sourced = session.exec(sourced_query).one()
     total_qualified = session.exec(qualified_query).one()
-    qualified_rate = (total_qualified / total_sourced * 100) if total_sourced > 0 else None
+    qualified_rate = (total_qualified / total_sourced * 100) if total_sourced > 0 else 0.0
     
     # Taux acceptation offre: (Nb acceptations / Nb offres envoyées) x100
     # Utiliser le statut "embauché" comme indicateur d'acceptation
@@ -920,7 +920,7 @@ def get_manager_kpis(
             Application.status == "embauché"
         )
     ).one()
-    offer_acceptance_rate = (total_offers_accepted / total_offers_sent * 100) if total_offers_sent > 0 else None
+    offer_acceptance_rate = (total_offers_accepted / total_offers_sent * 100) if total_offers_sent > 0 else 0.0
     
     # Taux refus offre: utiliser le statut "rejeté" après envoi d'offre
     total_offers_rejected = session.exec(
@@ -941,13 +941,13 @@ def get_manager_kpis(
             Application.client_validated == True
         )
     ).one()
-    shortlist_acceptance_rate = (total_validated_shortlists / total_shortlists * 100) if total_shortlists > 0 else None
+    shortlist_acceptance_rate = (total_validated_shortlists / total_shortlists * 100) if total_shortlists > 0 else 0.0
     
     # Score moyen candidat
     avg_score = session.exec(
         select(func.avg(Interview.score)).where(Interview.score.isnot(None))
     ).one()
-    average_candidate_score = float(avg_score) if avg_score else None
+    average_candidate_score = float(avg_score) if avg_score else 0.0
     
     # Nb candidats sourcés
     total_candidates_sourced = session.exec(select(func.count(Candidate.id))).one()
@@ -962,7 +962,7 @@ def get_manager_kpis(
     open_jobs = session.exec(
         select(func.count(Job.id)).where(Job.status != "clôturé")
     ).one()
-    closed_vs_open = (closed_jobs / open_jobs) if open_jobs > 0 else None
+    closed_vs_open = (closed_jobs / open_jobs) if open_jobs > 0 else 0.0
     
     # Taux réussite onboarding: (Nb onboardings complets / Nb embauches) x100
     # Pour simplifier, on considère que tous les embauchés ont complété l'onboarding
@@ -1413,20 +1413,23 @@ def analyze_kpis_with_ai(kpis_data: dict, role: str = "manager") -> KPIAnalysis:
     """
     Analyse les KPIs avec l'IA pour générer des insights structurés
     """
-    if OpenAI is None:
+    if genai is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI n'est pas installé. Installez-le avec: pip install openai"
+            detail="google-generativeai n'est pas installé. Installez-le avec: pip install google-generativeai"
         )
     
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")  # Compatibilité avec ancienne variable
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OPENAI_API_KEY n'est pas configurée dans les variables d'environnement"
+            detail="GEMINI_API_KEY n'est pas configurée dans les variables d'environnement"
         )
     
-    client = OpenAI(api_key=api_key)
+    # Configurer Gemini
+    genai.configure(api_key=api_key)
+    # Utiliser gemini-1.5-pro (modèle stable et disponible)
+    model = genai.GenerativeModel('gemini-1.5-pro')
     
     # Préparer les données KPIs pour l'analyse
     kpis_json = json.dumps(kpis_data, default=str, indent=2)
@@ -1476,17 +1479,23 @@ Règles importantes:
 """
     
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Tu es un expert en analyse de performance de recrutement. Tu retournes uniquement du JSON valide."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=3000
+        # Construire le prompt complet pour Gemini
+        full_prompt = f"""Tu es un expert en analyse de performance de recrutement. Tu retournes uniquement du JSON valide.
+
+{prompt}"""
+        
+        # Configuration pour la génération
+        generation_config = {
+            "temperature": 0.3,
+            "max_output_tokens": 3000,
+        }
+        
+        response = model.generate_content(
+            full_prompt,
+            generation_config=generation_config
         )
         
-        response_text = response.choices[0].message.content.strip()
+        response_text = response.text.strip()
         
         # Nettoyer la réponse
         if response_text.startswith("```json"):
