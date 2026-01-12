@@ -514,7 +514,7 @@ export default function ManagerKPIPage() {
                     <div className="space-y-6">
                       <KPICard
                         title="Time to Hire"
-                        value={managerKPIs.time_process.time_to_hire?.toFixed(1)}
+                        value={managerKPIs.time_process.time_to_hire?.toFixed(1) || '0'}
                         unit="jours"
                         icon={Clock}
                         color="blue"
@@ -522,7 +522,7 @@ export default function ManagerKPIPage() {
                       />
                       <KPICard
                         title="Time to Fill"
-                        value={managerKPIs.time_process.time_to_fill?.toFixed(1)}
+                        value={managerKPIs.time_process.time_to_fill?.toFixed(1) || '0'}
                         unit="jours"
                         icon={Clock}
                         color="green"
@@ -530,7 +530,7 @@ export default function ManagerKPIPage() {
                       />
                       <KPICard
                         title="Cycle moyen par étape"
-                        value={managerKPIs.time_process.average_cycle_per_stage?.toFixed(1)}
+                        value={managerKPIs.time_process.average_cycle_per_stage?.toFixed(1) || '0'}
                         unit="jours"
                         icon={Activity}
                         color="purple"
@@ -538,7 +538,7 @@ export default function ManagerKPIPage() {
                       />
                       <KPICard
                         title="Délai moyen feedback"
-                        value={managerKPIs.time_process.average_feedback_delay?.toFixed(1)}
+                        value={managerKPIs.time_process.average_feedback_delay?.toFixed(1) || '0'}
                         unit="jours"
                         icon={Clock}
                         color="orange"
@@ -633,7 +633,7 @@ export default function ManagerKPIPage() {
                     />
                     <KPICard
                       title="Clos / Ouverts"
-                      value={managerKPIs.volume_productivity.closed_vs_open_recruitments?.toFixed(2)}
+                      value={managerKPIs.volume_productivity.closed_vs_open_recruitments?.toFixed(2) || '0'}
                       icon={BarChart3}
                       color="orange"
                     />
@@ -902,28 +902,28 @@ export default function ManagerKPIPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                     <KPICard
                       title="Time to Hire"
-                      value={managerKPIs.time_process.time_to_hire?.toFixed(1)}
+                      value={managerKPIs.time_process.time_to_hire?.toFixed(1) || '0'}
                       unit="jours"
                       icon={Clock}
                       color="blue"
                     />
                     <KPICard
                       title="Time to Fill"
-                      value={managerKPIs.time_process.time_to_fill?.toFixed(1)}
+                      value={managerKPIs.time_process.time_to_fill?.toFixed(1) || '0'}
                       unit="jours"
                       icon={Clock}
                       color="green"
                     />
                     <KPICard
                       title="Cycle moyen par étape"
-                      value={managerKPIs.time_process.average_cycle_per_stage?.toFixed(1)}
+                        value={managerKPIs.time_process.average_cycle_per_stage?.toFixed(1) || '0'}
                       unit="jours"
                       icon={Activity}
                       color="purple"
                     />
                     <KPICard
                       title="Délai moyen feedback"
-                      value={managerKPIs.time_process.average_feedback_delay?.toFixed(1)}
+                      value={managerKPIs.time_process.average_feedback_delay?.toFixed(1) || '0'}
                       unit="jours"
                       icon={Clock}
                       color="orange"
@@ -1018,7 +1018,7 @@ export default function ManagerKPIPage() {
                     />
                     <KPICard
                       title="Clos / Ouverts"
-                      value={managerKPIs.volume_productivity.closed_vs_open_recruitments?.toFixed(2)}
+                      value={managerKPIs.volume_productivity.closed_vs_open_recruitments?.toFixed(2) || '0'}
                       icon={BarChart3}
                       color="orange"
                     />
@@ -1111,14 +1111,14 @@ export default function ManagerKPIPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <KPICard
                       title="Coût moyen recrutement"
-                      value={managerKPIs.cost_budget.average_recruitment_cost?.toFixed(2)}
+                      value={managerKPIs.cost_budget.average_recruitment_cost?.toFixed(2) || '0'}
                       unit="F CFA"
                       icon={DollarSign}
                       color="blue"
                     />
                     <KPICard
                       title="Coût par source"
-                      value={managerKPIs.cost_budget.cost_per_source?.toFixed(2)}
+                      value={managerKPIs.cost_budget.cost_per_source?.toFixed(2) || '0'}
                       unit="F CFA"
                       icon={DollarSign}
                       color="green"
@@ -1158,7 +1158,7 @@ export default function ManagerKPIPage() {
                       </div>
                       <KPICard
                         title="Temps moyen par étape"
-                        value={managerKPIs.recruiter_performance.average_time_per_stage?.toFixed(1)}
+                        value={managerKPIs.recruiter_performance.average_time_per_stage?.toFixed(1) || '0'}
                         unit="jours"
                         icon={Clock}
                         color="orange"
@@ -1201,7 +1201,7 @@ export default function ManagerKPIPage() {
                       </div>
                       <KPICard
                         title="Temps moyen sourcing"
-                        value={managerKPIs.source_channel.average_sourcing_time?.toFixed(1)}
+                        value={managerKPIs.source_channel.average_sourcing_time?.toFixed(1) || '0'}
                         unit="jours"
                         icon={Clock}
                         color="orange"
@@ -1227,7 +1227,7 @@ export default function ManagerKPIPage() {
                     </div>
                     <KPICard
                       title="Délai moyen onboarding"
-                      value={managerKPIs.onboarding.average_onboarding_delay?.toFixed(1)}
+                      value={managerKPIs.onboarding.average_onboarding_delay?.toFixed(1) || '0'}
                       unit="jours"
                       icon={Clock}
                       color="blue"

@@ -1,0 +1,159 @@
+# =============================================================================
+# DOCKER COMPOSE - RECRUTEMENT APP
+# =============================================================================
+# Déploiement complet avec PostgreSQL, Backend FastAPI, Frontend Next.js et Nginx
+#
+# Usage:
+#   Développement: docker-compose up -d
+#   Production:    docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Base de données PostgreSQL
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: recrutement-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-recrutement}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-recrutement_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-recrutement_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-recrutement} -d ${POSTGRES_DB:-recrutement_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - recrutement-network
+
+  # ---------------------------------------------------------------------------
+  # Backend FastAPI
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: recrutement-backend
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-recrutement}:${POSTGRES_PASSWORD:-recrutement_secret}@db:5432/${POSTGRES_DB:-recrutement_db}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - FROM_EMAIL=${FROM_EMAIL:-noreply@example.com}
+      - LOGIN_URL=${LOGIN_URL:-https://example.com/auth/login}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://example.com}
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_static:/app/static
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - recrutement-network
+
+  # ---------------------------------------------------------------------------
+  # Frontend Next.js
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: recrutement-frontend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - recrutement-network
+
+  # ---------------------------------------------------------------------------
+  # Nginx Reverse Proxy (Production)
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: recrutement-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - backend_uploads:/var/www/uploads:ro
+      - backend_static:/var/www/static:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - recrutement-network
+    profiles:
+      - production
+
+  # ---------------------------------------------------------------------------
+  # Certbot pour SSL (Production)
+  # ---------------------------------------------------------------------------
+  certbot:
+    image: certbot/certbot
+    container_name: recrutement-certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    profiles:
+      - production
+    networks:
+      - recrutement-network
+
+# -----------------------------------------------------------------------------
+# Volumes persistants
+# -----------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+  backend_uploads:
+    driver: local
+  backend_static:
+    driver: local
+
+# -----------------------------------------------------------------------------
+# Réseau
+# -----------------------------------------------------------------------------
+networks:
+  recrutement-network:
+    driver: bridge

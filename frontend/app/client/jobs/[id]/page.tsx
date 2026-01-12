@@ -791,7 +791,7 @@ export default function ClientJobDetailPage() {
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {(formData.competences_techniques_obligatoires || []).map((comp, index) => (
+                      {(formData.competences_techniques_obligatoires || []).map((comp: string, index: number) => (
                         <span key={index} className="inline-flex items-center px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm">
                           {comp}
                           <button
@@ -807,7 +807,7 @@ export default function ClientJobDetailPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {(job.competences_techniques_obligatoires || []).length > 0 ? (
-                      job.competences_techniques_obligatoires!.map((comp, index) => (
+                      job.competences_techniques_obligatoires!.map((comp: string, index: number) => (
                         <span key={index} className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm">
                           {comp}
                         </span>
@@ -841,7 +841,7 @@ export default function ClientJobDetailPage() {
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {(formData.competences_techniques_souhaitees || []).map((comp, index) => (
+                      {(formData.competences_techniques_souhaitees || []).map((comp: string, index: number) => (
                         <span key={index} className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
                           {comp}
                           <button
@@ -857,7 +857,7 @@ export default function ClientJobDetailPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {(job.competences_techniques_souhaitees || []).length > 0 ? (
-                      job.competences_techniques_souhaitees!.map((comp, index) => (
+                      job.competences_techniques_souhaitees!.map((comp: string, index: number) => (
                         <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
                           {comp}
                         </span>
@@ -891,7 +891,7 @@ export default function ClientJobDetailPage() {
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {(formData.competences_comportementales || []).map((comp, index) => (
+                      {(formData.competences_comportementales || []).map((comp: string, index: number) => (
                         <span key={index} className="inline-flex items-center px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
                           {comp}
                           <button
@@ -907,7 +907,7 @@ export default function ClientJobDetailPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {(job.competences_comportementales || []).length > 0 ? (
-                      job.competences_comportementales!.map((comp, index) => (
+                      job.competences_comportementales!.map((comp: string, index: number) => (
                         <span key={index} className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
                           {comp}
                         </span>
@@ -1094,7 +1094,7 @@ export default function ClientJobDetailPage() {
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {(formData.avantages || []).map((av, index) => (
+                      {(formData.avantages || []).map((av: string, index: number) => (
                         <span key={index} className="inline-flex items-center px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
                           {av}
                           <button
@@ -1110,7 +1110,7 @@ export default function ClientJobDetailPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {(job.avantages || []).length > 0 ? (
-                      job.avantages!.map((av, index) => (
+                      job.avantages!.map((av: string, index: number) => (
                         <span key={index} className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
                           {av}
                         </span>
@@ -1181,7 +1181,7 @@ export default function ClientJobDetailPage() {
                   </h2>
                   <div className="space-y-3 max-h-96 overflow-y-auto">
                     {history.length > 0 ? (
-                      history.slice(0, 5).map((item, index) => (
+                      history.slice(0, 5).map((item: JobHistoryItem, index: number) => (
                         <div key={index} className="text-sm border-l-2 border-emerald-200 pl-3 py-2">
                           <p className="font-medium text-gray-900">{item.field_name}</p>
                           <p className="text-gray-600 text-xs mt-1">
@@ -1323,7 +1323,7 @@ export default function ClientJobDetailPage() {
 
                       {candidate.candidate_tags && candidate.candidate_tags.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-4">
-                          {candidate.candidate_tags.slice(0, 3).map((tag, index) => (
+                          {candidate.candidate_tags.slice(0, 3).map((tag: string, index: number) => (
                             <span
                               key={index}
                               className="px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full"
@@ -1475,7 +1475,7 @@ export default function ClientJobDetailPage() {
                 </div>
                 
                 <div className="space-y-3">
-                  {availabilitySlots.map((slot, index) => (
+                  {availabilitySlots.map((slot: AvailabilitySlot, index: number) => (
                     <div key={index} className="p-4 border-2 border-gray-200 rounded-lg bg-gray-50 hover:border-emerald-300 transition-colors">
                       <div className="flex items-end gap-3">
                         <div className="flex-1">

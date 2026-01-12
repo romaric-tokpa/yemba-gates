@@ -1625,7 +1625,9 @@ export default function RecruiterCandidateDetailPage() {
                                       {job.title}
                                     </h3>
                                     {hasAiAnalysis && (
-                                      <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0" title="Analyse IA disponible" />
+                                      <span title="Analyse IA disponible">
+                                        <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0" aria-label="Analyse IA disponible" />
+                                      </span>
                                     )}
                                   </div>
                                   {job.department && (
@@ -1683,13 +1685,13 @@ export default function RecruiterCandidateDetailPage() {
                                     <div className="bg-white/60 rounded-lg p-2 border border-gray-200">
                                       <div className="text-xs text-gray-500 mb-1">Compétences</div>
                                       <div className="text-sm font-bold text-gray-900">
-                                        {jobAnalysis.technical_skills_match_score}%
+                                        {jobAnalysis.technical_score}%
                                       </div>
                                     </div>
                                     <div className="bg-white/60 rounded-lg p-2 border border-gray-200">
                                       <div className="text-xs text-gray-500 mb-1">Expérience</div>
                                       <div className="text-sm font-bold text-gray-900">
-                                        {jobAnalysis.experience_match_score}%
+                                        {jobAnalysis.experience_score}%
                                       </div>
                                     </div>
                                   </div>
@@ -1755,7 +1757,7 @@ export default function RecruiterCandidateDetailPage() {
                                     <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
                                       <div className="text-xs text-gray-500">Compétences</div>
                                       <div className="text-sm font-bold text-gray-900">
-                                        {jobAnalysis.technical_skills_match_score}%
+                                        {jobAnalysis.technical_score}%
                                       </div>
                                     </div>
                                     <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
@@ -1767,7 +1769,7 @@ export default function RecruiterCandidateDetailPage() {
                                     <div className="text-center p-2 bg-white/60 rounded-lg border border-gray-200">
                                       <div className="text-xs text-gray-500">Expérience</div>
                                       <div className="text-sm font-bold text-gray-900">
-                                        {jobAnalysis.experience_match_score}%
+                                        {jobAnalysis.experience_score}%
                                       </div>
                                     </div>
                                   </>
@@ -3063,7 +3065,7 @@ export default function RecruiterCandidateDetailPage() {
                 <button
                   onClick={handleSubmitInterview}
                   disabled={
-                    isSubmittingInterview || 
+                    !!(isSubmittingInterview || 
                     !interviewForm.application_id || 
                     !interviewForm.scheduled_at ||
                     // Pour la mise à jour, on exige le feedback selon le type
@@ -3080,7 +3082,7 @@ export default function RecruiterCandidateDetailPage() {
                       (interviewForm.interview_type !== 'prequalification' && 
                        interviewForm.interview_type !== 'qualification' && 
                        !interviewForm.feedback)
-                    ))
+                    )))
                   }
                   className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -3109,7 +3111,7 @@ export default function RecruiterCandidateDetailPage() {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
-                  onClick={handleAiAnalysis}
+                  onClick={() => handleAiAnalysis(false)}
                   disabled={isLoadingAiAnalysis || !candidate.cv_file_path}
                   className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg transition-colors font-medium text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   title={!candidate.cv_file_path ? 'Le candidat doit avoir un CV pour l\'analyse IA' : 'Analyser avec l\'IA'}
@@ -3338,7 +3340,7 @@ export default function RecruiterCandidateDetailPage() {
                     <Sparkles className="w-12 h-12 text-purple-400 mx-auto mb-4" />
                     <p className="text-purple-700 font-medium mb-4">Cliquez sur "Analyse IA" pour lancer l'analyse approfondie</p>
                     <button
-                      onClick={handleAiAnalysis}
+                      onClick={() => handleAiAnalysis(false)}
                       disabled={isLoadingAiAnalysis || !candidate.cv_file_path}
                       className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
                     >

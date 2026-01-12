@@ -1,50 +1,78 @@
-# Stage 1: Build
-FROM node:20-alpine AS builder
+# =============================================================================
+# DOCKERFILE FRONTEND - RECRUTEMENT APP
+# =============================================================================
+# Build: docker build -t recrutement-frontend .
+# Run: docker run -p 3000:3000 recrutement-frontend
 
-# Définir le répertoire de travail
+# -----------------------------------------------------------------------------
+# Stage 1: Dependencies
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS deps
+
 WORKDIR /app
 
 # Copier les fichiers de dépendances
 COPY package*.json ./
 
-# Installer les dépendances (utiliser npm install si package-lock.json n'est pas synchronisé)
-RUN npm install
+# Installer les dépendances
+RUN npm ci --only=production=false
 
-# Copier le reste du code
+# -----------------------------------------------------------------------------
+# Stage 2: Build
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copier les dépendances depuis le stage précédent
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build l'application Next.js avec standalone
+# Variables d'environnement pour le build
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
+# Désactiver la télémétrie Next.js
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Build l'application
 RUN npm run build
 
-# Stage 2: Production
+# -----------------------------------------------------------------------------
+# Stage 3: Production
+# -----------------------------------------------------------------------------
 FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Définir l'environnement en production
+# Définir l'environnement
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Créer un utilisateur non-root
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs
 
-# Copier les fichiers nécessaires depuis le builder
+# Copier les fichiers publics
 COPY --from=builder /app/public ./public
 
-# Copier les fichiers standalone
+# Copier les fichiers standalone (optimisés pour la production)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Passer à l'utilisateur non-root
 USER nextjs
 
-# Exposer le port 3000
+# Port exposé
 EXPOSE 3000
 
-# Variable d'environnement pour le port
+# Variables d'environnement runtime
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Commande pour démarrer l'application
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+
+# Commande de démarrage
 CMD ["node", "server.js"]

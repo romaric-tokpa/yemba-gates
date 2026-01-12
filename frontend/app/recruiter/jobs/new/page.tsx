@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createJob, JobCreate, parseJobDescription } from '@/lib/api'
@@ -8,7 +8,7 @@ import { getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
 import { ArrowLeft, Upload, FileText } from 'lucide-react'
 
-export default function RecruiterNewJobPage() {
+function RecruiterNewJobPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { success, error: showError } = useToastContext()
@@ -325,7 +325,7 @@ export default function RecruiterNewJobPage() {
                 <input
                   type="text"
                   required
-                  value={formData.department}
+                  value={formData.department ?? ''}
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Ex: IT"
@@ -338,7 +338,7 @@ export default function RecruiterNewJobPage() {
                 <input
                   type="text"
                   required
-                  value={formData.manager_demandeur}
+                  value={formData.manager_demandeur ?? ''}
                   onChange={(e) => setFormData({ ...formData, manager_demandeur: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Ex: Jean Dupont"
@@ -352,7 +352,7 @@ export default function RecruiterNewJobPage() {
               </label>
               <input
                 type="text"
-                value={formData.entreprise}
+                value={formData.entreprise ?? ''}
                 onChange={(e) => setFormData({ ...formData, entreprise: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Nom de l'entreprise"
@@ -366,7 +366,7 @@ export default function RecruiterNewJobPage() {
                 </label>
                 <select
                   required
-                  value={formData.contract_type}
+                  value={formData.contract_type ?? ''}
                   onChange={(e) => setFormData({ ...formData, contract_type: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -384,7 +384,7 @@ export default function RecruiterNewJobPage() {
                 </label>
                 <select
                   required
-                  value={formData.motif_recrutement}
+                  value={formData.motif_recrutement ?? ''}
                   onChange={(e) => setFormData({ ...formData, motif_recrutement: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -403,7 +403,7 @@ export default function RecruiterNewJobPage() {
                 </label>
                 <select
                   required
-                  value={formData.urgency}
+                  value={formData.urgency ?? ''}
                   onChange={(e) => setFormData({ ...formData, urgency: e.target.value as any })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -421,7 +421,7 @@ export default function RecruiterNewJobPage() {
                 <input
                   type="date"
                   required
-                  value={formData.date_prise_poste}
+                  value={formData.date_prise_poste ?? ''}
                   onChange={(e) => setFormData({ ...formData, date_prise_poste: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -440,7 +440,7 @@ export default function RecruiterNewJobPage() {
               </label>
               <textarea
                 required
-                value={formData.missions_principales}
+                value={formData.missions_principales ?? ''}
                 onChange={(e) => setFormData({ ...formData, missions_principales: e.target.value })}
                 rows={4}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -452,7 +452,7 @@ export default function RecruiterNewJobPage() {
                 Missions secondaires
               </label>
               <textarea
-                value={formData.missions_secondaires}
+                value={formData.missions_secondaires ?? ''}
                 onChange={(e) => setFormData({ ...formData, missions_secondaires: e.target.value })}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -464,7 +464,7 @@ export default function RecruiterNewJobPage() {
                 Indicateurs de performance attendus (KPI du poste)
               </label>
               <textarea
-                value={formData.kpi_poste}
+                value={formData.kpi_poste ?? ''}
                 onChange={(e) => setFormData({ ...formData, kpi_poste: e.target.value })}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -485,7 +485,7 @@ export default function RecruiterNewJobPage() {
                 </label>
                 <select
                   required
-                  value={formData.niveau_formation}
+                  value={formData.niveau_formation ?? ''}
                   onChange={(e) => setFormData({ ...formData, niveau_formation: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -697,7 +697,7 @@ export default function RecruiterNewJobPage() {
               </label>
               <textarea
                 required
-                value={formData.langues_requises}
+                value={formData.langues_requises ?? ''}
                 onChange={(e) => setFormData({ ...formData, langues_requises: e.target.value })}
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -709,7 +709,7 @@ export default function RecruiterNewJobPage() {
                 Certifications / habilitations requises
               </label>
               <textarea
-                value={formData.certifications_requises}
+                value={formData.certifications_requises ?? ''}
                 onChange={(e) => setFormData({ ...formData, certifications_requises: e.target.value })}
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -730,7 +730,7 @@ export default function RecruiterNewJobPage() {
               <input
                 type="text"
                 required
-                value={formData.localisation}
+                value={formData.localisation ?? ''}
                 onChange={(e) => setFormData({ ...formData, localisation: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Ex: Paris, France"
@@ -742,7 +742,7 @@ export default function RecruiterNewJobPage() {
                   Mobilité / déplacements
                 </label>
                 <select
-                  value={formData.mobilite_deplacements}
+                  value={formData.mobilite_deplacements ?? ''}
                   onChange={(e) => setFormData({ ...formData, mobilite_deplacements: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -757,7 +757,7 @@ export default function RecruiterNewJobPage() {
                   Télétravail
                 </label>
                 <select
-                  value={formData.teletravail}
+                  value={formData.teletravail ?? ''}
                   onChange={(e) => setFormData({ ...formData, teletravail: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -773,7 +773,7 @@ export default function RecruiterNewJobPage() {
                 Contraintes horaires
               </label>
               <textarea
-                value={formData.contraintes_horaires}
+                value={formData.contraintes_horaires ?? ''}
                 onChange={(e) => setFormData({ ...formData, contraintes_horaires: e.target.value })}
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -786,7 +786,7 @@ export default function RecruiterNewJobPage() {
               </label>
               <textarea
                 required
-                value={formData.criteres_eliminatoires}
+                value={formData.criteres_eliminatoires ?? ''}
                 onChange={(e) => setFormData({ ...formData, criteres_eliminatoires: e.target.value })}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -887,7 +887,7 @@ export default function RecruiterNewJobPage() {
                 Évolution possible du poste
               </label>
               <textarea
-                value={formData.evolution_poste}
+                value={formData.evolution_poste ?? ''}
                 onChange={(e) => setFormData({ ...formData, evolution_poste: e.target.value })}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -915,5 +915,13 @@ export default function RecruiterNewJobPage() {
         </div>
       </form>
     </div>
+  )
+}
+
+export default function RecruiterNewJobPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Chargement...</div>}>
+      <RecruiterNewJobPageContent />
+    </Suspense>
   )
 }

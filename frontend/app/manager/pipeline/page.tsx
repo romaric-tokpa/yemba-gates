@@ -130,8 +130,14 @@ function CandidateCard({ candidate, status }: { candidate: CandidateResponse; st
             {candidate.skills && candidate.skills.length > 0 && (
               <div className="mt-2 pt-2 border-t border-gray-100">
                 <p className="text-xs text-gray-500 truncate">
-                  <span className="font-medium">Skills:</span> {candidate.skills.slice(0, 2).join(', ')}
-                  {candidate.skills.length > 2 && '...'}
+                  <span className="font-medium">Skills:</span> {(() => {
+                    const skillsArray = Array.isArray(candidate.skills) 
+                      ? candidate.skills 
+                      : typeof candidate.skills === 'string' 
+                        ? [candidate.skills] 
+                        : []
+                    return skillsArray.slice(0, 2).join(', ') + (skillsArray.length > 2 ? '...' : '')
+                  })()}
                 </p>
               </div>
             )}

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUserInfo, logout, hasAnyRole } from '@/lib/auth'
+import { ROUTES } from '@/lib/routes'
 import { useEffect, useState } from 'react'
 
 const getMenuItems = (userRole: string | null) => {

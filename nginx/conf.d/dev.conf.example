@@ -1,0 +1,93 @@
+# =============================================================================
+# CONFIGURATION DÉVELOPPEMENT (sans SSL) - EXEMPLE
+# =============================================================================
+# Renommez ce fichier en default.conf pour le développement local
+# 
+# Cette configuration route toutes les routes API vers le backend
+# et toutes les routes frontend vers Next.js
+
+server {
+    listen 80;
+    server_name localhost;
+
+    client_max_body_size 50M;
+
+    # Fichiers statiques servis par le backend
+    location /static/ {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /uploads/ {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+
+    # Route racine de l'API
+    location = / {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Health check et documentation
+    location ~ ^/(health|docs|openapi\.json)$ {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Routes API /auth/*
+    location ~ ^/auth/(register|me|users|login)(/.*)?$ {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300;
+    }
+
+    # Toutes les autres routes API backend
+    location ~ ^/(admin|applications|candidates|client-interview-requests|history|interviews|jobs|kpi|notifications|offers|onboarding|shortlists|teams)(/.*)?$ {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300;
+    }
+
+    # Frontend Next.js (catch-all)
+    location / {
+        proxy_pass http://frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_buffering off;
+    }
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, History, Clock, User, Briefcase, MapPin, DollarSign, Calendar, FileText, Tag, Award, Languages, Building2, UserCheck, Edit, X, Save, Plus, Filter, Search, TrendingUp, Users, ListChecks, Trash2, Mail, Phone, ExternalLink, CheckCircle, XCircle } from 'lucide-react'
@@ -9,7 +9,7 @@ import { getJob, getJobHistory, updateJob, JobResponse, JobHistoryItem, JobUpdat
 import { getToken, isAuthenticated } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
 
-export default function RecruiterJobDetailPage() {
+function RecruiterJobDetailPageContent() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -220,7 +220,7 @@ export default function RecruiterJobDetailPage() {
   const handleToggleShortlist = async (applicationId: string, currentValue: boolean) => {
     try {
       setIsSaving(true)
-      await toggleShortlist(applicationId, !currentValue)
+      await toggleShortlist(applicationId)
       success(currentValue ? 'Candidat retiré de la shortlist' : 'Candidat ajouté à la shortlist')
       // Recharger les données
       const applicationsData = await getJobApplications(jobId)
@@ -675,7 +675,7 @@ export default function RecruiterJobDetailPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Compétences techniques obligatoires</label>
                     <div className="flex flex-wrap gap-2">
-                      {job.competences_techniques_obligatoires.map((skill, index) => (
+                      {job.competences_techniques_obligatoires.map((skill: string, index: number) => (
                         <span key={index} className="px-3 py-1 bg-red-100 text-red-800 text-sm rounded-full">
                           {skill}
                         </span>
@@ -688,7 +688,7 @@ export default function RecruiterJobDetailPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Compétences techniques souhaitées</label>
                     <div className="flex flex-wrap gap-2">
-                      {job.competences_techniques_souhaitees.map((skill, index) => (
+                      {job.competences_techniques_souhaitees.map((skill: string, index: number) => (
                         <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
                           {skill}
                         </span>
@@ -701,7 +701,7 @@ export default function RecruiterJobDetailPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Compétences comportementales</label>
                     <div className="flex flex-wrap gap-2">
-                      {job.competences_comportementales.map((skill, index) => (
+                      {job.competences_comportementales.map((skill: string, index: number) => (
                         <span key={index} className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
                           {skill}
                         </span>
@@ -808,7 +808,7 @@ export default function RecruiterJobDetailPage() {
                   {isEditing ? (
                     <div>
                       <div className="flex flex-wrap gap-2 mb-2">
-                        {(formData.avantages || []).map((avantage, index) => (
+                        {(formData.avantages || []).map((avantage: string, index: number) => (
                           <span key={index} className="px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full flex items-center gap-2">
                             {avantage}
                             <button
@@ -847,7 +847,7 @@ export default function RecruiterJobDetailPage() {
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {job.avantages && job.avantages.length > 0 ? (
-                        job.avantages.map((avantage, index) => (
+                        job.avantages.map((avantage: string, index: number) => (
                           <span key={index} className="px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full">
                             {avantage}
                           </span>
@@ -1321,7 +1321,7 @@ export default function RecruiterJobDetailPage() {
                     className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Tous les champs</option>
-                    {Array.from(new Set(history.map(h => h.field_name).filter(Boolean))).map((field) => (
+                    {Array.from(new Set(history.map(h => h.field_name).filter((f): f is string => Boolean(f)))).map((field: string) => (
                       <option key={field} value={field}>{field}</option>
                     ))}
                   </select>
@@ -1546,7 +1546,7 @@ export default function RecruiterJobDetailPage() {
                         {filteredCandidates.map((candidate) => (
                           <button
                             key={candidate.id}
-                            onClick={() => setSelectedCandidateId(candidate.id)}
+                            onClick={() => candidate.id && setSelectedCandidateId(candidate.id)}
                             className={`w-full text-left p-3 hover:bg-blue-50 transition-colors ${
                               selectedCandidateId === candidate.id ? 'bg-blue-100 border-l-4 border-blue-600' : ''
                             }`}
@@ -1620,6 +1620,21 @@ export default function RecruiterJobDetailPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function RecruiterJobDetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600 font-medium">Chargement...</p>
+        </div>
+      </div>
+    }>
+      <RecruiterJobDetailPageContent />
+    </Suspense>
   )
 }
 

@@ -68,12 +68,23 @@ if ENVIRONMENT == "production":
     allowed_origins = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost",
+        "http://localhost:80",
+        "https://yemma-gates.com",
+        "http://yemma-gates.com",
         # Ajoutez ici vos domaines de production
     ]
 else:
     # En développement, accepter toutes les origines pour faciliter le développement
     # et permettre l'accès depuis n'importe quel réseau (mobile, tunnel, etc.)
-    allowed_origins = ["*"]
+    # Inclut explicitement localhost:3000 pour éviter les problèmes CORS
+    allowed_origins = [
+        "*",  # Accepter toutes les origines
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost",
+        "http://localhost:80",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
@@ -345,6 +356,15 @@ async def value_error_handler(request: Request, exc: ValueError):
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Gestionnaire pour les erreurs HTTP explicites"""
+    # Ne pas logger les erreurs 405 (Method Not Allowed) sur les routes frontend
+    # Ces erreurs sont normales car Next.js gère ces routes côté client
+    routes_frontend_405 = ["/auth/login", "/auth/choice"]
+    is_frontend_route_405 = (
+        exc.status_code == 405 and 
+        request.method == "GET" and 
+        request.url.path in routes_frontend_405
+    )
+    
     if exc.status_code >= 500:
         logger.error(
             f"❌ ERREUR HTTP {exc.status_code}",
@@ -354,6 +374,17 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
                 "detail": exc.detail,
             }
         )
+    elif exc.status_code == 405 and not is_frontend_route_405:
+        # Logger les 405 seulement si ce n'est pas une route frontend
+        logger.debug(
+            f"⚠️  Méthode non autorisée (405) - {request.method} {request.url.path}",
+            extra={
+                "path": request.url.path,
+                "method": request.method,
+            }
+        )
+    # Ne pas logger les 405 sur les routes frontend (réduit le bruit dans les logs)
+    
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail, "path": request.url.path}

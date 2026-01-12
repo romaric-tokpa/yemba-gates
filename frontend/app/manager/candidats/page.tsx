@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createCandidate, getCandidates, CandidateResponse, CandidateCreate, uploadCandidatePhoto, parseCv, getJobs, JobResponse, createApplication } from '@/lib/api'
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useToastContext } from '@/components/ToastProvider'
 
-export default function ManagerCandidatsPage() {
+function ManagerCandidatsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { success, error: showError } = useToastContext()
@@ -127,10 +127,10 @@ export default function ManagerCandidatsPage() {
   const allSkills = Array.from(new Set(candidates.flatMap((c) => c.skills || [])))
 
   const handleAddTag = () => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
+    if (tagInput.trim() && !(formData.tags || []).includes(tagInput.trim())) {
       setFormData({
         ...formData,
-        tags: [...formData.tags, tagInput.trim()],
+        tags: [...(formData.tags || []), tagInput.trim()],
       })
       setTagInput('')
     }
@@ -139,7 +139,7 @@ export default function ManagerCandidatsPage() {
   const handleRemoveTag = (tagToRemove: string) => {
     setFormData({
       ...formData,
-      tags: formData.tags.filter((tag) => tag !== tagToRemove),
+      tags: (formData.tags || []).filter((tag) => tag !== tagToRemove),
     })
   }
 
@@ -173,35 +173,26 @@ export default function ManagerCandidatsPage() {
       const parsedData = await parseCv(file)
       
       setFormData({
-        first_name: parsedData.first_name || '',
-        last_name: parsedData.last_name || '',
-        profile_title: parsedData.profile_title || '',
-        years_of_experience: parsedData.years_of_experience,
-        email: parsedData.email || '',
-        phone: parsedData.phone || '',
-        tags: parsedData.tags || [],
-        skills: parsedData.skills || [],
-        source: parsedData.source || '',
-        notes: parsedData.notes || '',
+        first_name: parsedData.extracted_data?.first_name || parsedData.candidate?.first_name || '',
+        last_name: parsedData.extracted_data?.last_name || parsedData.candidate?.last_name || '',
+        profile_title: parsedData.candidate?.profile_title || '',
+        years_of_experience: parsedData.extracted_data?.experience ?? parsedData.candidate?.years_of_experience ?? undefined,
+        email: parsedData.extracted_data?.email || parsedData.candidate?.email || '',
+        phone: parsedData.extracted_data?.phone || parsedData.candidate?.phone || '',
+        tags: parsedData.candidate?.tags || [],
+        skills: Array.isArray(parsedData.extracted_data?.skills) 
+          ? parsedData.extracted_data.skills 
+          : Array.isArray(parsedData.candidate?.skills) 
+            ? parsedData.candidate.skills 
+            : typeof parsedData.candidate?.skills === 'string'
+              ? [parsedData.candidate.skills]
+              : [],
+        source: parsedData.candidate?.source || '',
+        notes: parsedData.candidate?.notes || '',
       })
       
-      if (parsedData.profile_picture_base64) {
-        setPhotoPreview(parsedData.profile_picture_base64)
-        try {
-          const base64Data = parsedData.profile_picture_base64.split(',')[1]
-          const mimeType = parsedData.profile_picture_base64.split(',')[0].split(':')[1].split(';')[0]
-          const byteCharacters = atob(base64Data)
-          const byteNumbers = new Array(byteCharacters.length)
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i)
-          }
-          const byteArray = new Uint8Array(byteNumbers)
-          const blob = new Blob([byteArray], { type: mimeType })
-          const imageFile = new File([blob], 'photo-extracted.jpg', { type: mimeType })
-          setPhotoFile(imageFile)
-        } catch (convertError) {
-          console.warn('Erreur lors de la conversion de l\'image extraite:', convertError)
-        }
+      if (parsedData.candidate?.profile_picture_url) {
+        setPhotoPreview(parsedData.candidate.profile_picture_url)
       }
       
       setCvFile(file)
@@ -342,7 +333,14 @@ export default function ManagerCandidatsPage() {
       if (selectedTag && !candidate.tags?.includes(selectedTag)) return false
       if (selectedSource && candidate.source !== selectedSource) return false
       if (selectedStatus && candidate.status !== selectedStatus) return false
-      if (selectedSkill && !candidate.skills?.some(skill => skill.toLowerCase().includes(selectedSkill.toLowerCase()))) return false
+      if (selectedSkill) {
+        const skillsArray = Array.isArray(candidate.skills) 
+          ? candidate.skills 
+          : typeof candidate.skills === 'string' 
+            ? [candidate.skills] 
+            : []
+        if (!skillsArray.some(skill => skill.toLowerCase().includes(selectedSkill.toLowerCase()))) return false
+      }
       
       const yearsExp = candidate.years_of_experience ?? 0
       if (selectedExperienceMin && yearsExp < parseInt(selectedExperienceMin)) return false
@@ -863,8 +861,8 @@ export default function ManagerCandidatsPage() {
                 >
                   <option value="">Toutes les sources</option>
                   {allSources.map((source) => (
-                    <option key={source} value={source}>
-                      {source}
+                    <option key={source || ''} value={source || ''}>
+                      {source || ''}
                     </option>
                   ))}
                 </select>
@@ -1236,7 +1234,7 @@ export default function ManagerCandidatsPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
                   <div className="flex flex-wrap gap-2 mb-2">
-                    {formData.tags.map((tag, index) => (
+                    {(formData.tags || []).map((tag, index) => (
                       <span
                         key={index}
                         className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
@@ -1355,5 +1353,13 @@ export default function ManagerCandidatsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function ManagerCandidatsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Chargement...</div>}>
+      <ManagerCandidatsPageContent />
+    </Suspense>
   )
 }

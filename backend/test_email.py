@@ -17,7 +17,7 @@ load_dotenv()
 
 from services.email import send_user_invitation_email
 
-def test_email(recipient_email: str):
+def send_test_email(recipient_email: str):
     """Teste l'envoi d'un email d'invitation"""
     
     print("=" * 60)
@@ -68,5 +68,5 @@ if __name__ == "__main__":
         sys.exit(1)
     
     recipient = sys.argv[1]
-    success = test_email(recipient)
+    success = send_test_email(recipient)
     sys.exit(0 if success else 1)

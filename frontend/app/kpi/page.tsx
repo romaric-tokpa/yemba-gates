@@ -273,6 +273,7 @@ export default function RecruiterKPIPage() {
       end_date: '',
       job_id: '',
       source: '',
+      recruiter_id: '',
     })
   }
 

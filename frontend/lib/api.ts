@@ -2,33 +2,63 @@ import { authenticatedFetch } from './auth'
 
 // Détection automatique de l'URL de l'API
 export function getApiUrl(): string {
+  // Si une variable d'environnement est définie, l'utiliser (sauf si c'est un domaine de production en développement local)
   if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL
+    const envUrl = process.env.NEXT_PUBLIC_API_URL
+    // Si on est en développement local (localhost) mais que l'URL env pointe vers un domaine de production,
+    // forcer l'utilisation de localhost:8000
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname
+      if ((hostname === 'localhost' || hostname === '127.0.0.1') && 
+          (envUrl.includes('yemma-gates.com') || envUrl.includes('https://'))) {
+        return 'http://localhost:8000'
+      }
+    }
+    return envUrl
   }
   
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname
     const protocol = window.location.protocol
     
+    // PRIORITÉ 1: Si on est sur localhost ou 127.0.0.1, TOUJOURS utiliser localhost:8000
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8000'
     }
     
+    // PRIORITÉ 2: Si on est sur un tunnel (cloudflare, localtunnel, etc.)
     if (protocol === 'https:' || hostname.includes('cloudflare') || hostname.includes('tunnel') || hostname.includes('loca.lt') || hostname.includes('trycloudflare.com')) {
       const tunnelBackendUrl = sessionStorage.getItem('TUNNEL_BACKEND_URL')
       if (tunnelBackendUrl) {
         return tunnelBackendUrl
       }
-      return `${protocol}//${hostname.replace(':3000', ':8000').replace(':3001', ':8000')}`
+      // Pour les tunnels, utiliser le même hostname (nginx route vers le backend)
+      return `${protocol}//${hostname}`
     }
     
-    return `http://${hostname}:8000`
+    // PRIORITÉ 3: Pour les domaines de production (yemma-gates.com, etc.)
+    // nginx route les requêtes API vers le backend
+    return `${protocol}//${hostname}`
   }
   
   return 'http://localhost:8000'
 }
 
-const API_URL = getApiUrl()
+// Ne pas calculer API_URL une seule fois, mais le récupérer à chaque fois
+// pour éviter les problèmes avec les variables d'environnement au build time
+function getApiUrlSafe(): string {
+  // FORCER localhost:8000 en développement local
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:8000'
+    }
+  }
+  return getApiUrl()
+}
+
+// Utiliser une fonction au lieu d'une constante pour forcer la réévaluation
+const API_URL = () => getApiUrlSafe()
 
 // ===== TYPES DE BASE =====
 
@@ -196,7 +226,7 @@ export interface InterviewFeedback {
 // ===== FONCTIONS CANDIDATES =====
 
 export async function getCandidate(candidateId: string): Promise<CandidateResponse> {
-  const response = await authenticatedFetch(`${API_URL}/candidates/${candidateId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/candidates/${candidateId}`, {
     method: 'GET',
   })
 
@@ -218,7 +248,7 @@ export async function getCandidates(params?: {
   if (params?.status_filter) queryParams.append('status_filter', params.status_filter)
 
   const queryString = queryParams.toString()
-  const url = queryString ? `${API_URL}/candidates/?${queryString}` : `${API_URL}/candidates/`
+  const url = queryString ? `${API_URL()}/candidates/?${queryString}` : `${API_URL()}/candidates/`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -248,7 +278,7 @@ export async function updateCandidateStatus(
   newStatus: string
 ): Promise<CandidateResponse> {
   try {
-    const url = `${API_URL}/candidates/${candidateId}/status?new_status=${encodeURIComponent(newStatus)}`
+    const url = `${API_URL()}/candidates/${candidateId}/status?new_status=${encodeURIComponent(newStatus)}`
     const response = await authenticatedFetch(url, {
       method: 'PATCH',
     })
@@ -292,7 +322,7 @@ export async function updateCandidate(
   candidateId: string,
   data: CandidateUpdate
 ): Promise<CandidateResponse> {
-  const response = await authenticatedFetch(`${API_URL}/candidates/${candidateId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/candidates/${candidateId}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -311,7 +341,7 @@ export async function updateCandidate(
 // ===== FONCTIONS JOBS =====
 
 export async function getJobs(): Promise<JobResponse[]> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/`, {
     method: 'GET',
   })
 
@@ -323,7 +353,7 @@ export async function getJobs(): Promise<JobResponse[]> {
 }
 
 export async function createJob(jobData: JobCreate): Promise<JobResponse> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -351,7 +381,7 @@ export async function parseJobDescription(jobDescriptionFile: File): Promise<Job
   const formData = new FormData()
   formData.append('job_description_file', jobDescriptionFile)
 
-  const response = await authenticatedFetch(`${API_URL}/jobs/parse-job-description`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/parse-job-description`, {
     method: 'POST',
     body: formData,
   })
@@ -417,7 +447,7 @@ export async function parseJobDescription(jobDescriptionFile: File): Promise<Job
 }
 
 export async function getPendingValidationJobs(): Promise<JobResponse[]> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/pending-validation`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/pending-validation`, {
     method: 'GET',
   })
 
@@ -434,7 +464,7 @@ export async function getPendingValidationJobs(): Promise<JobResponse[]> {
 // ===== FONCTIONS APPLICATIONS =====
 
 export async function getCandidateApplications(candidateId: string): Promise<ApplicationResponse[]> {
-  const response = await authenticatedFetch(`${API_URL}/applications/candidate/${candidateId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/applications/candidate/${candidateId}`, {
     method: 'GET',
   })
 
@@ -452,7 +482,7 @@ export interface ApplicationCreate {
 }
 
 export async function createApplication(applicationData: ApplicationCreate): Promise<ApplicationResponse> {
-  const response = await authenticatedFetch(`${API_URL}/applications/`, {
+  const response = await authenticatedFetch(`${API_URL()}/applications/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -482,8 +512,8 @@ export async function getInterviews(params?: {
 
   const queryString = queryParams.toString()
   const url = queryString 
-    ? `${API_URL}/interviews/?${queryString}`
-    : `${API_URL}/interviews/`
+    ? `${API_URL()}/interviews/?${queryString}`
+    : `${API_URL()}/interviews/`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -511,7 +541,7 @@ export async function getInterviews(params?: {
 }
 
 export async function createInterview(data: InterviewCreate): Promise<InterviewResponse> {
-  const response = await authenticatedFetch(`${API_URL}/interviews/`, {
+  const response = await authenticatedFetch(`${API_URL()}/interviews/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -531,7 +561,7 @@ export async function addInterviewFeedback(
   interviewId: string,
   feedback: InterviewFeedback
 ): Promise<InterviewResponse> {
-  const response = await authenticatedFetch(`${API_URL}/interviews/${interviewId}/feedback`, {
+  const response = await authenticatedFetch(`${API_URL()}/interviews/${interviewId}/feedback`, {
     method: 'PATCH',
     body: JSON.stringify(feedback),
   })
@@ -548,7 +578,7 @@ export async function updateInterview(
   interviewId: string,
   data: InterviewUpdate
 ): Promise<InterviewResponse> {
-  const response = await authenticatedFetch(`${API_URL}/interviews/${interviewId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/interviews/${interviewId}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -565,7 +595,7 @@ export async function updateInterview(
 }
 
 export async function deleteInterview(interviewId: string): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL}/interviews/${interviewId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/interviews/${interviewId}`, {
     method: 'DELETE',
   })
 
@@ -579,7 +609,7 @@ export async function updateInterviewStatus(
   interviewId: string,
   statusData: InterviewStatusUpdate
 ): Promise<InterviewResponse> {
-  const response = await authenticatedFetch(`${API_URL}/interviews/${interviewId}/status`, {
+  const response = await authenticatedFetch(`${API_URL()}/interviews/${interviewId}/status`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -746,7 +776,7 @@ export interface ClientKPIs {
 // ===== FONCTIONS KPI =====
 
 export async function getKPISummary(): Promise<KPISummary> {
-  const response = await authenticatedFetch(`${API_URL}/kpi/summary`, {
+  const response = await authenticatedFetch(`${API_URL()}/kpi/summary`, {
     method: 'GET',
   })
 
@@ -774,7 +804,7 @@ export async function getManagerKPIs(params?: {
   if (params?.job_id) queryParams.append('job_id', params.job_id)
   if (params?.source) queryParams.append('source', params.source)
 
-  const response = await authenticatedFetch(`${API_URL}/kpi/manager?${queryParams.toString()}`, {
+  const response = await authenticatedFetch(`${API_URL()}/kpi/manager?${queryParams.toString()}`, {
     method: 'GET',
   })
 
@@ -793,7 +823,7 @@ export async function getManagerKPIs(params?: {
 }
 
 export async function getRecruitersPerformance(): Promise<RecruiterPerformance[]> {
-  const response = await authenticatedFetch(`${API_URL}/kpi/recruiters`, {
+  const response = await authenticatedFetch(`${API_URL()}/kpi/recruiters`, {
     method: 'GET',
   })
 
@@ -821,8 +851,8 @@ export async function getRecruiterKPIs(params?: {
 
   const queryString = queryParams.toString()
   const url = queryString 
-    ? `${API_URL}/kpi/recruiter?${queryString}`
-    : `${API_URL}/kpi/recruiter`
+    ? `${API_URL()}/kpi/recruiter?${queryString}`
+    : `${API_URL()}/kpi/recruiter`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -876,7 +906,7 @@ export async function getManagerKPIsAIAnalysis(params?: {
   if (params?.job_id) queryParams.append('job_id', params.job_id)
   if (params?.source) queryParams.append('source', params.source)
 
-  const response = await authenticatedFetch(`${API_URL}/kpi/manager/ai-analysis?${queryParams.toString()}`, {
+  const response = await authenticatedFetch(`${API_URL()}/kpi/manager/ai-analysis?${queryParams.toString()}`, {
     method: 'GET',
   })
 
@@ -910,8 +940,8 @@ export async function getRecruiterKPIsAIAnalysis(params?: {
 
   const queryString = queryParams.toString()
   const url = queryString 
-    ? `${API_URL}/kpi/recruiter/ai-analysis?${queryString}`
-    : `${API_URL}/kpi/recruiter/ai-analysis`
+    ? `${API_URL()}/kpi/recruiter/ai-analysis?${queryString}`
+    : `${API_URL()}/kpi/recruiter/ai-analysis`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -945,8 +975,8 @@ export async function getClientKPIs(params?: {
 
   const queryString = queryParams.toString()
   const url = queryString 
-    ? `${API_URL}/kpi/client?${queryString}`
-    : `${API_URL}/kpi/client`
+    ? `${API_URL()}/kpi/client?${queryString}`
+    : `${API_URL()}/kpi/client`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -997,8 +1027,6 @@ export async function createCandidate(
   if (candidateData.skills) {
     if (Array.isArray(candidateData.skills) && candidateData.skills.length > 0) {
       formData.append('skills', candidateData.skills.join(','))
-    } else if (typeof candidateData.skills === 'string' && candidateData.skills.trim()) {
-      formData.append('skills', candidateData.skills)
     }
   }
   if (candidateData.profile_picture_url) {
@@ -1009,7 +1037,7 @@ export async function createCandidate(
   if (candidateData.cv_file) formData.append('cv_file', candidateData.cv_file)
 
   try {
-    const response = await authenticatedFetch(`${API_URL}/candidates/`, {
+    const response = await authenticatedFetch(`${API_URL()}/candidates/`, {
       method: 'POST',
       body: formData,
     })
@@ -1044,7 +1072,7 @@ export async function uploadCandidatePhoto(photoFile: File): Promise<{ photo_url
   const formData = new FormData()
   formData.append('photo', photoFile)
 
-  const response = await authenticatedFetch(`${API_URL}/candidates/upload-photo`, {
+  const response = await authenticatedFetch(`${API_URL()}/candidates/upload-photo`, {
     method: 'POST',
     body: formData,
   })
@@ -1095,7 +1123,7 @@ export async function compareCandidateWithJob(
   jobId: string
 ): Promise<JobCandidateComparisonResponse> {
   const response = await authenticatedFetch(
-    `${API_URL}/candidates/${candidateId}/compare-with-job/${jobId}`,
+    `${API_URL()}/candidates/${candidateId}/compare-with-job/${jobId}`,
     {
       method: 'POST',
     }
@@ -1115,7 +1143,7 @@ export async function getSavedComparison(
 ): Promise<JobCandidateComparisonResponse | null> {
   try {
     const response = await authenticatedFetch(
-      `${API_URL}/candidates/${candidateId}/compare-with-job/${jobId}`,
+      `${API_URL()}/candidates/${candidateId}/compare-with-job/${jobId}`,
       {
         method: 'GET',
       }
@@ -1156,7 +1184,7 @@ export async function parseCv(cvFile: File): Promise<CandidateParseResponse> {
   const formData = new FormData()
   formData.append('cv_file', cvFile)
 
-  const response = await authenticatedFetch(`${API_URL}/candidates/parse-cv`, {
+  const response = await authenticatedFetch(`${API_URL()}/candidates/parse-cv`, {
     method: 'POST',
     body: formData,
   })
@@ -1172,7 +1200,7 @@ export async function parseCv(cvFile: File): Promise<CandidateParseResponse> {
 // ===== FONCTIONS JOBS ADDITIONNELLES =====
 
 export async function getJob(jobId: string): Promise<JobResponse> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/${jobId}`, {
     method: 'GET',
   })
 
@@ -1194,7 +1222,7 @@ export interface JobUpdate {
 }
 
 export async function updateJob(jobId: string, data: JobUpdate): Promise<JobResponse> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/${jobId}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -1217,7 +1245,7 @@ export interface JobValidation {
 }
 
 export async function getAvailableRecruiters(): Promise<Array<{ id: string; first_name: string; last_name: string; email: string; department?: string }>> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/recruiters/available`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/recruiters/available`, {
     method: 'GET',
   })
 
@@ -1232,7 +1260,7 @@ export async function getAvailableRecruiters(): Promise<Array<{ id: string; firs
 }
 
 export async function validateJob(jobId: string, validation: JobValidation): Promise<JobResponse> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}/validate`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/${jobId}/validate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1249,7 +1277,7 @@ export async function validateJob(jobId: string, validation: JobValidation): Pro
 }
 
 export async function getClientJobRequests(): Promise<JobResponse[]> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/client-requests`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/client-requests`, {
     method: 'GET',
   })
 
@@ -1273,7 +1301,7 @@ export interface JobResponseWithCreator extends JobResponse {
 }
 
 export async function getPendingApprovalJobs(): Promise<JobResponseWithCreator[]> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/pending-approval`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/pending-approval`, {
     method: 'GET',
   })
 
@@ -1291,7 +1319,7 @@ export async function getPendingApprovalJobs(): Promise<JobResponseWithCreator[]
 }
 
 export async function updateJobStatus(jobId: string, newStatus: string): Promise<JobResponse> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}/status?new_status=${encodeURIComponent(newStatus)}`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/${jobId}/status?new_status=${encodeURIComponent(newStatus)}`, {
     method: 'PATCH',
   })
 
@@ -1304,7 +1332,7 @@ export async function updateJobStatus(jobId: string, newStatus: string): Promise
 }
 
 export async function archiveJob(jobId: string): Promise<JobResponse> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}/archive`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/${jobId}/archive`, {
     method: 'POST',
   })
 
@@ -1317,7 +1345,7 @@ export async function archiveJob(jobId: string): Promise<JobResponse> {
 }
 
 export async function markJobAsWon(jobId: string): Promise<JobResponse> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}/mark-won`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/${jobId}/mark-won`, {
     method: 'POST',
   })
 
@@ -1330,7 +1358,7 @@ export async function markJobAsWon(jobId: string): Promise<JobResponse> {
 }
 
 export async function deleteJob(jobId: string): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL}/jobs/${jobId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/jobs/${jobId}`, {
     method: 'DELETE',
   })
 
@@ -1352,7 +1380,7 @@ export interface DeletedJobItem {
 }
 
 export async function getDeletedJobs(): Promise<DeletedJobItem[]> {
-  const response = await authenticatedFetch(`${API_URL}/history/deleted-jobs`, {
+  const response = await authenticatedFetch(`${API_URL()}/history/deleted-jobs`, {
     method: 'GET',
   })
 
@@ -1378,7 +1406,7 @@ export interface JobHistoryItem {
 }
 
 export async function getJobHistory(jobId: string): Promise<JobHistoryItem[]> {
-  const response = await authenticatedFetch(`${API_URL}/history/jobs/${jobId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/history/jobs/${jobId}`, {
     method: 'GET',
   })
 
@@ -1403,7 +1431,7 @@ export async function getJobHistory(jobId: string): Promise<JobHistoryItem[]> {
 }
 
 export async function getJobApplications(jobId: string): Promise<ApplicationResponse[]> {
-  const response = await authenticatedFetch(`${API_URL}/applications/job/${jobId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/applications/job/${jobId}`, {
     method: 'GET',
   })
 
@@ -1415,7 +1443,7 @@ export async function getJobApplications(jobId: string): Promise<ApplicationResp
 }
 
 export async function getJobShortlist(jobId: string): Promise<ApplicationResponse[]> {
-  const response = await authenticatedFetch(`${API_URL}/applications/job/${jobId}/shortlist`, {
+  const response = await authenticatedFetch(`${API_URL()}/applications/job/${jobId}/shortlist`, {
     method: 'GET',
   })
 
@@ -1427,7 +1455,7 @@ export async function getJobShortlist(jobId: string): Promise<ApplicationRespons
 }
 
 export async function toggleShortlist(applicationId: string): Promise<ApplicationResponse> {
-  const response = await authenticatedFetch(`${API_URL}/applications/${applicationId}/toggle-shortlist`, {
+  const response = await authenticatedFetch(`${API_URL()}/applications/${applicationId}/toggle-shortlist`, {
     method: 'PATCH',
   })
 
@@ -1440,7 +1468,7 @@ export async function toggleShortlist(applicationId: string): Promise<Applicatio
 }
 
 export async function deleteApplication(applicationId: string): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL}/applications/${applicationId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/applications/${applicationId}`, {
     method: 'DELETE',
   })
 
@@ -1476,7 +1504,7 @@ export interface ShortlistValidation {
 }
 
 export async function getClientShortlists(): Promise<ShortlistItem[]> {
-  const response = await authenticatedFetch(`${API_URL}/shortlists/`, {
+  const response = await authenticatedFetch(`${API_URL()}/shortlists/`, {
     method: 'GET',
   })
 
@@ -1495,7 +1523,7 @@ export async function validateCandidate(
   validation: ShortlistValidation
 ): Promise<ShortlistItem> {
   try {
-    const response = await authenticatedFetch(`${API_URL}/shortlists/${applicationId}/validate`, {
+    const response = await authenticatedFetch(`${API_URL()}/shortlists/${applicationId}/validate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1568,14 +1596,14 @@ export interface UserUpdate {
 
 export async function getUsers(): Promise<UserResponse[]> {
   // Essayer d'abord l'endpoint admin, puis l'endpoint auth (accessible aux recruteurs, managers et administrateurs)
-  let response = await authenticatedFetch(`${API_URL}/admin/users`, {
+  let response = await authenticatedFetch(`${API_URL()}/admin/users`, {
     method: 'GET',
   })
 
   // Si accès refusé (403) ou non trouvé (404), essayer l'endpoint auth
   if (response.status === 403 || response.status === 404) {
     console.log('🔄 [GET_USERS] Tentative avec /auth/users')
-    response = await authenticatedFetch(`${API_URL}/auth/users`, {
+    response = await authenticatedFetch(`${API_URL()}/auth/users`, {
       method: 'GET',
     })
   }
@@ -1616,7 +1644,7 @@ export async function getUsers(): Promise<UserResponse[]> {
 }
 
 export async function createUser(userData: UserCreate): Promise<UserResponse> {
-  const response = await authenticatedFetch(`${API_URL}/admin/users`, {
+  const response = await authenticatedFetch(`${API_URL()}/admin/users`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1633,7 +1661,7 @@ export async function createUser(userData: UserCreate): Promise<UserResponse> {
 }
 
 export async function updateUser(userId: string, userData: UserUpdate): Promise<UserResponse> {
-  const response = await authenticatedFetch(`${API_URL}/admin/users/${userId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/admin/users/${userId}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -1650,7 +1678,7 @@ export async function updateUser(userId: string, userData: UserUpdate): Promise<
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL}/admin/users/${userId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/admin/users/${userId}`, {
     method: 'DELETE',
   })
 
@@ -1661,7 +1689,7 @@ export async function deleteUser(userId: string): Promise<void> {
 }
 
 export async function toggleUserActive(userId: string): Promise<UserResponse> {
-  const response = await authenticatedFetch(`${API_URL}/admin/users/${userId}/toggle-active`, {
+  const response = await authenticatedFetch(`${API_URL()}/admin/users/${userId}/toggle-active`, {
     method: 'PATCH',
   })
 
@@ -1687,7 +1715,7 @@ export interface ChangePasswordResponse {
 }
 
 export async function changePassword(data: ChangePasswordRequest): Promise<ChangePasswordResponse> {
-  const response = await authenticatedFetch(`${API_URL}/auth/me/password`, {
+  const response = await authenticatedFetch(`${API_URL()}/auth/me/password`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -1723,7 +1751,7 @@ export async function getUsersByManager(role?: string): Promise<UserCreateRespon
   if (role) queryParams.append('role', role)
 
   const queryString = queryParams.toString()
-  const url = queryString ? `${API_URL}/teams/users?${queryString}` : `${API_URL}/teams/users`
+  const url = queryString ? `${API_URL()}/teams/users?${queryString}` : `${API_URL()}/teams/users`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -1740,7 +1768,7 @@ export async function getUsersByManager(role?: string): Promise<UserCreateRespon
 }
 
 export async function getUserByManager(userId: string): Promise<UserCreateResponse> {
-  const response = await authenticatedFetch(`${API_URL}/teams/users/${userId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/teams/users/${userId}`, {
     method: 'GET',
   })
 
@@ -1758,7 +1786,7 @@ export async function getUserByManager(userId: string): Promise<UserCreateRespon
 }
 
 export async function createUserByManager(userData: UserCreateByManager): Promise<UserCreateResponse> {
-  const response = await authenticatedFetch(`${API_URL}/teams/users`, {
+  const response = await authenticatedFetch(`${API_URL()}/teams/users`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1775,7 +1803,7 @@ export async function createUserByManager(userData: UserCreateByManager): Promis
 }
 
 export async function updateUserByManager(userId: string, userData: UserCreateByManager): Promise<UserCreateResponse> {
-  const response = await authenticatedFetch(`${API_URL}/teams/users/${userId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/teams/users/${userId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -1792,7 +1820,7 @@ export async function updateUserByManager(userId: string, userData: UserCreateBy
 }
 
 export async function deleteUserByManager(userId: string): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL}/teams/users/${userId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/teams/users/${userId}`, {
     method: 'DELETE',
   })
 
@@ -1832,7 +1860,7 @@ export async function getSettings(category?: string): Promise<SettingResponse[]>
   if (category) queryParams.append('category', category)
 
   const queryString = queryParams.toString()
-  const url = queryString ? `${API_URL}/admin/settings?${queryString}` : `${API_URL}/admin/settings`
+  const url = queryString ? `${API_URL()}/admin/settings?${queryString}` : `${API_URL()}/admin/settings`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -1849,7 +1877,7 @@ export async function getSettings(category?: string): Promise<SettingResponse[]>
 }
 
 export async function createSetting(settingData: SettingCreate): Promise<SettingResponse> {
-  const response = await authenticatedFetch(`${API_URL}/admin/settings`, {
+  const response = await authenticatedFetch(`${API_URL()}/admin/settings`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1866,7 +1894,7 @@ export async function createSetting(settingData: SettingCreate): Promise<Setting
 }
 
 export async function updateSetting(settingKey: string, settingData: SettingUpdate): Promise<SettingResponse> {
-  const response = await authenticatedFetch(`${API_URL}/admin/settings/${settingKey}`, {
+  const response = await authenticatedFetch(`${API_URL()}/admin/settings/${settingKey}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -1883,7 +1911,7 @@ export async function updateSetting(settingKey: string, settingData: SettingUpda
 }
 
 export async function deleteSetting(settingKey: string): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL}/admin/settings/${settingKey}`, {
+  const response = await authenticatedFetch(`${API_URL()}/admin/settings/${settingKey}`, {
     method: 'DELETE',
   })
 
@@ -1915,8 +1943,8 @@ export async function getNotifications(unread_only: boolean = false): Promise<No
 
   const queryString = queryParams.toString()
   const url = queryString 
-    ? `${API_URL}/notifications/?${queryString}`
-    : `${API_URL}/notifications/`
+    ? `${API_URL()}/notifications/?${queryString}`
+    : `${API_URL()}/notifications/`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -1930,7 +1958,7 @@ export async function getNotifications(unread_only: boolean = false): Promise<No
 }
 
 export async function getUnreadCount(): Promise<number> {
-  const response = await authenticatedFetch(`${API_URL}/notifications/unread/count`, {
+  const response = await authenticatedFetch(`${API_URL()}/notifications/unread/count`, {
     method: 'GET',
   })
 
@@ -1944,7 +1972,7 @@ export async function getUnreadCount(): Promise<number> {
 }
 
 export async function markAsRead(notificationId: string): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL}/notifications/${notificationId}/read`, {
+  const response = await authenticatedFetch(`${API_URL()}/notifications/${notificationId}/read`, {
     method: 'PATCH',
   })
 
@@ -1955,7 +1983,7 @@ export async function markAsRead(notificationId: string): Promise<void> {
 }
 
 export async function markAllAsRead(): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL}/notifications/read-all`, {
+  const response = await authenticatedFetch(`${API_URL()}/notifications/read-all`, {
     method: 'PATCH',
   })
 
@@ -1998,7 +2026,7 @@ export interface ClientInterviewRequestResponse {
 export async function createClientInterviewRequest(
   data: ClientInterviewRequestCreate
 ): Promise<ClientInterviewRequestResponse> {
-  const response = await authenticatedFetch(`${API_URL}/client-interview-requests/`, {
+  const response = await authenticatedFetch(`${API_URL()}/client-interview-requests/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -2024,8 +2052,8 @@ export async function getClientInterviewRequests(
 
   const queryString = queryParams.toString()
   const url = queryString 
-    ? `${API_URL}/client-interview-requests/?${queryString}`
-    : `${API_URL}/client-interview-requests/`
+    ? `${API_URL()}/client-interview-requests/?${queryString}`
+    : `${API_URL()}/client-interview-requests/`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -2041,7 +2069,7 @@ export async function getClientInterviewRequests(
 export async function getClientInterviewRequest(
   requestId: string
 ): Promise<ClientInterviewRequestResponse> {
-  const response = await authenticatedFetch(`${API_URL}/client-interview-requests/${requestId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/client-interview-requests/${requestId}`, {
     method: 'GET',
   })
 
@@ -2057,7 +2085,7 @@ export async function scheduleClientInterview(
   requestId: string,
   interviewId: string
 ): Promise<ClientInterviewRequestResponse> {
-  const response = await authenticatedFetch(`${API_URL}/client-interview-requests/${requestId}/schedule`, {
+  const response = await authenticatedFetch(`${API_URL()}/client-interview-requests/${requestId}/schedule`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -2102,8 +2130,8 @@ export async function getSecurityLogs(params?: {
 
   const queryString = queryParams.toString()
   const url = queryString 
-    ? `${API_URL}/admin/security-logs?${queryString}`
-    : `${API_URL}/admin/security-logs`
+    ? `${API_URL()}/admin/security-logs?${queryString}`
+    : `${API_URL()}/admin/security-logs`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -2164,7 +2192,7 @@ export async function getTeams(skip?: number, limit?: number): Promise<TeamRespo
   if (limit !== undefined) queryParams.append('limit', limit.toString())
 
   const queryString = queryParams.toString()
-  const url = queryString ? `${API_URL}/teams?${queryString}` : `${API_URL}/teams`
+  const url = queryString ? `${API_URL()}/teams?${queryString}` : `${API_URL()}/teams`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -2178,7 +2206,7 @@ export async function getTeams(skip?: number, limit?: number): Promise<TeamRespo
 }
 
 export async function createTeam(teamData: TeamCreate): Promise<TeamResponse> {
-  const response = await authenticatedFetch(`${API_URL}/teams/`, {
+  const response = await authenticatedFetch(`${API_URL()}/teams/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -2195,7 +2223,7 @@ export async function createTeam(teamData: TeamCreate): Promise<TeamResponse> {
 }
 
 export async function updateTeam(teamId: string, teamData: TeamUpdate): Promise<TeamResponse> {
-  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/teams/${teamId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -2212,7 +2240,7 @@ export async function updateTeam(teamId: string, teamData: TeamUpdate): Promise<
 }
 
 export async function deleteTeam(teamId: string): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/teams/${teamId}`, {
     method: 'DELETE',
   })
 
@@ -2227,7 +2255,7 @@ export async function addTeamMember(teamId: string, userId: string, role: string
   queryParams.append('user_id', userId)
   queryParams.append('role', role)
 
-  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}/members?${queryParams.toString()}`, {
+  const response = await authenticatedFetch(`${API_URL()}/teams/${teamId}/members?${queryParams.toString()}`, {
     method: 'POST',
   })
 
@@ -2240,7 +2268,7 @@ export async function addTeamMember(teamId: string, userId: string, role: string
 }
 
 export async function removeTeamMember(teamId: string, userId: string): Promise<TeamResponse> {
-  const response = await authenticatedFetch(`${API_URL}/teams/${teamId}/members/${userId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/teams/${teamId}/members/${userId}`, {
     method: 'DELETE',
   })
 
@@ -2281,7 +2309,7 @@ export interface OfferDecision {
 }
 
 export async function sendOffer(offerData: OfferSend): Promise<OfferResponse> {
-  const response = await authenticatedFetch(`${API_URL}/offers/`, {
+  const response = await authenticatedFetch(`${API_URL()}/offers/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -2310,7 +2338,7 @@ export async function getOffers(params?: {
   if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString())
 
   const queryString = queryParams.toString()
-  const url = queryString ? `${API_URL}/offers/?${queryString}` : `${API_URL}/offers/`
+  const url = queryString ? `${API_URL()}/offers/?${queryString}` : `${API_URL()}/offers/`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -2325,7 +2353,7 @@ export async function getOffers(params?: {
 }
 
 export async function acceptOffer(applicationId: string, decision: OfferDecision): Promise<OfferResponse> {
-  const response = await authenticatedFetch(`${API_URL}/offers/${applicationId}/accept`, {
+  const response = await authenticatedFetch(`${API_URL()}/offers/${applicationId}/accept`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -2342,7 +2370,7 @@ export async function acceptOffer(applicationId: string, decision: OfferDecision
 }
 
 export async function rejectOffer(applicationId: string, decision: OfferDecision): Promise<OfferResponse> {
-  const response = await authenticatedFetch(`${API_URL}/offers/${applicationId}/reject`, {
+  const response = await authenticatedFetch(`${API_URL()}/offers/${applicationId}/reject`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -2391,7 +2419,7 @@ export interface OnboardingChecklistUpdate {
 }
 
 export async function getOnboardingChecklist(applicationId: string): Promise<OnboardingChecklist> {
-  const response = await authenticatedFetch(`${API_URL}/onboarding/${applicationId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/onboarding/${applicationId}`, {
     method: 'GET',
   })
 
@@ -2407,7 +2435,7 @@ export async function updateOnboardingChecklist(
   applicationId: string,
   checklistData: OnboardingChecklistUpdate
 ): Promise<OnboardingChecklist> {
-  const response = await authenticatedFetch(`${API_URL}/onboarding/${applicationId}/checklist`, {
+  const response = await authenticatedFetch(`${API_URL()}/onboarding/${applicationId}/checklist`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -2424,7 +2452,7 @@ export async function updateOnboardingChecklist(
 }
 
 export async function completeOnboarding(applicationId: string): Promise<OnboardingChecklist> {
-  const response = await authenticatedFetch(`${API_URL}/onboarding/${applicationId}/complete`, {
+  const response = await authenticatedFetch(`${API_URL()}/onboarding/${applicationId}/complete`, {
     method: 'POST',
   })
 
@@ -2445,7 +2473,7 @@ export async function getOnboardingList(params?: {
   if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString())
 
   const queryString = queryParams.toString()
-  const url = queryString ? `${API_URL}/onboarding/?${queryString}` : `${API_URL}/onboarding/`
+  const url = queryString ? `${API_URL()}/onboarding/?${queryString}` : `${API_URL()}/onboarding/`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -2473,7 +2501,7 @@ export interface ApplicationHistoryItem {
 }
 
 export async function getApplicationHistory(applicationId: string): Promise<ApplicationHistoryItem[]> {
-  const response = await authenticatedFetch(`${API_URL}/history/applications/${applicationId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/history/applications/${applicationId}`, {
     method: 'GET',
   })
 
@@ -2491,7 +2519,7 @@ export async function getApplicationHistory(applicationId: string): Promise<Appl
 // ===== FONCTIONS SHORTLISTS NOTIFICATIONS =====
 
 export async function getRecruiterNotifications(): Promise<ShortlistItem[]> {
-  const response = await authenticatedFetch(`${API_URL}/shortlists/notifications`, {
+  const response = await authenticatedFetch(`${API_URL()}/shortlists/notifications`, {
     method: 'GET',
   })
 

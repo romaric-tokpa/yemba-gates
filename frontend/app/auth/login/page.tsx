@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { login } from '@/lib/auth'
 import { useToastContext } from '@/components/ToastProvider'
@@ -13,7 +13,7 @@ const ROLE_LABELS: Record<string, string> = {
   administrateur: 'Administrateur',
 }
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { success, error: showError } = useToastContext()
@@ -346,6 +346,21 @@ export default function LoginPage() {
         }
       `}</style>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mb-4"></div>
+          <p className="text-gray-600 font-medium">Chargement...</p>
+        </div>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   )
 }
 

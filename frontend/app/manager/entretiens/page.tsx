@@ -500,6 +500,9 @@ export default function ManagerInterviewsPage() {
       }
       
       // Créer l'application d'abord
+      if (!selectedCandidate.id) {
+        throw new Error('Le candidat sélectionné n\'a pas d\'ID')
+      }
       const newApplication = await createApplication({
         candidate_id: selectedCandidate.id,
         job_id: selectedJobId,
@@ -1228,7 +1231,9 @@ export default function ManagerInterviewsPage() {
                           setApplicationSearchQuery(`${candidate.first_name} ${candidate.last_name}`)
                           setSelectedApplicationId('')
                           // Charger les applications pour ce candidat
-                          await loadCandidateApplications(candidate.id)
+                          if (candidate.id) {
+                            await loadCandidateApplications(candidate.id)
+                          }
                         }}
                         className="w-full text-left p-3 hover:bg-indigo-50 transition-colors border-b border-gray-100 last:border-b-0"
                       >

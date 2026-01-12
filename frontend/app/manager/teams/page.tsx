@@ -68,9 +68,7 @@ export default function TeamsPage() {
   const [formData, setFormData] = useState<Partial<TeamCreate>>({
     name: '',
     description: '',
-    department: '',
-    manager_id: '',
-    member_ids: []
+    department: ''
   })
   const [searchQuery, setSearchQuery] = useState('')
   const [memberSearchQuery, setMemberSearchQuery] = useState('')
@@ -185,9 +183,7 @@ export default function TeamsPage() {
     setFormData({
       name: '',
       description: '',
-      department: '',
-      manager_id: '',
-      member_ids: []
+      department: ''
     })
     setSearchQuery('')
     setMemberSearchQuery('')
@@ -283,8 +279,6 @@ export default function TeamsPage() {
       name: team.name,
       description: team.description || '',
       department: team.department || '',
-      manager_id: team.manager_id || '',
-      member_ids: []
     })
     setShowEditModal(true)
   }
@@ -637,9 +631,9 @@ export default function TeamsPage() {
                             </div>
                             <div>
                               <p className="text-sm font-medium text-gray-900">
-                                {member.user_first_name} {member.user_last_name}
+                                {member.user_name || 'Utilisateur sans nom'}
                               </p>
-                              <p className="text-xs text-gray-500">{member.user_role}</p>
+                              <p className="text-xs text-gray-500">{member.role}</p>
                             </div>
                           </div>
                           <button
@@ -959,7 +953,7 @@ export default function TeamsPage() {
                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Description</label>
                   <textarea
-                    value={formData.description}
+                    value={formData.description || ''}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
@@ -971,28 +965,13 @@ export default function TeamsPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Département</label>
                   <input
                     type="text"
-                    value={formData.department}
+                    value={formData.department || ''}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     placeholder="Ex: IT, RH, Marketing..."
                   />
                 </div>
 
-                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Manager</label>
-                  <select
-                    value={formData.manager_id}
-                    onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
-                  >
-                    <option value="">Sélectionner un manager</option>
-                    {users.filter(u => u.role === 'manager' || u.role === 'administrateur').map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.first_name} {user.last_name} ({user.role})
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
                 <div className="flex justify-end gap-3 pt-6 border-t-2 border-gray-200 bg-white -mx-8 -mb-8 px-8 pb-8 rounded-b-2xl">
                   <button
@@ -1060,7 +1039,7 @@ export default function TeamsPage() {
                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Description</label>
                   <textarea
-                    value={formData.description}
+                    value={formData.description || ''}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
@@ -1071,27 +1050,12 @@ export default function TeamsPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Département</label>
                   <input
                     type="text"
-                    value={formData.department}
+                    value={formData.department || ''}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   />
                 </div>
 
-                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Manager</label>
-                  <select
-                    value={formData.manager_id}
-                    onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
-                  >
-                    <option value="">Sélectionner un manager</option>
-                    {users.filter(u => u.role === 'manager' || u.role === 'administrateur').map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.first_name} {user.last_name} ({user.role})
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
                 <div className="flex justify-end gap-3 pt-6 border-t-2 border-gray-200 bg-white -mx-8 -mb-8 px-8 pb-8 rounded-b-2xl">
                   <button
@@ -1314,7 +1278,7 @@ export default function TeamsPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Téléphone</label>
                   <input
                     type="tel"
-                    value={userFormData.phone}
+                    value={userFormData.phone || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, phone: e.target.value })}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     placeholder="+33 6 12 34 56 78"
@@ -1325,7 +1289,7 @@ export default function TeamsPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Département</label>
                   <input
                     type="text"
-                    value={userFormData.department}
+                    value={userFormData.department || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, department: e.target.value })}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                     placeholder="Ex: IT, RH, Marketing..."
@@ -1711,7 +1675,7 @@ export default function TeamsPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Téléphone</label>
                   <input
                     type="tel"
-                    value={userFormData.phone}
+                    value={userFormData.phone || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, phone: e.target.value })}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   />
@@ -1721,7 +1685,7 @@ export default function TeamsPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Département</label>
                   <input
                     type="text"
-                    value={userFormData.department}
+                    value={userFormData.department || ''}
                     onChange={(e) => setUserFormData({ ...userFormData, department: e.target.value })}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white"
                   />

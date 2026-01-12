@@ -56,8 +56,8 @@ export default function NotificationCenter() {
     }
     
     try {
-      const data = await getUnreadCount()
-      setUnreadCount(data.unread_count)
+      const count = await getUnreadCount()
+      setUnreadCount(count)
     } catch (error) {
       // Ignorer silencieusement les erreurs 401 (non authentifié) et 422 (validation)
       if (error instanceof Error && (error.message.includes('401') || error.message.includes('422'))) {

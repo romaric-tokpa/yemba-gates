@@ -158,14 +158,14 @@ export default function ClientInterviewsPage() {
     })
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string | undefined) => {
     const config: Record<string, { bg: string; text: string; icon: any; label: string }> = {
       planifié: { bg: 'bg-blue-100', text: 'text-blue-800', icon: Clock, label: 'Planifié' },
       réalisé: { bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle, label: 'Réalisé' },
       reporté: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock, label: 'Reporté' },
       annulé: { bg: 'bg-red-100', text: 'text-red-800', icon: XCircle, label: 'Annulé' },
     }
-    const statusConfig = config[status] || config.planifié
+    const statusConfig = status && config[status] ? config[status] : config.planifié
     const Icon = statusConfig.icon
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>

@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, History, Clock, User } from 'lucide-react'
 import { getJob, getJobHistory, JobResponse, JobHistoryItem } from '@/lib/api'
 
-export default function BesoinDetailPage() {
+function BesoinDetailPageContent() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -263,6 +263,21 @@ export default function BesoinDetailPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function BesoinDetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600 font-medium">Chargement...</p>
+        </div>
+      </div>
+    }>
+      <BesoinDetailPageContent />
+    </Suspense>
   )
 }
 

@@ -1,43 +1,66 @@
 // Détection automatique de l'URL de l'API en fonction de l'URL actuelle
 function getApiUrl(): string {
-  // Si une variable d'environnement est définie, l'utiliser
+  // Si une variable d'environnement est définie, l'utiliser (sauf si c'est un domaine de production en développement local)
   if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL
+    const envUrl = process.env.NEXT_PUBLIC_API_URL
+    // Si on est en développement local (localhost) mais que l'URL env pointe vers un domaine de production,
+    // forcer l'utilisation de localhost:8000
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname
+      if ((hostname === 'localhost' || hostname === '127.0.0.1') && 
+          (envUrl.includes('yemma-gates.com') || envUrl.includes('https://'))) {
+        return 'http://localhost:8000'
+      }
+    }
+    return envUrl
   }
   
   // Sinon, détecter automatiquement depuis l'URL actuelle
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname
     const protocol = window.location.protocol
-    const port = window.location.port || '3000'
+    const port = window.location.port
     
-    // Si on est sur localhost ou 127.0.0.1, utiliser localhost:8000
+    // PRIORITÉ 1: Si on est sur localhost ou 127.0.0.1, TOUJOURS utiliser localhost:8000
+    // Même si le port est différent (3000, 80, etc.), on utilise toujours le backend direct
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8000'
     }
     
-    // Si on est sur un tunnel (cloudflare, localtunnel, etc.), utiliser le même hostname avec le port 8000
-    // ou détecter si c'est HTTPS (tunnel) et adapter
+    // PRIORITÉ 2: Si on est sur un tunnel (cloudflare, localtunnel, etc.)
     if (protocol === 'https:' || hostname.includes('cloudflare') || hostname.includes('tunnel') || hostname.includes('loca.lt') || hostname.includes('trycloudflare.com')) {
-      // Pour les tunnels, on peut utiliser le même hostname mais avec le port backend
-      // ou stocker l'URL du tunnel backend dans sessionStorage
       const tunnelBackendUrl = sessionStorage.getItem('TUNNEL_BACKEND_URL')
       if (tunnelBackendUrl) {
         return tunnelBackendUrl
       }
-      // Pour les autres tunnels, utiliser le même hostname
-      return `${protocol}//${hostname.replace(':3000', ':8000').replace(':3001', ':8000')}`
+      // Pour les tunnels, utiliser le même hostname (nginx route vers le backend)
+      return `${protocol}//${hostname}`
     }
     
-    // Sinon, utiliser la même IP avec le port 8000
-    return `http://${hostname}:8000`
+    // PRIORITÉ 3: Pour les domaines de production (yemma-gates.com, etc.)
+    // nginx route les requêtes API vers le backend
+    return `${protocol}//${hostname}`
   }
   
   // Par défaut pour le SSR
   return 'http://localhost:8000'
 }
 
-const API_URL = getApiUrl()
+// Ne pas calculer API_URL une seule fois, mais le récupérer à chaque fois
+// pour éviter les problèmes avec les variables d'environnement au build time
+function getApiUrlSafe(): string {
+  // FORCER localhost:8000 en développement local
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:8000'
+    }
+  }
+  return getApiUrl()
+}
+
+// Utiliser une fonction au lieu d'une constante pour forcer la réévaluation
+const API_URL = () => getApiUrlSafe()
 
 export interface LoginResponse {
   access_token: string
@@ -244,7 +267,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
   formData.append('username', email)  // Le backend attend 'username' (qui correspond à l'email)
   formData.append('password', password)
 
-  const response = await fetch(`${API_URL}/auth/login`, {
+  const response = await fetch(`${API_URL()}/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -329,7 +352,7 @@ export async function logout() {
 }
 
 export async function getCurrentUser(): Promise<UserInfo> {
-  const response = await authenticatedFetch(`${API_URL}/auth/me`)
+  const response = await authenticatedFetch(`${API_URL()}/auth/me`)
 
   if (!response.ok) {
     if (response.status === 401) {
