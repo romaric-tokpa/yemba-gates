@@ -37,7 +37,7 @@ export default function NouveauBesoinPage() {
         title: formData.title.trim(),
         ...(formData.department && { department: formData.department.trim() }),
         ...(formData.contract_type && { contract_type: formData.contract_type.trim() }),
-        ...(formData.budget !== undefined && formData.budget > 0 && { budget: formData.budget }),
+        ...(formData.budget !== undefined && formData.budget !== null && formData.budget > 0 && { budget: formData.budget }),
         // Convertir l'urgence en minuscules pour correspondre à l'enum backend
         ...(formData.urgency && { urgency: formData.urgency.toLowerCase() as 'faible' | 'moyenne' | 'haute' | 'critique' }),
       }
@@ -113,7 +113,7 @@ export default function NouveauBesoinPage() {
               type="text"
               id="department"
               name="department"
-              value={formData.department}
+              value={formData.department || ''}
               onChange={handleChange}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Ex: IT, Marketing, Client XYZ"
@@ -127,7 +127,7 @@ export default function NouveauBesoinPage() {
             <select
               id="contract_type"
               name="contract_type"
-              value={formData.contract_type}
+              value={formData.contract_type || ''}
               onChange={handleChange}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
