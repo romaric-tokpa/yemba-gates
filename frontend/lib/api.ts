@@ -1660,6 +1660,52 @@ export async function deleteUser(userId: string): Promise<void> {
   }
 }
 
+export async function toggleUserActive(userId: string): Promise<UserResponse> {
+  const response = await authenticatedFetch(`${API_URL}/admin/users/${userId}/toggle-active`, {
+    method: 'PATCH',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la modification du statut' }))
+    throw new Error(error.detail || 'Erreur lors de la modification du statut')
+  }
+
+  return response.json()
+}
+
+// ===== CHANGE PASSWORD =====
+
+export interface ChangePasswordRequest {
+  current_password: string
+  new_password: string
+  confirm_password?: string
+}
+
+export interface ChangePasswordResponse {
+  message: string
+  success: boolean
+}
+
+export async function changePassword(data: ChangePasswordRequest): Promise<ChangePasswordResponse> {
+  const response = await authenticatedFetch(`${API_URL}/auth/me/password`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      current_password: data.current_password,
+      new_password: data.new_password,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors du changement de mot de passe' }))
+    throw new Error(error.detail || 'Erreur lors du changement de mot de passe')
+  }
+
+  return response.json()
+}
+
 export interface UserCreateByManager {
   email: string
   first_name: string

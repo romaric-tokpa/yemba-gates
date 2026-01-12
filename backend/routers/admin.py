@@ -10,7 +10,7 @@ from pydantic import BaseModel, EmailStr
 
 from database import get_session
 from models import User, UserRole, SecurityLog, Setting
-from auth import get_current_active_user, require_role, get_password_hash
+from auth import get_current_active_user, require_role, get_password_hash, require_manager
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -90,11 +90,15 @@ def list_users(
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     user_data: UserCreate,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_manager),
     session: Session = Depends(get_session)
 ):
     """
-    Créer un nouvel utilisateur (réservé aux administrateurs)
+    Créer un nouvel utilisateur (réservé aux administrateurs et managers)
+    Un email d'invitation avec les identifiants est envoyé automatiquement
+    
+    Note: Seuls les administrateurs peuvent créer des comptes administrateurs.
+    Les managers peuvent créer des comptes recruteur, manager ou client.
     """
     # Vérifier si l'utilisateur existe déjà
     from auth import get_user_by_email
@@ -114,6 +118,14 @@ def create_user(
             detail=f"Rôle invalide. Rôles valides: {', '.join(valid_roles)}"
         )
     
+    # Vérifier les permissions : seuls les administrateurs peuvent créer des administrateurs
+    user_role = current_user.role if isinstance(current_user.role, str) else current_user.role.value
+    if role_lower == "administrateur" and user_role != UserRole.ADMINISTRATEUR.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seuls les administrateurs peuvent créer des comptes administrateurs"
+        )
+    
     # Créer le nouvel utilisateur
     hashed_password = get_password_hash(user_data.password)
     
@@ -131,6 +143,40 @@ def create_user(
     session.add(new_user)
     session.commit()
     session.refresh(new_user)
+    
+    # Envoyer l'email d'invitation avec les identifiants
+    try:
+        from services.email import send_user_invitation_email
+        import os
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # Récupérer l'URL de connexion depuis les variables d'environnement ou utiliser la valeur par défaut
+        login_url = os.getenv("LOGIN_URL", "http://localhost:3000/auth/login")
+        
+        logger.info(f"📧 Tentative d'envoi d'email d'invitation à {new_user.email}")
+        
+        email_sent = send_user_invitation_email(
+            recipient_email=new_user.email,
+            first_name=new_user.first_name,
+            last_name=new_user.last_name,
+            email=new_user.email,
+            password=user_data.password,  # Utiliser le mot de passe en clair pour l'email
+            role=new_user.role,
+            login_url=login_url
+        )
+        
+        if email_sent:
+            logger.info(f"✅ Email d'invitation envoyé avec succès à {new_user.email}")
+        else:
+            logger.warning(f"⚠️ Échec de l'envoi de l'email d'invitation à {new_user.email} (vérifiez la configuration SMTP)")
+            
+    except Exception as e:
+        # Ne pas faire échouer la création de l'utilisateur si l'email échoue
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"❌ Erreur lors de l'envoi de l'email d'invitation à {new_user.email}: {str(e)}", exc_info=True)
     
     return UserResponse(
         id=str(new_user.id),
@@ -253,6 +299,51 @@ def update_user(
     )
 
 
+@router.patch("/users/{user_id}/toggle-active", response_model=UserResponse)
+def toggle_user_active(
+    user_id: UUID,
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session)
+):
+    """
+    Activer ou désactiver un utilisateur (réservé aux administrateurs)
+    """
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Empêcher la désactivation de soi-même
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot deactivate your own account"
+        )
+    
+    # Inverser le statut actif/inactif
+    user.is_active = not user.is_active
+    user.updated_at = datetime.utcnow()
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=user.role,
+        phone=user.phone,
+        department=user.department,
+        is_active=user.is_active,
+        created_at=user.created_at,
+        updated_at=user.updated_at
+    )
+
+
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: UUID,
@@ -260,8 +351,8 @@ def delete_user(
     session: Session = Depends(get_session)
 ):
     """
-    Désactiver un utilisateur (réservé aux administrateurs)
-    Note: On ne supprime pas vraiment l'utilisateur, on le désactive
+    Supprimer définitivement un utilisateur (réservé aux administrateurs)
+    Attention: Cette action est irréversible
     """
     user = session.get(User, user_id)
     if not user:
@@ -277,12 +368,25 @@ def delete_user(
             detail="Cannot delete your own account"
         )
     
-    # Désactiver l'utilisateur au lieu de le supprimer
-    user.is_active = False
-    user.updated_at = datetime.utcnow()
+    # Utiliser une requête SQL brute pour éviter le chargement automatique des relations
+    # qui peut causer des erreurs si des colonnes sont manquantes dans la base de données
+    from sqlalchemy import text
     
-    session.add(user)
+    # Retirer l'utilisateur de la session pour éviter le chargement des relations
+    session.expunge(user)
+    
+    # Supprimer l'utilisateur avec une requête SQL brute
+    result = session.execute(
+        text("DELETE FROM users WHERE id = :user_id"),
+        {"user_id": str(user_id)}
+    )
     session.commit()
+    
+    if result.rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
     
     return None
 

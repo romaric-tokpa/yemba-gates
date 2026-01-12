@@ -253,8 +253,33 @@ export async function login(email: string, password: string): Promise<LoginRespo
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Erreur de connexion' }))
-    throw new Error(error.detail || 'Erreur de connexion')
+    let errorMessage = 'Erreur de connexion'
+    try {
+      const error = await response.json()
+      const detail = error.detail || error.message || errorMessage
+      
+      // Traduire les messages d'erreur en français
+      const errorTranslations: Record<string, string> = {
+        'User not found': 'Utilisateur non trouvé',
+        'Incorrect email or password': 'Email ou mot de passe incorrect',
+        'User account is inactive': 'Compte utilisateur inactif',
+        'User account has no password set': 'Aucun mot de passe défini pour ce compte',
+        'Email and password are required': 'Email et mot de passe requis',
+        'Invalid request format. Use JSON or form data.': 'Format de requête invalide',
+      }
+      
+      errorMessage = errorTranslations[detail] || detail
+    } catch (e) {
+      // Si la réponse n'est pas du JSON, utiliser le statut
+      if (response.status === 401) {
+        errorMessage = 'Email ou mot de passe incorrect'
+      } else if (response.status === 400) {
+        errorMessage = 'Requête invalide. Vérifiez vos informations.'
+      } else if (response.status === 500) {
+        errorMessage = 'Erreur serveur. Veuillez réessayer plus tard.'
+      }
+    }
+    throw new Error(errorMessage)
   }
 
   const data = await response.json()

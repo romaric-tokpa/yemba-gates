@@ -113,6 +113,46 @@ def create_user_by_manager(
     session.commit()
     session.refresh(new_user)
     
+    # Envoyer l'email d'invitation avec les identifiants
+    try:
+        from services.email import send_user_invitation_email
+        import os
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # Récupérer l'URL de connexion depuis les variables d'environnement ou utiliser la valeur par défaut
+        login_url = os.getenv("LOGIN_URL", "http://localhost:3000/auth/login")
+        
+        # Utiliser le mot de passe généré ou fourni
+        password_to_send = generated_password if generated_password else user_data.password
+        
+        logger.info(f"📧 Tentative d'envoi d'email d'invitation à {new_user.email}")
+        
+        if password_to_send:
+            email_sent = send_user_invitation_email(
+                recipient_email=new_user.email,
+                first_name=new_user.first_name,
+                last_name=new_user.last_name,
+                email=new_user.email,
+                password=password_to_send,
+                role=new_user.role,
+                login_url=login_url
+            )
+            
+            if email_sent:
+                logger.info(f"✅ Email d'invitation envoyé avec succès à {new_user.email}")
+            else:
+                logger.warning(f"⚠️ Échec de l'envoi de l'email d'invitation à {new_user.email} (vérifiez la configuration SMTP)")
+        else:
+            logger.warning(f"⚠️ Impossible d'envoyer l'email d'invitation à {new_user.email} : aucun mot de passe disponible")
+            
+    except Exception as e:
+        # Ne pas faire échouer la création de l'utilisateur si l'email échoue
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"❌ Erreur lors de l'envoi de l'email d'invitation à {new_user.email}: {str(e)}", exc_info=True)
+    
     return UserCreateResponse(
         id=str(new_user.id),
         email=new_user.email,

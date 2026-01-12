@@ -192,7 +192,17 @@ def require_role(allowed_roles: list[UserRole]):
         allowed_role_values = [role.value if isinstance(role, UserRole) else role for role in allowed_roles]
         user_role = current_user.role if isinstance(current_user.role, str) else current_user.role.value
         
-        if user_role not in allowed_role_values:
+        # Normaliser les rôles pour la comparaison (gérer les variantes)
+        user_role_normalized = user_role.lower() if user_role else ""
+        allowed_role_values_normalized = [r.lower() if isinstance(r, str) else r for r in allowed_role_values]
+        
+        # Pour les administrateurs, accepter à la fois "admin" et "administrateur"
+        if UserRole.ADMINISTRATEUR in allowed_roles or "administrateur" in allowed_role_values_normalized:
+            if user_role_normalized in ["admin", "administrateur"]:
+                return current_user
+        
+        # Vérification standard
+        if user_role_normalized not in allowed_role_values_normalized:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Operation not allowed for role: {user_role}"

@@ -6,11 +6,12 @@ import {
   createUser, 
   updateUser, 
   deleteUser,
+  toggleUserActive,
   type UserResponse,
   type UserCreate,
   type UserUpdate
 } from '@/lib/api'
-import { Plus, Edit, Trash2, X, Save, Eye, EyeOff } from 'lucide-react'
+import { Plus, Edit, Trash2, X, Save, Eye, EyeOff, Power, PowerOff } from 'lucide-react'
 
 export default function UsersManagementPage() {
   const [users, setUsers] = useState<UserResponse[]>([])
@@ -64,6 +65,9 @@ export default function UsersManagementPage() {
         department: formData.department || undefined
       })
       
+      // Afficher un message de succès avec information sur l'email
+      alert(`✅ Utilisateur créé avec succès !\n\nUn email de bienvenue avec les identifiants a été envoyé à ${formData.email}`)
+      
       setShowCreateModal(false)
       setFormData({
         email: '',
@@ -74,6 +78,7 @@ export default function UsersManagementPage() {
         phone: '',
         department: ''
       })
+      setError(null)
       loadUsers()
     } catch (err: any) {
       setError(err.message || 'Erreur lors de la création')
@@ -90,14 +95,30 @@ export default function UsersManagementPage() {
     }
   }
 
+  const handleToggleActive = async (userId: string, currentStatus: boolean) => {
+    try {
+      await toggleUserActive(userId)
+      loadUsers()
+      setError(null)
+    } catch (err: any) {
+      setError(err.message || 'Erreur lors de la modification du statut')
+    }
+  }
+
   const handleDelete = async (userId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir désactiver cet utilisateur ?')) {
+    if (!confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement cet utilisateur ?\n\nCette action est irréversible et supprimera toutes les données associées à cet utilisateur.')) {
+      return
+    }
+    
+    // Demander une confirmation supplémentaire
+    if (!confirm('⚠️ DERNIÈRE CONFIRMATION : La suppression est définitive et irréversible.\n\nVoulez-vous vraiment continuer ?')) {
       return
     }
     
     try {
       await deleteUser(userId)
       loadUsers()
+      setError(null)
     } catch (err: any) {
       setError(err.message || 'Erreur lors de la suppression')
     }
@@ -210,13 +231,30 @@ export default function UsersManagementPage() {
                   <div className="flex justify-end space-x-2">
                     <button
                       onClick={() => setEditingUser(user)}
-                      className="text-blue-600 hover:text-blue-900"
+                      className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50 transition-colors"
+                      title="Modifier"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
                     <button
+                      onClick={() => handleToggleActive(user.id, user.is_active)}
+                      className={`p-1 rounded transition-colors ${
+                        user.is_active
+                          ? 'text-orange-600 hover:text-orange-900 hover:bg-orange-50'
+                          : 'text-green-600 hover:text-green-900 hover:bg-green-50'
+                      }`}
+                      title={user.is_active ? 'Désactiver' : 'Activer'}
+                    >
+                      {user.is_active ? (
+                        <PowerOff className="w-4 h-4" />
+                      ) : (
+                        <Power className="w-4 h-4" />
+                      )}
+                    </button>
+                    <button
                       onClick={() => handleDelete(user.id)}
-                      className="text-red-600 hover:text-red-900"
+                      className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 transition-colors"
+                      title="Supprimer définitivement"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

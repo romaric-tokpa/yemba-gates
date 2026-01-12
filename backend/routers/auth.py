@@ -367,6 +367,84 @@ def get_current_user_info(
     }
 
 
+class ChangePasswordRequest(BaseModel):
+    """Schéma pour changer le mot de passe"""
+    current_password: str
+    new_password: str
+
+
+class ChangePasswordResponse(BaseModel):
+    """Réponse après changement de mot de passe"""
+    message: str
+    success: bool
+
+
+@router.patch("/me/password", response_model=ChangePasswordResponse)
+def change_password(
+    password_data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Permet à l'utilisateur connecté de changer son mot de passe
+    """
+    import logging
+    from auth import verify_password
+    logger = logging.getLogger(__name__)
+    
+    # Vérifier que l'utilisateur a un mot de passe actuel
+    if not current_user.password_hash:
+        logger.warning(f"❌ [CHANGE_PASSWORD] Aucun mot de passe défini pour l'utilisateur: {current_user.email}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucun mot de passe actuel défini. Contactez un administrateur."
+        )
+    
+    # Vérifier le mot de passe actuel
+    if not verify_password(password_data.current_password, current_user.password_hash):
+        logger.warning(f"❌ [CHANGE_PASSWORD] Mot de passe actuel incorrect pour l'utilisateur: {current_user.email}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mot de passe actuel incorrect"
+        )
+    
+    # Vérifier que le nouveau mot de passe est différent de l'ancien
+    if verify_password(password_data.new_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le nouveau mot de passe doit être différent de l'ancien"
+        )
+    
+    # Vérifier la longueur minimale du nouveau mot de passe
+    if len(password_data.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le nouveau mot de passe doit contenir au moins 6 caractères"
+        )
+    
+    # Mettre à jour le mot de passe
+    try:
+        current_user.password_hash = get_password_hash(password_data.new_password)
+        current_user.updated_at = datetime.utcnow()
+        session.add(current_user)
+        session.commit()
+        session.refresh(current_user)
+        
+        logger.info(f"✅ [CHANGE_PASSWORD] Mot de passe changé avec succès pour l'utilisateur: {current_user.email}")
+        
+        return ChangePasswordResponse(
+            message="Mot de passe changé avec succès",
+            success=True
+        )
+    except Exception as e:
+        session.rollback()
+        logger.error(f"❌ [CHANGE_PASSWORD] Erreur lors du changement de mot de passe pour {current_user.email}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erreur lors du changement de mot de passe"
+        )
+
+
 @router.get("/users")
 def list_users_for_interviews(
     current_user: User = Depends(get_current_active_user),

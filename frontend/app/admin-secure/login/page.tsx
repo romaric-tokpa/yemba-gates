@@ -12,7 +12,6 @@ export default function AdminSecureLoginPage() {
   
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [adminToken, setAdminToken] = useState('') // Token d'accès admin supplémentaire
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [showSecurityWarning, setShowSecurityWarning] = useState(true)
@@ -46,16 +45,6 @@ export default function AdminSecureLoginPage() {
     setIsLoading(true)
 
     try {
-      // Vérifier le token admin si configuré
-      // Note: Les variables d'environnement NEXT_PUBLIC_* sont disponibles côté client
-      // Par défaut, si non configuré, le token n'est pas requis
-      const requiredAdminToken = process.env.NEXT_PUBLIC_ADMIN_SECURE_TOKEN || ''
-      
-      // Si un token est configuré, il doit être fourni
-      if (requiredAdminToken && requiredAdminToken.trim() !== '' && adminToken !== requiredAdminToken) {
-        throw new Error('Token d\'accès admin invalide. Veuillez entrer le token correct.')
-      }
-
       // Authentification normale
       const loginResponse = await login(email, password)
       
@@ -221,34 +210,6 @@ export default function AdminSecureLoginPage() {
                 />
               </div>
             </div>
-
-            {/* Token d'accès admin (optionnel) */}
-            {(process.env.NEXT_PUBLIC_ADMIN_SECURE_TOKEN || '').trim() !== '' && (
-              <div>
-                <label htmlFor="adminToken" className="block text-sm font-medium text-gray-700 mb-2">
-                  Token d'accès admin
-                  <span className="ml-2 text-xs text-gray-500">(Requis)</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Shield className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="adminToken"
-                    name="adminToken"
-                    type="password"
-                    required
-                    value={adminToken}
-                    onChange={(e) => setAdminToken(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 text-gray-900 placeholder-gray-400"
-                    placeholder="Token d'accès sécurisé"
-                  />
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Token supplémentaire requis pour l'accès administrateur
-                </p>
-              </div>
-            )}
 
             {/* Bouton de connexion */}
             <div>
