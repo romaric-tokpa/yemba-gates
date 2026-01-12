@@ -361,7 +361,7 @@ export default function UsersManagementPage() {
                 </label>
                 <input
                   type="tel"
-                  value={formData.phone}
+                  value={formData.phone || ''}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
@@ -373,7 +373,7 @@ export default function UsersManagementPage() {
                 </label>
                 <input
                   type="text"
-                  value={formData.department}
+                  value={formData.department || ''}
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
@@ -448,7 +448,7 @@ function EditUserModal({
             </label>
             <input
               type="email"
-              value={formData.email}
+              value={formData.email || ''}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
@@ -482,7 +482,7 @@ function EditUserModal({
               </label>
               <input
                 type="text"
-                value={formData.first_name}
+                value={formData.first_name || ''}
                 onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
@@ -493,7 +493,7 @@ function EditUserModal({
               </label>
               <input
                 type="text"
-                value={formData.last_name}
+                value={formData.last_name || ''}
                 onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
@@ -505,7 +505,7 @@ function EditUserModal({
               Rôle *
             </label>
             <select
-              value={formData.role}
+              value={formData.role || ''}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
