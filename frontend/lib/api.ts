@@ -2251,3 +2251,254 @@ export async function removeTeamMember(teamId: string, userId: string): Promise<
 
   return response.json()
 }
+
+// ===== FONCTIONS OFFERS =====
+
+export interface OfferResponse {
+  application_id: string
+  candidate_id: string
+  candidate_name: string
+  candidate_email: string | null
+  job_id: string
+  job_title: string
+  job_department: string | null
+  offer_sent_at: string | null
+  offer_accepted: boolean | null
+  offer_accepted_at: string | null
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface OfferSend {
+  application_id: string
+  notes?: string | null
+}
+
+export interface OfferDecision {
+  accepted: boolean
+  notes?: string | null
+}
+
+export async function sendOffer(offerData: OfferSend): Promise<OfferResponse> {
+  const response = await authenticatedFetch(`${API_URL}/offers/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(offerData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'envoi de l\'offre' }))
+    throw new Error(error.detail || 'Erreur lors de l\'envoi de l\'offre')
+  }
+
+  return response.json()
+}
+
+export async function getOffers(params?: {
+  status_filter?: string
+  job_id?: string
+  skip?: number
+  limit?: number
+}): Promise<OfferResponse[]> {
+  const queryParams = new URLSearchParams()
+  if (params?.status_filter) queryParams.append('status_filter', params.status_filter)
+  if (params?.job_id) queryParams.append('job_id', params.job_id)
+  if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString())
+  if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString())
+
+  const queryString = queryParams.toString()
+  const url = queryString ? `${API_URL}/offers/?${queryString}` : `${API_URL}/offers/`
+
+  const response = await authenticatedFetch(url, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération des offres' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération des offres')
+  }
+
+  return response.json()
+}
+
+export async function acceptOffer(applicationId: string, decision: OfferDecision): Promise<OfferResponse> {
+  const response = await authenticatedFetch(`${API_URL}/offers/${applicationId}/accept`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(decision),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de l\'acceptation de l\'offre' }))
+    throw new Error(error.detail || 'Erreur lors de l\'acceptation de l\'offre')
+  }
+
+  return response.json()
+}
+
+export async function rejectOffer(applicationId: string, decision: OfferDecision): Promise<OfferResponse> {
+  const response = await authenticatedFetch(`${API_URL}/offers/${applicationId}/reject`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(decision),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors du rejet de l\'offre' }))
+    throw new Error(error.detail || 'Erreur lors du rejet de l\'offre')
+  }
+
+  return response.json()
+}
+
+// ===== FONCTIONS ONBOARDING =====
+
+export interface OnboardingChecklist {
+  application_id: string
+  candidate_name: string
+  job_title: string
+  contract_signed: boolean
+  contract_signed_at: string | null
+  equipment_ready: boolean
+  equipment_ready_at: string | null
+  training_scheduled: boolean
+  training_scheduled_at: string | null
+  access_granted: boolean
+  access_granted_at: string | null
+  welcome_meeting_scheduled: boolean
+  welcome_meeting_scheduled_at: string | null
+  onboarding_completed: boolean
+  onboarding_completed_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface OnboardingChecklistUpdate {
+  contract_signed?: boolean | null
+  equipment_ready?: boolean | null
+  training_scheduled?: boolean | null
+  access_granted?: boolean | null
+  welcome_meeting_scheduled?: boolean | null
+  notes?: string | null
+}
+
+export async function getOnboardingChecklist(applicationId: string): Promise<OnboardingChecklist> {
+  const response = await authenticatedFetch(`${API_URL}/onboarding/${applicationId}`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération de la checklist' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération de la checklist')
+  }
+
+  return response.json()
+}
+
+export async function updateOnboardingChecklist(
+  applicationId: string,
+  checklistData: OnboardingChecklistUpdate
+): Promise<OnboardingChecklist> {
+  const response = await authenticatedFetch(`${API_URL}/onboarding/${applicationId}/checklist`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(checklistData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la mise à jour de la checklist' }))
+    throw new Error(error.detail || 'Erreur lors de la mise à jour de la checklist')
+  }
+
+  return response.json()
+}
+
+export async function completeOnboarding(applicationId: string): Promise<OnboardingChecklist> {
+  const response = await authenticatedFetch(`${API_URL}/onboarding/${applicationId}/complete`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la complétion de l\'onboarding' }))
+    throw new Error(error.detail || 'Erreur lors de la complétion de l\'onboarding')
+  }
+
+  return response.json()
+}
+
+export async function getOnboardingList(params?: {
+  skip?: number
+  limit?: number
+}): Promise<OnboardingChecklist[]> {
+  const queryParams = new URLSearchParams()
+  if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString())
+  if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString())
+
+  const queryString = queryParams.toString()
+  const url = queryString ? `${API_URL}/onboarding/?${queryString}` : `${API_URL}/onboarding/`
+
+  const response = await authenticatedFetch(url, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération de la liste d\'onboarding' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération de la liste d\'onboarding')
+  }
+
+  return response.json()
+}
+
+// ===== FONCTIONS HISTORY =====
+
+export interface ApplicationHistoryItem {
+  id: string
+  application_id: string
+  changed_by: string
+  changed_by_name: string
+  old_status: string | null
+  new_status: string | null
+  notes: string | null
+  created_at: string
+}
+
+export async function getApplicationHistory(applicationId: string): Promise<ApplicationHistoryItem[]> {
+  const response = await authenticatedFetch(`${API_URL}/history/applications/${applicationId}`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      return []
+    }
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération de l\'historique' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération de l\'historique')
+  }
+
+  return response.json()
+}
+
+// ===== FONCTIONS SHORTLISTS NOTIFICATIONS =====
+
+export async function getRecruiterNotifications(): Promise<ShortlistItem[]> {
+  const response = await authenticatedFetch(`${API_URL}/shortlists/notifications`, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur lors de la récupération des notifications' }))
+    throw new Error(error.detail || 'Erreur lors de la récupération des notifications')
+  }
+
+  return response.json()
+}
