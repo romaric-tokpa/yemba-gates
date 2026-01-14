@@ -146,7 +146,7 @@ Accès:
 cat .env
 
 # Configurer le domaine dans nginx
-sed -i 's/example.com/yemma-gates.com/g' nginx/conf.d/default.conf
+sed -i 's/yemma-gates.com/yemma-gates.com/g' nginx/conf.d/default.conf
 ```
 
 ### Étape 2: Obtenir les certificats SSL
@@ -180,7 +180,7 @@ docker compose logs -f
 ### Première installation
 
 ```bash
-./scripts/init-ssl.sh votre-domaine.com admin@votre-domaine.com
+./scripts/init-ssl.sh yemma-gates.com admin@yemma-gates.com
 ```
 
 ### Renouvellement automatique
@@ -302,6 +302,57 @@ docker system prune -a
 # Redéployer
 ./scripts/deploy.sh prod
 ```
+
+### Problèmes de build sur Hostinger
+
+Si le build s'arrête sans message d'erreur sur Hostinger Docker Manager:
+
+1. **Vérifier les logs complets du build**:
+   - Dans l'interface Hostinger, allez dans les logs de build
+   - Cherchez les messages d'erreur après "Building project"
+   - Les logs peuvent être tronqués, vérifiez tous les logs disponibles
+
+2. **Problème de timeout**:
+   - Le build peut prendre plusieurs minutes
+   - Hostinger peut avoir un timeout de build limité
+   - Solution: Construire les images localement et les pousser vers un registry Docker
+
+3. **Problème de mémoire**:
+   - Le build Next.js nécessite suffisamment de RAM
+   - Vérifiez les ressources disponibles sur votre VPS
+   - Solution: Augmentez la RAM ou utilisez un build avec moins de parallélisme
+
+4. **Variables d'environnement manquantes**:
+   - Assurez-vous que `NEXT_PUBLIC_API_URL` est défini dans Hostinger
+   - Vérifiez que toutes les variables nécessaires sont configurées
+
+5. **Build local pour diagnostic**:
+   ```bash
+   # Tester le build localement
+   cd frontend
+   docker build -t test-frontend --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 .
+   
+   cd ../backend
+   docker build -t test-backend .
+   ```
+
+6. **Utiliser un registry Docker** (recommandé pour Hostinger):
+   - Construire les images localement ou sur CI/CD
+   - Pousser vers Docker Hub ou un registry privé
+   - Modifier docker-compose.yml pour utiliser les images pré-construites:
+   ```yaml
+   backend:
+     image: votre-username/recrutement-backend:latest
+     # Au lieu de build:
+     # build:
+     #   context: ./backend
+   
+   frontend:
+     image: votre-username/recrutement-frontend:latest
+     # Au lieu de build:
+     # build:
+     #   context: ./frontend
+   ```
 
 ---
 

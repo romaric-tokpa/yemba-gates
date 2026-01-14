@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Créer utilisateur non-root
@@ -35,8 +36,10 @@ WORKDIR /app
 
 # Copier et installer les dépendances
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir gunicorn
+RUN echo "Installing Python dependencies..." && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir gunicorn && \
+    echo "Dependencies installed successfully"
 
 # -----------------------------------------------------------------------------
 # Stage 3: Production
@@ -51,6 +54,10 @@ COPY --chown=app:app . .
 # Créer les répertoires nécessaires
 RUN mkdir -p uploads/cvs static/uploads \
     && chown -R app:app uploads static
+
+# Vérifier que les fichiers essentiels existent
+RUN test -f main.py || (echo "main.py not found!" && exit 1)
+RUN test -f gunicorn.conf.py || (echo "gunicorn.conf.py not found!" && exit 1)
 
 # Changer vers l'utilisateur non-root
 USER app

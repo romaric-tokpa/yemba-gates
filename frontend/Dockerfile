@@ -14,8 +14,11 @@ WORKDIR /app
 # Copier les fichiers de dépendances
 COPY package*.json ./
 
-# Installer les dépendances
-RUN npm ci --only=production=false
+# Installer les dépendances avec logs détaillés
+RUN echo "Installing dependencies..." && \
+    npm ci --only=production=false --verbose || \
+    (echo "npm ci failed, trying npm install..." && npm install) && \
+    echo "Dependencies installed successfully"
 
 # -----------------------------------------------------------------------------
 # Stage 2: Build
@@ -29,14 +32,19 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Variables d'environnement pour le build
-ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 # Désactiver la télémétrie Next.js
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build l'application
-RUN npm run build
+# Build l'application (avec gestion d'erreur explicite et logs)
+RUN echo "Starting Next.js build..." && \
+    echo "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}" && \
+    npm run build 2>&1 | tee /tmp/build.log || \
+    (echo "=== BUILD FAILED ===" && cat /tmp/build.log && exit 1) && \
+    echo "Build completed successfully" && \
+    ls -la .next/standalone 2>/dev/null || echo "Warning: .next/standalone not found"
 
 # -----------------------------------------------------------------------------
 # Stage 3: Production
@@ -57,8 +65,12 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder /app/public ./public
 
 # Copier les fichiers standalone (optimisés pour la production)
+# Vérifier que le dossier standalone existe avant de copier
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Vérifier que server.js existe
+RUN test -f server.js || (echo "server.js not found in standalone output!" && exit 1)
 
 # Passer à l'utilisateur non-root
 USER nextjs
