@@ -1,0 +1,90 @@
+# =============================================================================
+# COMMANDES DE MIGRATION - À EXÉCUTER DANS L'ORDRE
+# =============================================================================
+
+# =============================================================================
+# ÉTAPE 1: Créer la Base MASTER
+# =============================================================================
+
+psql -U postgres -c "CREATE DATABASE yemma_gates_master;"
+psql -U postgres -d yemma_gates_master -f backend/schema_master.sql
+
+# Vérification:
+psql -U postgres -d yemma_gates_master -c "\dt"
+
+
+# =============================================================================
+# ÉTAPE 2: Créer l'Entreprise Par Défaut
+# =============================================================================
+
+cd /Users/tokpa/Documents/recrutement-app
+python3 backend/migrations/create_default_company.py
+
+# ⚠️ NOTER L'ID DE L'ENTREPRISE AFFICHÉ!
+
+
+# =============================================================================
+# ÉTAPE 3: Migrer les Données
+# =============================================================================
+
+# Option A: Script Python (Recommandé)
+python3 backend/migrations/migrate_data_with_company_id.py
+
+# Option B: SQL Manuel (si le script Python échoue)
+# 1. Récupérer l'ID:
+#    psql -U postgres -d yemma_gates_master -t -c "SELECT id FROM companies WHERE subdomain = 'default';"
+# 2. Éditer backend/migrations/add_company_id_migration.sql avec l'ID
+# 3. Exécuter:
+#    psql -U postgres -d recrutement_db -f backend/migrations/add_company_id_migration.sql
+
+# Vérification:
+psql -U postgres -d recrutement_db -c "SELECT COUNT(*) FROM users WHERE company_id IS NULL;"
+# Doit retourner: 0
+
+
+# =============================================================================
+# ÉTAPE 4: Mettre à Jour les Routers
+# =============================================================================
+
+python3 backend/migrations/update_routers_for_tenant.py
+
+# Vérification:
+grep -r "from database import get_session" backend/routers/
+# Ne doit rien retourner
+
+
+# =============================================================================
+# ÉTAPE 5: Optimiser les KPI (Optionnel)
+# =============================================================================
+
+psql -U postgres -d recrutement_db -f backend/migrations/optimize_kpi_indexes.sql
+
+
+# =============================================================================
+# TESTS
+# =============================================================================
+
+# Test 1: Vérifier les imports
+cd backend
+python3 -c "from tenant_manager import get_master_session; from database_tenant import get_session; print('✅ OK')"
+
+# Test 2: Tests de migration
+cd ..
+python3 backend/tests/test_migration.py
+
+# Test 3: Démarrer le serveur
+cd backend
+python3 -m uvicorn main:app --reload
+
+# Test 4: Tester l'authentification (dans un autre terminal)
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "votre-email@example.com", "password": "votre-mot-de-passe"}'
+
+
+# =============================================================================
+# SCRIPT AUTOMATISÉ (Alternative)
+# =============================================================================
+
+cd /Users/tokpa/Documents/recrutement-app
+./backend/scripts/run_migration.sh

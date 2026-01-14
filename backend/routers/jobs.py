@@ -7,7 +7,8 @@ from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel
 
-from database import get_session, engine
+from database_tenant import get_session, get_engine
+engine = get_engine  # Adapter pour compatibilité
 from models import Job, JobStatus, UrgencyLevel, User, UserRole, JobHistory, Application, JobRecruiter
 from schemas import JobCreate, JobUpdate, JobResponse, JobResponseWithCreator, JobSubmitForValidation
 from auth import get_current_active_user, require_recruteur, require_manager

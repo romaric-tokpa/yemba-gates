@@ -10,8 +10,9 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
 from uuid import UUID
 
-from database import get_session
+from database_tenant import get_session
 from models import User, UserRole
+from tenant_manager import get_current_tenant_id, require_tenant_access
 
 # Configuration JWT
 SECRET_KEY = "your-secret-key-change-in-production"  # TODO: Utiliser une variable d'environnement
@@ -165,7 +166,23 @@ async def get_current_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User is inactive"
             )
-        logger.debug(f"🔐 [AUTH] Utilisateur authentifié: {user.email} (role: {user.role})")
+        
+        # Vérifier que l'utilisateur appartient au tenant actuel (sécurité multi-tenant)
+        try:
+            current_tenant = get_current_tenant_id()
+            if user.company_id != current_tenant:
+                logger.warning(f"🔐 [AUTH] Tentative d'accès cross-tenant: user {user_id} (company: {user.company_id}) vs current tenant: {current_tenant}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: user does not belong to current tenant"
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Si le tenant n'est pas encore défini (route publique), on continue
+            logger.debug(f"🔐 [AUTH] Tenant non défini (route publique probable): {str(e)}")
+        
+        logger.debug(f"🔐 [AUTH] Utilisateur authentifié: {user.email} (role: {user.role}, company: {user.company_id})")
         return user
     except ValueError as e:
         logger.error(f"🔐 [AUTH] Erreur de format UUID: {str(e)}")

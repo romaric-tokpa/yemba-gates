@@ -48,7 +48,7 @@ class User(SQLModel, table=True):
     __tablename__ = "users"
     
     id: UUID | None = Field(default_factory=uuid4, sa_column=Column(PG_UUID(as_uuid=True), primary_key=True))
-    email: str = Field(unique=True, index=True)
+    email: str = Field(index=True)  # Retirer unique=True car email peut être dupliqué entre tenants
     password_hash: str
     first_name: str
     last_name: str
@@ -56,8 +56,13 @@ class User(SQLModel, table=True):
     phone: str | None = None
     department: str | None = None
     is_active: bool = Field(default=True)
+    # Multi-tenant: company_id pour isoler les données par entreprise
+    company_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), index=True))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Index composite pour email unique par tenant
+    # Note: L'index unique sera créé via migration SQL
     
     # Relationships - SQLModel infère automatiquement les types via back_populates
     jobs_created: Job = Relationship(back_populates="creator", sa_relationship_kwargs={"lazy": "select", "foreign_keys": "Job.created_by"})
@@ -360,6 +365,8 @@ class SecurityLog(SQLModel, table=True):
     user_agent: str | None = Field(default=None, sa_column=Column(Text))
     success: bool = Field(default=True)
     details: str | None = Field(default=None, sa_column=Column(Text))
+    # Multi-tenant: company_id pour isoler les logs par entreprise
+    company_id: UUID | None = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), index=True))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships

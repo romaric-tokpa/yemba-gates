@@ -7,7 +7,7 @@ from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
-from database import get_session
+from database_tenant import get_session
 from models import User, Notification
 from auth import get_current_active_user
 

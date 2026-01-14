@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 import json
 
-from database import get_session
+from database_tenant import get_session
 from models import User, UserRole, ClientInterviewRequest, Application, Candidate, Job, Interview
 from auth import get_current_active_user
 

@@ -12,7 +12,7 @@ from uuid import UUID
 from pydantic import BaseModel
 from sqlalchemy import case, cast, Date
 
-from database import get_session
+from database_tenant import get_session
 from models import User, UserRole, Candidate, Job, Application, Interview, ApplicationHistory
 from auth import get_current_active_user, require_manager, require_recruteur, require_client
 

@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel
 from datetime import datetime
 
-from database import get_session
+from database_tenant import get_session
 from models import Application, Candidate, Job, User
 from auth import get_current_active_user, require_recruteur
 

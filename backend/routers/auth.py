@@ -7,8 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlmodel import Session
 from pydantic import BaseModel, EmailStr
 
-from database import get_session
+from database_tenant import get_session
 from models import User, UserRole, SecurityLog
+from tenant_manager import identify_tenant_from_domain, get_tenant_engine, get_current_tenant_id
+from sqlmodel import Session as SQLSession
 from auth import (
     authenticate_user,
     create_access_token,
@@ -53,85 +55,158 @@ class UserRegister(BaseModel):
 @router.post("/login", response_model=Token)
 async def login(
     request: Request,
-    session: Session = Depends(get_session)
+    subdomain: Optional[str] = None  # Paramètre optionnel pour identifier le tenant
 ):
     """
     Connexion d'un utilisateur
     
-    Accepte à la fois JSON et Form data pour plus de flexibilité
+    Accepte à la fois JSON et Form data pour plus de flexibilité.
+    Le tenant peut être identifié via:
+    - Le domaine (ex: entreprise.yemma-gates.com)
+    - Le paramètre 'subdomain' dans la requête
+    - Le header 'X-Tenant-Subdomain'
     """
     import logging
     logger = logging.getLogger(__name__)
     
     try:
-        # Détecter le type de contenu
-        content_type = request.headers.get("content-type", "")
+        # Identifier le tenant AVANT de chercher l'utilisateur
+        tenant_id = None
         
-        # Extraire username et password selon le type de contenu
-        username = None
-        password = None
+        # 1. Essayer depuis le domaine
+        tenant_id = identify_tenant_from_domain(request)
         
-        if "application/json" in content_type:
-            # JSON body
-            body = await request.json()
-            username = body.get("email") or body.get("username")
-            password = body.get("password")
-        elif "application/x-www-form-urlencoded" in content_type:
-            # Form data
-            form_data = await request.form()
-            username_val = form_data.get("username") or form_data.get("email")
-            password_val = form_data.get("password")
+        # 2. Essayer depuis le paramètre subdomain
+        if not tenant_id and subdomain:
+            from tenant_manager import get_master_session
+            from sqlmodel import select
+            from models_master import Company
+            with get_master_session() as master_session:
+                statement = select(Company).where(
+                    Company.subdomain == subdomain,
+                    Company.status == "active"
+                )
+                company = master_session.exec(statement).first()
+                if company:
+                    tenant_id = company.id
+        
+        # 3. Essayer depuis le header
+        if not tenant_id:
+            subdomain_header = request.headers.get("X-Tenant-Subdomain")
+            if subdomain_header:
+                from tenant_manager import get_master_session
+                from sqlmodel import select
+                from models_master import Company
+                with get_master_session() as master_session:
+                    statement = select(Company).where(
+                        Company.subdomain == subdomain_header,
+                        Company.status == "active"
+                    )
+                    company = master_session.exec(statement).first()
+                    if company:
+                        tenant_id = company.id
+        
+        # 4. Si toujours pas de tenant, utiliser l'entreprise par défaut
+        if not tenant_id:
+            from tenant_manager import get_master_session
+            from sqlmodel import select
+            from models_master import Company
+            with get_master_session() as master_session:
+                statement = select(Company).where(Company.subdomain == "default")
+                company = master_session.exec(statement).first()
+                if company:
+                    tenant_id = company.id
+                    logger.info(f"🔐 [LOGIN] Utilisation de l'entreprise par défaut: {company.name}")
+        
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tenant non identifié. Spécifiez le subdomain ou utilisez un domaine personnalisé."
+            )
+        
+        # Obtenir la session du tenant
+        from tenant_manager import get_tenant_engine
+        engine = get_tenant_engine(tenant_id)
+        if not engine:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Base de données du tenant non disponible"
+            )
+        session = SQLSession(engine)
+        
+        try:
+            # Détecter le type de contenu
+            content_type = request.headers.get("content-type", "")
             
-            # Extraire la valeur si c'est un UploadFile ou autre objet
-            if username_val:
-                username = username_val if isinstance(username_val, str) else str(username_val)
-            if password_val:
-                password = password_val if isinstance(password_val, str) else str(password_val)
-        else:
-            # Essayer Form() en fallback
-            try:
+            # Extraire username et password selon le type de contenu
+            username = None
+            password = None
+            
+            if "application/json" in content_type:
+                # JSON body
+                body = await request.json()
+                username = body.get("email") or body.get("username")
+                password = body.get("password")
+                # Vérifier si subdomain est dans le body
+                if not subdomain and "subdomain" in body:
+                    subdomain = body.get("subdomain")
+            elif "application/x-www-form-urlencoded" in content_type:
+                # Form data
                 form_data = await request.form()
                 username_val = form_data.get("username") or form_data.get("email")
                 password_val = form_data.get("password")
                 
+                # Extraire la valeur si c'est un UploadFile ou autre objet
                 if username_val:
                     username = username_val if isinstance(username_val, str) else str(username_val)
                 if password_val:
                     password = password_val if isinstance(password_val, str) else str(password_val)
-            except Exception as e:
-                logger.warning(f"⚠️ [LOGIN] Erreur lors de l'extraction du formulaire: {str(e)}")
-                # Dernier recours: essayer JSON
+            else:
+                # Essayer Form() en fallback
                 try:
-                    body = await request.json()
-                    username = body.get("email") or body.get("username")
-                    password = body.get("password")
-                except Exception as e2:
-                    logger.error(f"❌ [LOGIN] Impossible d'extraire les données: {str(e2)}")
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid request format. Use JSON or form data."
-                    )
-        
-        # Logger les paramètres reçus (sans le mot de passe complet pour la sécurité)
-        logger.info(f"🔐 [LOGIN] Tentative de connexion - Email: {username}, Password length: {len(password) if password else 0}, Content-Type: {content_type}")
-        
-        # Valider les paramètres d'entrée
-        if not username or not password:
-            logger.warning(f"❌ [LOGIN] Paramètres manquants - Username: {bool(username)}, Password: {bool(password)}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email and password are required"
-            )
-        
-        # Récupérer l'IP et le user agent
-        ip_address = request.client.host if request.client else None
-        user_agent = request.headers.get("user-agent", None)
-        logger.info(f"🔐 [LOGIN] IP: {ip_address}, User-Agent: {user_agent}")
-        
-        # Authentifier l'utilisateur
-        logger.info(f"🔐 [LOGIN] Appel de authenticate_user pour: {username}")
-        user = authenticate_user(username, password, session)
-        if not user:
+                    form_data = await request.form()
+                    username_val = form_data.get("username") or form_data.get("email")
+                    password_val = form_data.get("password")
+                    
+                    if username_val:
+                        username = username_val if isinstance(username_val, str) else str(username_val)
+                    if password_val:
+                        password = password_val if isinstance(password_val, str) else str(password_val)
+                except Exception as e:
+                    logger.warning(f"⚠️ [LOGIN] Erreur lors de l'extraction du formulaire: {str(e)}")
+                    # Dernier recours: essayer JSON
+                    try:
+                        body = await request.json()
+                        username = body.get("email") or body.get("username")
+                        password = body.get("password")
+                    except Exception as e2:
+                        logger.error(f"❌ [LOGIN] Impossible d'extraire les données: {str(e2)}")
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Invalid request format. Use JSON or form data."
+                        )
+            
+            # Logger les paramètres reçus (sans le mot de passe complet pour la sécurité)
+            logger.info(f"🔐 [LOGIN] Tentative de connexion - Email: {username}, Tenant: {tenant_id}, Content-Type: {content_type}")
+            
+            # Valider les paramètres d'entrée
+            if not username or not password:
+                logger.warning(f"❌ [LOGIN] Paramètres manquants - Username: {bool(username)}, Password: {bool(password)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email and password are required"
+                )
+            
+            # Récupérer l'IP et le user agent
+            ip_address = request.client.host if request.client else None
+            user_agent = request.headers.get("user-agent", None)
+            logger.info(f"🔐 [LOGIN] IP: {ip_address}, User-Agent: {user_agent}")
+            
+            # Authentifier l'utilisateur
+            logger.info(f"🔐 [LOGIN] Appel de authenticate_user pour: {username}")
+            user = authenticate_user(username, password, session)
+            
+            if not user:
             # Vérifier pourquoi l'authentification a échoué pour donner un message plus précis
             failed_user = get_user_by_email(username, session)
             
@@ -168,79 +243,84 @@ async def login(
                 except:
                     pass
             
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=error_detail,
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        # Vérifier que l'utilisateur a tous les champs requis
-        if not user.id:
-            logger.error(f"User {username} has no ID")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="User data is incomplete"
-            )
-        
-        if not user.email:
-            logger.error(f"User {user.id} has no email")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="User data is incomplete"
-            )
-        
-        # Préparer les données pour le token
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        # user.role est maintenant une string, pas un enum
-        user_role = user.role if isinstance(user.role, str) else (user.role.value if hasattr(user.role, 'value') else str(user.role))
-        
-        # Créer le token
-        try:
-            access_token = create_access_token(
-                data={"sub": str(user.id), "role": user_role},
-                expires_delta=access_token_expires
-            )
-        except Exception as e:
-            logger.error(f"Erreur lors de la création du token: {str(e)}", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error creating access token"
-            )
-        
-        # Construire le nom de l'utilisateur (gérer les cas None)
-        first_name = user.first_name or ""
-        last_name = user.last_name or ""
-        user_name = f"{first_name} {last_name}".strip() or user.email
-        
-        # Enregistrer la connexion réussie (non bloquant)
-        try:
-            ip_address = request.client.host if request.client else None
-            user_agent = request.headers.get("user-agent", None)
-            log = SecurityLog(
-                user_id=user.id,
-                action="login",
-                ip_address=ip_address,
-                user_agent=user_agent,
-                success=True
-            )
-            session.add(log)
-            session.commit()
-        except Exception as e:
-            # Ne pas faire échouer la connexion si l'enregistrement du log échoue
-            logger.warning(f"⚠️ [LOGIN] Impossible d'enregistrer le log de sécurité (non bloquant): {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=error_detail,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            
+            # Vérifier que l'utilisateur a tous les champs requis
+            if not user.id:
+                logger.error(f"User {username} has no ID")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="User data is incomplete"
+                )
+            
+            if not user.email:
+                logger.error(f"User {user.id} has no email")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="User data is incomplete"
+                )
+            
+            # Préparer les données pour le token
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            # user.role est maintenant une string, pas un enum
+            user_role = user.role if isinstance(user.role, str) else (user.role.value if hasattr(user.role, 'value') else str(user.role))
+            
+            # Créer le token avec company_id pour le multi-tenant
             try:
-                session.rollback()
-            except:
-                pass
-        
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user_id": str(user.id),
-            "user_role": user_role,
-            "user_email": user.email,
-            "user_name": user_name
-        }
+                access_token = create_access_token(
+                    data={
+                        "sub": str(user.id),
+                        "role": user_role,
+                        "company_id": str(user.company_id)  # ✅ Ajout pour multi-tenant
+                    },
+                    expires_delta=access_token_expires
+                )
+            except Exception as e:
+                logger.error(f"Erreur lors de la création du token: {str(e)}", exc_info=True)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Error creating access token"
+                )
+            
+            # Construire le nom de l'utilisateur (gérer les cas None)
+            first_name = user.first_name or ""
+            last_name = user.last_name or ""
+            user_name = f"{first_name} {last_name}".strip() or user.email
+            
+            # Enregistrer la connexion réussie (non bloquant)
+            try:
+                log = SecurityLog(
+                    user_id=user.id,
+                    action="login",
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    success=True,
+                    company_id=tenant_id  # Ajouter company_id au log
+                )
+                session.add(log)
+                session.commit()
+            except Exception as e:
+                # Ne pas faire échouer la connexion si l'enregistrement du log échoue
+                logger.warning(f"⚠️ [LOGIN] Impossible d'enregistrer le log de sécurité (non bloquant): {str(e)}")
+                try:
+                    session.rollback()
+                except:
+                    pass
+            
+            return {
+                "access_token": access_token,
+                "token_type": "bearer",
+                "user_id": str(user.id),
+                "user_role": user_role,
+                "user_email": user.email,
+                "user_name": user_name
+            }
+        finally:
+            session.close()
     except HTTPException:
         # Relancer les HTTPException telles quelles
         raise
@@ -323,7 +403,11 @@ def register(
         # Créer le token
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": str(new_user.id), "role": new_user.role},
+            data={
+                "sub": str(new_user.id),
+                "role": new_user.role,
+                "company_id": str(new_user.company_id)  # ✅ Ajout pour multi-tenant
+            },
             expires_delta=access_token_expires
         )
         

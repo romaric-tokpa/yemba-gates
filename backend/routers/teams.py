@@ -11,7 +11,7 @@ import string
 
 from models import Team, TeamMember, User
 from schemas import TeamCreate, TeamUpdate, TeamResponse, TeamMemberResponse
-from database import get_session
+from database_tenant import get_session
 from auth import get_current_active_user, get_password_hash
 from pydantic import BaseModel, EmailStr
 

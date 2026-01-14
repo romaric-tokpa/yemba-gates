@@ -8,7 +8,7 @@ from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
-from database import get_session
+from database_tenant import get_session
 from models import User, UserRole, SecurityLog, Setting
 from auth import get_current_active_user, require_role, get_password_hash, require_manager
 

@@ -14,8 +14,9 @@ import traceback
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from database import init_db
+from database_tenant import init_db
 from routers import jobs, candidates, auth, kpi, shortlists, notifications, interviews, offers, onboarding, history, admin, applications, teams, client_interview_requests
+from tenant_manager import tenant_middleware
 
 # Configuration du logging
 logging.basicConfig(
@@ -90,6 +91,7 @@ def get_allowed_origins():
 
 allowed_origins = get_allowed_origins()
 
+# Middleware CORS (doit être avant le middleware tenant)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -99,6 +101,10 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,  # Cache les pré-requêtes OPTIONS pendant 1 heure
 )
+
+# Middleware Tenant (doit être après CORS mais avant les routes)
+# Ce middleware identifie le tenant et configure la connexion DB
+app.middleware("http")(tenant_middleware)
 
 
 # Inclusion des routers
