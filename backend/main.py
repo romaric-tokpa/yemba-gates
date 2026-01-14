@@ -63,28 +63,32 @@ import os
 # En production, utilisez une liste spécifique d'origines autorisées
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
-if ENVIRONMENT == "production":
-    # En production, liste spécifique d'origines autorisées
-    allowed_origins = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost",
-        "http://localhost:80",
-        "https://yemma-gates.com",
-        "http://yemma-gates.com",
-        # Ajoutez ici vos domaines de production
-    ]
-else:
-    # En développement, accepter toutes les origines pour faciliter le développement
-    # et permettre l'accès depuis n'importe quel réseau (mobile, tunnel, etc.)
-    # Inclut explicitement localhost:3000 pour éviter les problèmes CORS
-    allowed_origins = [
-        "*",  # Accepter toutes les origines
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost",
-        "http://localhost:80",
-    ]
+def get_allowed_origins():
+    """Récupère la liste des origines CORS autorisées depuis la variable d'environnement"""
+    ALLOWED_ORIGINS_ENV = os.getenv("ALLOWED_ORIGINS", "")
+    
+    if ENVIRONMENT == "production":
+        # En production, utiliser la variable d'environnement ALLOWED_ORIGINS si définie
+        if ALLOWED_ORIGINS_ENV:
+            # Parser la liste d'origines séparées par des virgules
+            origins = [origin.strip() for origin in ALLOWED_ORIGINS_ENV.split(",") if origin.strip()]
+            if origins:
+                logger.info(f"✅ CORS configuré avec {len(origins)} origine(s) autorisée(s)")
+                return origins
+            else:
+                logger.warning("⚠️  ALLOWED_ORIGINS est défini mais vide, autorisation de toutes les origines (non sécurisé!)")
+                return ["*"]
+        else:
+            # Si la variable n'est pas définie en production, accepter toutes les origines
+            # avec un avertissement (non idéal pour la sécurité mais évite les erreurs CORS)
+            logger.warning("⚠️  ALLOWED_ORIGINS non défini en production, autorisation de toutes les origines (non sécurisé!)")
+            logger.warning("💡 Configurez ALLOWED_ORIGINS dans vos variables d'environnement pour la sécurité")
+            return ["*"]
+    else:
+        # En développement, accepter toutes les origines
+        return ["*"]
+
+allowed_origins = get_allowed_origins()
 
 app.add_middleware(
     CORSMiddleware,

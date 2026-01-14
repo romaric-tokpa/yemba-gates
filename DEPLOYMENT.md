@@ -91,10 +91,11 @@ nano .env
 SECRET_KEY=votre-cle-secrete-tres-longue
 POSTGRES_PASSWORD=mot-de-passe-fort
 
-# Domaine
-ALLOWED_ORIGINS=https://votre-domaine.com
-LOGIN_URL=https://votre-domaine.com/auth/login
-NEXT_PUBLIC_API_URL=https://votre-domaine.com
+# Domaine et CORS (OBLIGATOIRE en production)
+# Liste des origines autorisées séparées par des virgules
+ALLOWED_ORIGINS=https://yemma-gates.com,http://yemma-gates.com
+LOGIN_URL=https://yemma-gates.com/auth/login
+NEXT_PUBLIC_API_URL=https://yemma-gates.com
 
 # Email (pour les notifications)
 SMTP_HOST=smtp.gmail.com
@@ -104,6 +105,18 @@ SMTP_PASSWORD=votre-mot-de-passe-application
 # API Gemini (pour l'IA)
 GEMINI_API_KEY=votre-cle-api-gemini
 ```
+
+**⚠️ IMPORTANT pour Hostinger:**
+
+Si vous accédez à votre application via l'IP (ex: `http://72.62.186.189:3000`), vous devez configurer:
+- `ALLOWED_ORIGINS=http://72.62.186.189:3000` (ou ajouter plusieurs origines séparées par des virgules)
+- `NEXT_PUBLIC_API_URL=http://72.62.186.189:8000` (l'IP avec le port du backend)
+- `LOGIN_URL=http://72.62.186.189:3000/auth/login`
+
+Si vous utilisez un domaine (ex: `https://yemma-gates.com`):
+- `ALLOWED_ORIGINS=https://yemma-gates.com,http://yemma-gates.com`
+- `NEXT_PUBLIC_API_URL=https://yemma-gates.com`
+- `LOGIN_URL=https://yemma-gates.com/auth/login`
 
 ### 3. Configurer Nginx
 
@@ -279,7 +292,7 @@ docker compose exec db psql -U recrutement -d recrutement_db
 ls -la certbot/conf/live/
 
 # Régénérer les certificats
-./scripts/init-ssl.sh votre-domaine.com admin@votre-domaine.com
+./scripts/init-ssl.sh yemma-gates.com admin@yemma-gates.com
 ```
 
 ### Problèmes de mémoire
@@ -302,6 +315,30 @@ docker system prune -a
 # Redéployer
 ./scripts/deploy.sh prod
 ```
+
+### Problèmes CORS sur Hostinger
+
+Si vous voyez des erreurs `Origin ... is not allowed by Access-Control-Allow-Origin`:
+
+1. **Configurer ALLOWED_ORIGINS dans Hostinger**:
+   - Dans Hostinger Docker Manager, allez dans les variables d'environnement
+   - Ajoutez `ALLOWED_ORIGINS` avec votre origine (ex: `http://72.62.186.189:3000`)
+   - Pour plusieurs origines, séparez-les par des virgules: `http://72.62.186.189:3000,https://votre-domaine.com`
+
+2. **Vérifier NEXT_PUBLIC_API_URL**:
+   - Configurez `NEXT_PUBLIC_API_URL` avec l'URL de votre backend
+   - Exemple avec IP: `http://72.62.186.189:8000`
+   - Exemple avec domaine: `https://votre-domaine.com`
+
+3. **Vérifier LOGIN_URL**:
+   - Configurez `LOGIN_URL` avec l'URL de votre frontend + `/auth/login`
+   - Exemple avec IP: `http://72.62.186.189:3000/auth/login`
+   - Exemple avec domaine: `https://votre-domaine.com/auth/login`
+
+4. **Redémarrer les conteneurs**:
+   ```bash
+   docker compose restart backend frontend
+   ```
 
 ### Problèmes de build sur Hostinger
 

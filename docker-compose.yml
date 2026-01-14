@@ -52,9 +52,9 @@ services:
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - FROM_EMAIL=${FROM_EMAIL:-noreply@example.com}
-      - LOGIN_URL=${LOGIN_URL:-https://example.com/auth/login}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://example.com}
+      - FROM_EMAIL=${FROM_EMAIL:-noreply@yemma-gates.com}
+      - LOGIN_URL=${LOGIN_URL:-https://yemma-gates.com/auth/login}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://yemma-gates.com,http://yemma-gates.com}
     volumes:
       - backend_uploads:/app/uploads
       - backend_static:/app/static
@@ -80,12 +80,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://yemma-gates.com}
     container_name: recrutement-frontend
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://yemma-gates.com}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
