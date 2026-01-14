@@ -1595,15 +1595,15 @@ export interface UserUpdate {
 }
 
 export async function getUsers(): Promise<UserResponse[]> {
-  // Essayer d'abord l'endpoint admin, puis l'endpoint auth (accessible aux recruteurs, managers et administrateurs)
-  let response = await authenticatedFetch(`${API_URL()}/admin/users`, {
+  // Utiliser le préfixe /api/ pour les appels API admin (différencier des pages frontend)
+  let response = await authenticatedFetch(`${API_URL()}/api/admin/users`, {
     method: 'GET',
   })
 
   // Si accès refusé (403) ou non trouvé (404), essayer l'endpoint auth
   if (response.status === 403 || response.status === 404) {
-    console.log('🔄 [GET_USERS] Tentative avec /auth/users')
-    response = await authenticatedFetch(`${API_URL()}/auth/users`, {
+    console.log('🔄 [GET_USERS] Tentative avec /api/auth/users')
+    response = await authenticatedFetch(`${API_URL()}/api/auth/users`, {
       method: 'GET',
     })
   }
@@ -1644,7 +1644,7 @@ export async function getUsers(): Promise<UserResponse[]> {
 }
 
 export async function createUser(userData: UserCreate): Promise<UserResponse> {
-  const response = await authenticatedFetch(`${API_URL()}/admin/users`, {
+  const response = await authenticatedFetch(`${API_URL()}/api/admin/users`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1661,7 +1661,7 @@ export async function createUser(userData: UserCreate): Promise<UserResponse> {
 }
 
 export async function updateUser(userId: string, userData: UserUpdate): Promise<UserResponse> {
-  const response = await authenticatedFetch(`${API_URL()}/admin/users/${userId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/api/admin/users/${userId}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -1678,7 +1678,7 @@ export async function updateUser(userId: string, userData: UserUpdate): Promise<
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL()}/admin/users/${userId}`, {
+  const response = await authenticatedFetch(`${API_URL()}/api/admin/users/${userId}`, {
     method: 'DELETE',
   })
 
@@ -1689,7 +1689,7 @@ export async function deleteUser(userId: string): Promise<void> {
 }
 
 export async function toggleUserActive(userId: string): Promise<UserResponse> {
-  const response = await authenticatedFetch(`${API_URL()}/admin/users/${userId}/toggle-active`, {
+  const response = await authenticatedFetch(`${API_URL()}/api/admin/users/${userId}/toggle-active`, {
     method: 'PATCH',
   })
 
@@ -1715,7 +1715,7 @@ export interface ChangePasswordResponse {
 }
 
 export async function changePassword(data: ChangePasswordRequest): Promise<ChangePasswordResponse> {
-  const response = await authenticatedFetch(`${API_URL()}/auth/me/password`, {
+  const response = await authenticatedFetch(`${API_URL()}/api/auth/me/password`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -1860,7 +1860,7 @@ export async function getSettings(category?: string): Promise<SettingResponse[]>
   if (category) queryParams.append('category', category)
 
   const queryString = queryParams.toString()
-  const url = queryString ? `${API_URL()}/admin/settings?${queryString}` : `${API_URL()}/admin/settings`
+  const url = queryString ? `${API_URL()}/api/admin/settings?${queryString}` : `${API_URL()}/api/admin/settings`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',
@@ -1877,7 +1877,7 @@ export async function getSettings(category?: string): Promise<SettingResponse[]>
 }
 
 export async function createSetting(settingData: SettingCreate): Promise<SettingResponse> {
-  const response = await authenticatedFetch(`${API_URL()}/admin/settings`, {
+  const response = await authenticatedFetch(`${API_URL()}/api/admin/settings`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1894,7 +1894,7 @@ export async function createSetting(settingData: SettingCreate): Promise<Setting
 }
 
 export async function updateSetting(settingKey: string, settingData: SettingUpdate): Promise<SettingResponse> {
-  const response = await authenticatedFetch(`${API_URL()}/admin/settings/${settingKey}`, {
+  const response = await authenticatedFetch(`${API_URL()}/api/admin/settings/${settingKey}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -1911,7 +1911,7 @@ export async function updateSetting(settingKey: string, settingData: SettingUpda
 }
 
 export async function deleteSetting(settingKey: string): Promise<void> {
-  const response = await authenticatedFetch(`${API_URL()}/admin/settings/${settingKey}`, {
+  const response = await authenticatedFetch(`${API_URL()}/api/admin/settings/${settingKey}`, {
     method: 'DELETE',
   })
 
@@ -2129,9 +2129,9 @@ export async function getSecurityLogs(params?: {
   if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString())
 
   const queryString = queryParams.toString()
-  const url = queryString 
-    ? `${API_URL()}/admin/security-logs?${queryString}`
-    : `${API_URL()}/admin/security-logs`
+  const url = queryString
+    ? `${API_URL()}/api/admin/security-logs?${queryString}`
+    : `${API_URL()}/api/admin/security-logs`
 
   const response = await authenticatedFetch(url, {
     method: 'GET',

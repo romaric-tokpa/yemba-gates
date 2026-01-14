@@ -267,7 +267,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
   formData.append('username', email)  // Le backend attend 'username' (qui correspond à l'email)
   formData.append('password', password)
 
-  const response = await fetch(`${API_URL()}/auth/login`, {
+  const response = await fetch(`${API_URL()}/api/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -352,7 +352,7 @@ export async function logout() {
 }
 
 export async function getCurrentUser(): Promise<UserInfo> {
-  const response = await authenticatedFetch(`${API_URL()}/auth/me`)
+  const response = await authenticatedFetch(`${API_URL()}/api/auth/me`)
 
   if (!response.ok) {
     if (response.status === 401) {
