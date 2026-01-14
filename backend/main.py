@@ -184,26 +184,15 @@ async def global_exception_handler(request: Request, exc: Exception):
         )
         # S'assurer que les headers CORS sont présents même en cas d'erreur
         origin = request.headers.get("origin", "*")
-        if ENVIRONMENT == "production":
-            # En production, vérifier l'origine
-            allowed_origins = [
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://localhost:3001",
-                "http://127.0.0.1:3001",
-            ]
-            if origin in allowed_origins:
-                response.headers["Access-Control-Allow-Origin"] = origin
-            else:
-                response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        if origin in allowed_origins or "*" in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
         else:
-            # En développement, accepter toutes les origines
-            response.headers["Access-Control-Allow-Origin"] = origin if origin != "*" else "*"
+            response.headers["Access-Control-Allow-Origin"] = allowed_origins[0] if allowed_origins else "*"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
         return response
-    
+
     # Détecter les erreurs ValueError (doivent être converties en HTTPException)
     if error_type == "ValueError":
         logger.error(f"🔍 ERREUR ValueError détectée (doit être convertie en HTTPException)")
@@ -233,24 +222,15 @@ async def global_exception_handler(request: Request, exc: Exception):
         )
         # S'assurer que les headers CORS sont présents
         origin = request.headers.get("origin", "*")
-        if ENVIRONMENT == "production":
-            allowed_origins = [
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://localhost:3001",
-                "http://127.0.0.1:3001",
-            ]
-            if origin in allowed_origins:
-                response.headers["Access-Control-Allow-Origin"] = origin
-            else:
-                response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        if origin in allowed_origins or "*" in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
         else:
-            response.headers["Access-Control-Allow-Origin"] = origin if origin != "*" else "*"
+            response.headers["Access-Control-Allow-Origin"] = allowed_origins[0] if allowed_origins else "*"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
         return response
-    
+
     # Détecter les erreurs de validation
     if "validation" in error_message.lower() or "ValidationError" in error_type:
         logger.error(f"🔍 ERREUR DE VALIDATION détectée")
@@ -265,24 +245,15 @@ async def global_exception_handler(request: Request, exc: Exception):
         )
         # S'assurer que les headers CORS sont présents
         origin = request.headers.get("origin", "*")
-        if ENVIRONMENT == "production":
-            allowed_origins = [
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://localhost:3001",
-                "http://127.0.0.1:3001",
-            ]
-            if origin in allowed_origins:
-                response.headers["Access-Control-Allow-Origin"] = origin
-            else:
-                response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        if origin in allowed_origins or "*" in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
         else:
-            response.headers["Access-Control-Allow-Origin"] = origin if origin != "*" else "*"
+            response.headers["Access-Control-Allow-Origin"] = allowed_origins[0] if allowed_origins else "*"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
         return response
-    
+
     # Pour toutes les autres erreurs, retourner un message générique mais logger les détails
     # S'assurer que error_message est une chaîne de caractères (pas un objet)
     error_detail = str(error_message) if error_message else "Erreur interne du serveur"
@@ -298,21 +269,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
     # S'assurer que les headers CORS sont présents même en cas d'erreur
     origin = request.headers.get("origin", "*")
-    if ENVIRONMENT == "production":
-        # En production, vérifier l'origine
-        allowed_origins = [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:3001",
-            "http://127.0.0.1:3001",
-        ]
-        if origin in allowed_origins:
-            response.headers["Access-Control-Allow-Origin"] = origin
-        else:
-            response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    if origin in allowed_origins or "*" in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
     else:
-        # En développement, accepter toutes les origines
-        response.headers["Access-Control-Allow-Origin"] = origin if origin != "*" else "*"
+        response.headers["Access-Control-Allow-Origin"] = allowed_origins[0] if allowed_origins else "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
@@ -337,19 +297,10 @@ async def value_error_handler(request: Request, exc: ValueError):
     )
     # S'assurer que les headers CORS sont présents
     origin = request.headers.get("origin", "*")
-    if ENVIRONMENT == "production":
-        allowed_origins = [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:3001",
-            "http://127.0.0.1:3001",
-        ]
-        if origin in allowed_origins:
-            response.headers["Access-Control-Allow-Origin"] = origin
-        else:
-            response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    if origin in allowed_origins or "*" in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
     else:
-        response.headers["Access-Control-Allow-Origin"] = origin if origin != "*" else "*"
+        response.headers["Access-Control-Allow-Origin"] = allowed_origins[0] if allowed_origins else "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
