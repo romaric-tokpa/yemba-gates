@@ -166,21 +166,21 @@ export default function RecruiterDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <KPICard
           title="Candidats traités"
-          value={kpis?.candidates_processed || 0}
+          value={kpis?.volume_productivity?.total_cvs_processed || 0}
           format="number"
           icon={<Users className="w-6 h-6" />}
         />
         
         <KPICard
           title="Entretiens réalisés"
-          value={kpis?.total_interviews_conducted || 0}
+          value={kpis?.volume_productivity?.total_interviews_conducted || 0}
           format="number"
           icon={<MessageSquare className="w-6 h-6" />}
         />
-        
+
         <KPICard
-          title="Candidats actifs"
-          value={kpis?.active_candidates || 0}
+          title="Candidats sourcés"
+          value={kpis?.volume_productivity?.total_candidates_sourced || 0}
           format="number"
           icon={<Zap className="w-6 h-6" />}
         />

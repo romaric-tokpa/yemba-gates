@@ -448,7 +448,6 @@ export default function JobPipelinePage() {
           ) : null}
         </DragOverlay>
       </DndContext>
-          </div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>
