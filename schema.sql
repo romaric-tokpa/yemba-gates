@@ -19,6 +19,7 @@ CREATE TABLE users (
     phone VARCHAR(20),
     department VARCHAR(100),
     is_active BOOLEAN DEFAULT TRUE,
+    company_id UUID,  -- Lien vers le tenant (entreprise) dans la base master
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

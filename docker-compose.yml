@@ -55,6 +55,9 @@ services:
       - FROM_EMAIL=${FROM_EMAIL:-noreply@example.com}
       - LOGIN_URL=${LOGIN_URL:-http://72.62.186.189:3000/auth/login}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://72.62.186.189:3000,http://72.62.186.189}
+      - MASTER_DB_URL=postgresql://${POSTGRES_USER:-recrutement}:${POSTGRES_PASSWORD:-recrutement_secret}@db:5432/yemma_gates_master
+      - POSTGRES_USER=${POSTGRES_USER:-recrutement}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-recrutement_secret}
     volumes:
       - backend_uploads:/app/uploads
       - backend_static:/app/static
