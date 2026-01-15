@@ -60,8 +60,13 @@ class Company(SQLModel, table=True):
     status: str = Field(default=CompanyStatus.ACTIVE.value, max_length=20, index=True)
     
     # Informations de contact
-    contact_email: str | None = Field(default=None, max_length=255)
+    contact_email: str | None = Field(default=None, max_length=255, index=True)
     contact_phone: str | None = Field(default=None, max_length=50)
+    
+    # Informations supplémentaires
+    country: str | None = Field(default=None, max_length=100)
+    industry: str | None = Field(default=None, max_length=100)
+    size: str | None = Field(default=None, max_length=50)  # small, medium, large, enterprise
     
     # Métadonnées
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -83,7 +88,9 @@ class TenantDatabase(SQLModel, table=True):
     company_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), unique=True, index=True))
     
     # Informations de connexion
-    db_name: str = Field(max_length=100, unique=True, index=True)  # Nom de la base (ex: tenant_abc123)
+    db_name: str = Field(max_length=100, index=True)  # Nom de la base (ex: tenant_abc123)
+    # Note: unique=False car plusieurs entreprises peuvent partager la même base de données physique
+    # L'isolation se fait par company_id dans les tables, pas par base de données séparée
     db_host: str = Field(default="localhost", max_length=255)  # Host de la base
     db_port: int = Field(default=5432)
     db_user: str | None = Field(default=None, max_length=100)

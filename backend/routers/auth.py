@@ -3,6 +3,7 @@ Routes d'authentification
 """
 from datetime import timedelta
 from typing import Optional, List
+from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlmodel import Session
 from pydantic import BaseModel, EmailStr
@@ -50,6 +51,26 @@ class UserRegister(BaseModel):
     role: str  # Accepter une string directement
     phone: Optional[str] = None
     department: Optional[str] = None
+
+
+class CompanyRegister(BaseModel):
+    """Schéma pour l'inscription d'une entreprise"""
+    # Informations entreprise
+    company_name: str
+    company_email: EmailStr  # Email de contact de l'entreprise
+    company_phone: Optional[str] = None
+    country: Optional[str] = None
+    industry: Optional[str] = None
+    company_size: Optional[str] = None  # small, medium, large, enterprise
+    
+    # Informations administrateur
+    admin_first_name: str
+    admin_last_name: str
+    admin_email: EmailStr
+    admin_password: str
+    
+    # Sous-domaine optionnel (généré si non fourni)
+    subdomain: Optional[str] = None
 
 
 @router.post("/login", response_model=Token)
@@ -207,42 +228,42 @@ async def login(
             user = authenticate_user(username, password, session)
             
             if not user:
-            # Vérifier pourquoi l'authentification a échoué pour donner un message plus précis
-            failed_user = get_user_by_email(username, session)
-            
-            error_detail = "Incorrect email or password"
-            if not failed_user:
-                error_detail = "User not found"
-                logger.warning(f"❌ [LOGIN] Utilisateur non trouvé: {username}")
-            elif not failed_user.is_active:
-                error_detail = "User account is inactive"
-                logger.warning(f"❌ [LOGIN] Compte inactif: {username}")
-            elif not failed_user.password_hash:
-                error_detail = "User account has no password set"
-                logger.warning(f"❌ [LOGIN] Aucun mot de passe défini pour: {username}")
-            else:
-                logger.warning(f"❌ [LOGIN] Mot de passe incorrect pour: {username}")
-            
-            # Enregistrer la tentative de connexion échouée (non bloquant)
-            try:
-                log = SecurityLog(
-                    user_id=failed_user.id if failed_user else None,
-                    action="failed_login",
-                    ip_address=ip_address,
-                    user_agent=user_agent,
-                    success=False,
-                    details=error_detail
-                )
-                session.add(log)
-                session.commit()
-            except Exception as e:
-                # Ne pas faire échouer la connexion si l'enregistrement du log échoue
-                logger.warning(f"⚠️ [LOGIN] Impossible d'enregistrer le log de sécurité (non bloquant): {str(e)}")
+                # Vérifier pourquoi l'authentification a échoué pour donner un message plus précis
+                failed_user = get_user_by_email(username, session)
+                
+                error_detail = "Incorrect email or password"
+                if not failed_user:
+                    error_detail = "User not found"
+                    logger.warning(f"❌ [LOGIN] Utilisateur non trouvé: {username}")
+                elif not failed_user.is_active:
+                    error_detail = "User account is inactive"
+                    logger.warning(f"❌ [LOGIN] Compte inactif: {username}")
+                elif not failed_user.password_hash:
+                    error_detail = "User account has no password set"
+                    logger.warning(f"❌ [LOGIN] Aucun mot de passe défini pour: {username}")
+                else:
+                    logger.warning(f"❌ [LOGIN] Mot de passe incorrect pour: {username}")
+                
+                # Enregistrer la tentative de connexion échouée (non bloquant)
                 try:
-                    session.rollback()
-                except:
-                    pass
-            
+                    log = SecurityLog(
+                        user_id=failed_user.id if failed_user else None,
+                        action="failed_login",
+                        ip_address=ip_address,
+                        user_agent=user_agent,
+                        success=False,
+                        details=error_detail
+                    )
+                    session.add(log)
+                    session.commit()
+                except Exception as e:
+                    # Ne pas faire échouer la connexion si l'enregistrement du log échoue
+                    logger.warning(f"⚠️ [LOGIN] Impossible d'enregistrer le log de sécurité (non bloquant): {str(e)}")
+                    try:
+                        session.rollback()
+                    except:
+                        pass
+                
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail=error_detail,
@@ -527,6 +548,372 @@ def change_password(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erreur lors du changement de mot de passe"
         )
+
+
+class RegisterCompanyResponse(BaseModel):
+    """Réponse pour l'inscription d'entreprise"""
+    success: bool
+    message: str
+    company_id: Optional[str] = None
+    redirect: str = "/login"
+    access_token: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+@router.post("/register-company", response_model=RegisterCompanyResponse, status_code=status.HTTP_201_CREATED)
+async def register_company(company_data: CompanyRegister):
+    """
+    Inscription d'une nouvelle entreprise avec création du premier administrateur
+    
+    Processus complet:
+    1. Validation des données
+    2. Création de l'entreprise dans MASTER_DB
+    3. Création d'une base de données PostgreSQL dédiée
+    4. Application du schéma dans la nouvelle base
+    5. Création d'une subscription avec plan par défaut
+    6. Création de l'utilisateur administrateur
+    7. Rollback complet en cas d'erreur
+    """
+    import logging
+    import re
+    from datetime import datetime, timedelta
+    from tenant_manager import get_master_session
+    from models_master import Company, TenantDatabase, Plan, Subscription
+    from sqlmodel import select, Session as SQLSession, create_engine
+    from sqlalchemy.pool import QueuePool
+    from utils.db_creator import (
+        create_tenant_database,
+        apply_schema_to_database,
+        drop_tenant_database,
+        sanitize_db_name
+    )
+    import os
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"🚀 [REGISTER_COMPANY] Début de l'inscription pour: {company_data.company_name}")
+    
+    # Variables pour rollback
+    created_company_id = None
+    created_db_name = None
+    master_session = None
+    tenant_engine = None
+    
+    try:
+        # ====================================================================
+        # ÉTAPE 0: VALIDATION INITIALE
+        # ====================================================================
+        
+        # 0.1 Valider la robustesse du mot de passe
+        if len(company_data.admin_password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le mot de passe doit contenir au moins 8 caractères"
+            )
+        
+        # 0.2 Vérifier l'unicité de company_email dans MASTER_DB
+        with get_master_session() as session:
+            existing_company = session.exec(
+                select(Company).where(Company.contact_email == company_data.company_email)
+            ).first()
+            if existing_company:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Une entreprise avec cet email existe déjà"
+                )
+        
+        # 0.3 S'assurer que la base MASTER est initialisée
+        try:
+            with get_master_session() as test_session:
+                test_session.exec(select(Company).limit(1))
+                logger.info("✅ [REGISTER_COMPANY] Base MASTER accessible")
+        except Exception as e:
+            logger.warning(f"⚠️ [REGISTER_COMPANY] Problème d'accès à la base MASTER: {str(e)}")
+        
+        # ====================================================================
+        # ÉTAPE 1: VALIDATION ET GÉNÉRATION SUBDOMAIN
+        # ====================================================================
+        
+        # 1.1 Générer et normaliser le subdomain
+        subdomain = company_data.subdomain
+        if subdomain:
+            # Nettoyer le subdomain (minuscules, alphanumériques et tirets uniquement)
+            subdomain = re.sub(r'[^a-z0-9-]', '', subdomain.lower())
+            subdomain = re.sub(r'-+', '-', subdomain)  # Remplacer les tirets multiples par un seul
+            subdomain = subdomain.strip('-')  # Supprimer les tirets en début/fin
+            if not subdomain or len(subdomain) < 3:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Le sous-domaine doit contenir au moins 3 caractères alphanumériques"
+                )
+        else:
+            # Générer un subdomain depuis le nom de l'entreprise
+            subdomain = re.sub(r'[^a-z0-9-]', '', company_data.company_name.lower()[:20])
+            subdomain = re.sub(r'-+', '-', subdomain)  # Remplacer les tirets multiples par un seul
+            subdomain = subdomain.strip('-')  # Supprimer les tirets en début/fin
+            if not subdomain:
+                subdomain = f"company_{uuid4().hex[:8]}"
+        
+        # 1.2 Vérifier que le subdomain n'existe pas déjà
+        with get_master_session() as session:
+            existing_company = session.exec(
+                select(Company).where(Company.subdomain == subdomain)
+            ).first()
+            if existing_company:
+                # Générer un subdomain unique
+                subdomain = f"{subdomain}_{uuid4().hex[:6]}"
+                logger.info(f"ℹ️ [REGISTER_COMPANY] Subdomain modifié pour garantir l'unicité: {subdomain}")
+        
+        logger.info(f"✅ [REGISTER_COMPANY] Validation OK - Subdomain: {subdomain}")
+        
+        # ====================================================================
+        # ÉTAPE 2: CRÉATION ENTREPRISE (MASTER_DB)
+        # ====================================================================
+        
+        master_session = get_master_session().__enter__()
+        created_company_id = None
+        
+        try:
+            # Récupérer le plan par défaut (FREE ou TRIAL)
+            default_plan = master_session.exec(
+                select(Plan).where(Plan.plan_type == "free").limit(1)
+            ).first()
+            
+            if not default_plan:
+                # Créer un plan FREE par défaut si nécessaire
+                default_plan = Plan(
+                    name="Free Plan",
+                    plan_type="free",
+                    max_users=5,
+                    price_monthly=0.0,
+                    features='{"basic_features": true}',
+                    is_active=True
+                )
+                master_session.add(default_plan)
+                master_session.commit()
+                master_session.refresh(default_plan)
+            
+            # Créer l'entreprise
+            new_company = Company(
+                name=company_data.company_name,
+                subdomain=subdomain,
+                contact_email=company_data.company_email,
+                contact_phone=company_data.company_phone,
+                country=company_data.country,
+                industry=company_data.industry,
+                size=company_data.company_size,
+                status="active",
+                activated_at=datetime.utcnow(),
+                trial_ends_at=datetime.utcnow() + timedelta(days=30)
+            )
+            master_session.add(new_company)
+            master_session.commit()
+            master_session.refresh(new_company)
+            created_company_id = new_company.id
+            
+            logger.info(f"✅ [REGISTER_COMPANY] Entreprise créée: {new_company.id}")
+            
+            # ====================================================================
+            # ÉTAPE 3: CRÉER LA BASE DE DONNÉES DÉDIÉE
+            # ====================================================================
+            
+            db_name = f"yemmagates_{new_company.id.hex[:12]}"
+            db_name = sanitize_db_name(db_name)
+            created_db_name = db_name
+            
+            logger.info(f"🔄 [REGISTER_COMPANY] Création de la base de données: {db_name}")
+            
+            # Récupérer les credentials PostgreSQL
+            db_user = os.getenv("POSTGRES_USER", "postgres")
+            db_password = os.getenv("POSTGRES_PASSWORD", "postgres")
+            db_host = os.getenv("POSTGRES_HOST", "localhost")
+            db_port = os.getenv("POSTGRES_PORT", "5432")
+            
+            # Créer la base de données
+            db_created, db_error = create_tenant_database(db_name)
+            if not db_created:
+                error_detail = f"Impossible de créer la base de données: {db_name}"
+                if db_error:
+                    error_detail += f" - {db_error}"
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=error_detail
+                )
+            
+            logger.info(f"✅ [REGISTER_COMPANY] Base de données créée: {db_name}")
+            
+            # ====================================================================
+            # ÉTAPE 4: ENREGISTRER LE MAPPING TENANT
+            # ====================================================================
+            
+            tenant_db = TenantDatabase(
+                company_id=new_company.id,
+                db_name=db_name,
+                db_host=db_host,
+                db_port=int(db_port),
+                db_user=db_user,
+                status="active",
+                provisioned_at=datetime.utcnow()
+            )
+            master_session.add(tenant_db)
+            master_session.commit()
+            
+            logger.info(f"✅ [REGISTER_COMPANY] Mapping tenant créé")
+            
+            # ====================================================================
+            # ÉTAPE 5: CRÉER LA SUBSCRIPTION
+            # ====================================================================
+            
+            subscription = Subscription(
+                company_id=new_company.id,
+                plan_id=default_plan.id,
+                status="trial",
+                start_date=datetime.utcnow(),
+                trial_ends_at=datetime.utcnow() + timedelta(days=30)
+            )
+            master_session.add(subscription)
+            master_session.commit()
+            
+            logger.info(f"✅ [REGISTER_COMPANY] Subscription créée (Plan: {default_plan.name})")
+            
+            # ====================================================================
+            # ÉTAPE 6: APPLIQUER LE SCHÉMA DANS LA NOUVELLE BASE
+            # ====================================================================
+            
+            tenant_db_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+            
+            logger.info(f"🔄 [REGISTER_COMPANY] Application du schéma...")
+            if not apply_schema_to_database(tenant_db_url):
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Impossible d'appliquer le schéma à la base de données"
+                )
+            
+            logger.info(f"✅ [REGISTER_COMPANY] Schéma appliqué")
+            
+            # ====================================================================
+            # ÉTAPE 7: CRÉER L'UTILISATEUR ADMIN
+            # ====================================================================
+            
+            tenant_engine = create_engine(tenant_db_url, poolclass=QueuePool, pool_size=5, max_overflow=10, echo=False)
+            tenant_session = SQLSession(tenant_engine)
+            
+            try:
+                # Vérifier l'unicité de l'email admin dans la base tenant
+                existing_user = get_user_by_email(company_data.admin_email, tenant_session)
+                if existing_user:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Un utilisateur avec cet email existe déjà"
+                    )
+                
+                # Créer l'administrateur
+                hashed_password = get_password_hash(company_data.admin_password)
+                
+                new_admin = User(
+                    email=company_data.admin_email,
+                    password_hash=hashed_password,
+                    first_name=company_data.admin_first_name,
+                    last_name=company_data.admin_last_name,
+                    role="administrateur",
+                    phone=company_data.company_phone,
+                    is_active=True,
+                    company_id=new_company.id
+                )
+                
+                tenant_session.add(new_admin)
+                tenant_session.commit()
+                tenant_session.refresh(new_admin)
+                
+                if not new_admin.id:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Erreur lors de la création de l'administrateur: ID non généré"
+                    )
+                
+                logger.info(f"✅ [REGISTER_COMPANY] Administrateur créé: {new_admin.email}")
+                
+                # ====================================================================
+                # ÉTAPE 8: CRÉER LE TOKEN ET RETOURNER LA RÉPONSE
+                # ====================================================================
+                
+                access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+                access_token = create_access_token(
+                    data={
+                        "sub": str(new_admin.id),
+                        "role": new_admin.role,
+                        "company_id": str(new_company.id)
+                    },
+                    expires_delta=access_token_expires
+                )
+                
+                master_session.__exit__(None, None, None)
+                master_session = None
+                tenant_session.close()
+                tenant_engine.dispose()
+                tenant_engine = None
+                
+                logger.info(f"✅ [REGISTER_COMPANY] Inscription terminée avec succès!")
+                
+                return RegisterCompanyResponse(
+                    success=True,
+                    message="Entreprise créée avec succès",
+                    company_id=str(new_company.id),
+                    redirect="/login",
+                    access_token=access_token,
+                    user_id=str(new_admin.id)
+                )
+            except Exception as e:
+                tenant_session.rollback()
+                tenant_session.close()
+                raise
+        except Exception as e:
+            if master_session:
+                try:
+                    master_session.rollback()
+                    master_session.__exit__(type(e), e, e.__traceback__)
+                except:
+                    pass
+            
+            # ROLLBACK: Supprimer la base de données si créée
+            if created_db_name:
+                logger.warning(f"🗑️ [REGISTER_COMPANY] Rollback: Suppression de la base {created_db_name}")
+                try:
+                    drop_tenant_database(created_db_name)
+                except Exception as drop_error:
+                    logger.error(f"❌ [REGISTER_COMPANY] Erreur lors de la suppression: {str(drop_error)}")
+            
+            raise
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ [REGISTER_COMPANY] Erreur: {str(e)}")
+        logger.error(f"❌ [REGISTER_COMPANY] Traceback:\n{traceback.format_exc()}")
+        
+        # ROLLBACK final
+        if created_db_name:
+            try:
+                drop_tenant_database(created_db_name)
+            except:
+                pass
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'inscription: {str(e)}"
+        )
+    finally:
+        # Nettoyage
+        if master_session:
+            try:
+                master_session.__exit__(None, None, None)
+            except:
+                pass
+        if tenant_engine:
+            try:
+                tenant_engine.dispose()
+            except:
+                pass
 
 
 @router.get("/users")

@@ -39,7 +39,7 @@ except ImportError:
     genai = None
     GeminiError = Exception
 
-from database_tenant import get_session, engine
+from database_tenant import get_session
 from models import Candidate, User, UserRole, Interview, Application, Job, CandidateJobComparison
 from schemas import CandidateCreate, CandidateUpdate, CandidateResponse, CandidateParseResponse, JobCandidateComparisonResponse
 from auth import get_current_active_user, require_recruteur, require_client

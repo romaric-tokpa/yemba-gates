@@ -4,6 +4,7 @@ import './globals.css'
 import Sidebar from '@/components/Sidebar'
 import NotificationCenter from '@/components/NotificationCenter'
 import { ToastProvider } from '@/components/ToastProvider'
+import { AuthProvider } from '@/context/AuthContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -29,9 +30,11 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className={inter.className}>
-        <ToastProvider>
-          {children}
-        </ToastProvider>
+        <AuthProvider>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   )

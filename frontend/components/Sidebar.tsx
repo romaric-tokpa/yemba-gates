@@ -22,9 +22,8 @@ import {
   ChevronDown
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getUserInfo, logout, hasAnyRole } from '@/lib/auth'
 import { ROUTES } from '@/lib/routes'
-import { useEffect, useState } from 'react'
+import { useAuth } from '@/context/AuthContext'
 
 const getMenuItems = (userRole: string | null) => {
   // Déterminer le préfixe du dashboard selon le rôle
@@ -144,24 +143,50 @@ const getMenuItems = (userRole: string | null) => {
 
   if (!userRole) return []
   
-  return baseItems.filter(item => hasAnyRole(item.roles))
+  // Filtrer les items selon le rôle de l'utilisateur
+  return baseItems.filter(item => {
+    // Normaliser les rôles pour la comparaison
+    const normalizedRole = userRole.toLowerCase()
+    const normalizedItemRoles = item.roles.map(r => r.toLowerCase())
+    return normalizedItemRoles.includes(normalizedRole)
+  })
 }
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const [userInfo, setUserInfo] = useState<{ user_name: string; user_role: string } | null>(null)
+  const { user, role, hasAnyRole, logout } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
 
-  useEffect(() => {
-    const info = getUserInfo()
-    setUserInfo(info)
-  }, [])
-
-  const menuItems = getMenuItems(userInfo?.user_role || null)
+  const menuItems = getMenuItems(role)
 
   const handleLogout = () => {
     logout()
+  }
+
+  const getUserDisplayName = () => {
+    if (user) {
+      return `${user.first_name} ${user.last_name}`
+    }
+    return 'Utilisateur'
+  }
+
+  const getUserInitials = () => {
+    if (user) {
+      return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase()
+    }
+    return 'U'
+  }
+
+  const getRoleLabel = () => {
+    const roleLabels: Record<string, string> = {
+      'administrateur': 'Administrateur',
+      'manager': 'Manager',
+      'recruteur': 'Recruteur',
+      'recruiter': 'Recruteur',
+      'client': 'Client',
+    }
+    return roleLabels[role || ''] || role || 'Utilisateur'
   }
 
   return (
@@ -195,15 +220,17 @@ export default function Sidebar() {
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
       <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center space-x-3">
-          <div className="bg-blue-600 rounded-lg p-2">
+        <Link href="/dashboard/manager" className="flex items-center space-x-3 group">
+          <div className="bg-gradient-to-br from-primary to-primary-600 rounded-lg p-2 shadow-sm group-hover:shadow-md transition-shadow">
             <Building2 className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-gray-900">Recrutement</h1>
-            <p className="text-xs text-gray-500">Gestion RH</p>
+            <h1 className="text-lg font-bold text-[#1F2A44] group-hover:text-primary transition-colors">
+              Yemma-Gates
+            </h1>
+            <p className="text-xs text-gray-500">Recrutement</p>
           </div>
-        </div>
+        </Link>
       </div>
 
       <nav className="flex-1 p-4 space-y-1">
@@ -225,7 +252,7 @@ export default function Sidebar() {
             >
               <Icon className={cn(
                 "w-5 h-5",
-                isActive ? "text-blue-700" : "text-gray-500"
+                isActive ? "text-primary" : "text-gray-500 group-hover:text-primary"
               )} />
               <span>{item.title}</span>
             </Link>
@@ -234,20 +261,20 @@ export default function Sidebar() {
       </nav>
 
       <div className="border-t border-gray-200 bg-gray-50">
-        {userInfo && (
+        {user && (
           <div className="p-2">
             <button
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
               className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-gray-700 hover:bg-white transition-colors"
             >
-              <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-7 h-7 bg-gradient-to-br from-primary to-primary-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
                 <span className="text-xs font-semibold text-white">
-                  {userInfo.user_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                  {getUserInitials()}
                 </span>
               </div>
               <div className="flex-1 text-left min-w-0">
-                <p className="text-xs font-medium text-gray-900 truncate">{userInfo.user_name}</p>
-                <p className="text-[10px] text-gray-500 capitalize truncate">{userInfo.user_role}</p>
+                <p className="text-xs font-medium text-[#1F2A44] truncate">{getUserDisplayName()}</p>
+                <p className="text-[10px] text-gray-500 truncate">{getRoleLabel()}</p>
               </div>
               <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
             </button>

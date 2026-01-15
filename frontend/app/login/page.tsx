@@ -2,14 +2,31 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { login, getDashboardPath } from '@/lib/auth'
+import { login } from '@/lib/auth'
+import { useAuth } from '@/context/AuthContext'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { login: authLogin } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  const getDashboardPath = (role: string | null): string => {
+    switch (role) {
+      case 'administrateur':
+      case 'manager':
+        return '/dashboard/manager'
+      case 'recruteur':
+      case 'recruiter':
+        return '/dashboard/recruiter'
+      case 'client':
+        return '/dashboard/client'
+      default:
+        return '/auth/choice'
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -18,6 +35,10 @@ export default function LoginPage() {
 
     try {
       const loginResponse = await login(email, password)
+      
+      // Utiliser le contexte d'authentification
+      await authLogin(loginResponse)
+      
       // Rediriger vers le dashboard approprié selon le rôle
       const dashboardPath = getDashboardPath(loginResponse.user_role)
       router.push(dashboardPath)

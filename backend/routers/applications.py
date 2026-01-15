@@ -22,6 +22,11 @@ class ApplicationCreate(BaseModel):
     status: Optional[str] = "sourcé"
 
 
+class ApplicationStatusUpdate(BaseModel):
+    """Schéma pour mettre à jour le statut d'une application"""
+    status: str
+
+
 class ApplicationResponse(BaseModel):
     """Schéma de réponse pour une application"""
     id: UUID
@@ -302,6 +307,102 @@ def toggle_shortlist(
             application.status = "sourcé"
     
     application.updated_at = datetime.utcnow()
+    session.add(application)
+    session.commit()
+    session.refresh(application)
+    
+    # Récupérer les informations complètes pour la réponse
+    candidate = session.get(Candidate, application.candidate_id)
+    job = session.get(Job, application.job_id)
+    creator = session.get(User, application.created_by)
+    
+    return ApplicationResponse(
+        id=application.id,
+        candidate_id=application.candidate_id,
+        candidate_name=f"{candidate.first_name} {candidate.last_name}" if candidate else "",
+        candidate_email=candidate.email if candidate else None,
+        candidate_profile_title=candidate.profile_title if candidate else None,
+        candidate_years_of_experience=candidate.years_of_experience if candidate else None,
+        candidate_photo_url=candidate.profile_picture_url if candidate else None,
+        job_id=application.job_id,
+        job_title=job.title if job else "",
+        status=application.status,
+        is_in_shortlist=application.is_in_shortlist,
+        created_by=application.created_by,
+        created_by_name=f"{creator.first_name} {creator.last_name}" if creator else "",
+        client_validated=application.client_validated,
+        client_feedback=application.client_feedback,
+        client_validated_at=application.client_validated_at,
+        created_at=application.created_at,
+        updated_at=application.updated_at
+    )
+
+
+@router.patch("/{application_id}/status", response_model=ApplicationResponse)
+def update_application_status(
+    application_id: UUID,
+    status_data: ApplicationStatusUpdate,
+    current_user: User = Depends(require_recruteur),
+    session: Session = Depends(get_session)
+):
+    """
+    Mettre à jour le statut d'une application (déplacer dans le pipeline)
+    
+    Permet de déplacer une candidature d'une étape à une autre dans le pipeline.
+    """
+    # Récupérer l'application
+    application = session.get(Application, application_id)
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidature non trouvée"
+        )
+    
+    new_status = status_data.status
+    
+    # Liste des statuts valides
+    valid_statuses = ["sourcé", "qualifié", "entretien_rh", "entretien_client", "shortlist", "offre", "embauché", "rejeté"]
+    if new_status not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Statut invalide. Statuts valides: {', '.join(valid_statuses)}"
+        )
+    
+    # Mettre à jour le statut
+    old_status = application.status
+    application.status = new_status
+    application.updated_at = datetime.utcnow()
+    
+    # Si le statut passe à "shortlist", mettre is_in_shortlist à True
+    if new_status == "shortlist":
+        application.is_in_shortlist = True
+    elif new_status in ["embauché", "rejeté"]:
+        # Si le statut passe à "embauché" ou "rejeté", retirer de la shortlist
+        application.is_in_shortlist = False
+    
+    # Mettre à jour aussi le statut du candidat pour cette application spécifique
+    candidate = session.get(Candidate, application.candidate_id)
+    if candidate:
+        # Mettre à jour le statut du candidat seulement si c'est un statut "avancé"
+        # (on ne veut pas écraser le statut avec un statut moins avancé)
+        status_priority = {
+            "rejeté": 0,
+            "sourcé": 1,
+            "qualifié": 2,
+            "entretien_rh": 3,
+            "entretien_client": 4,
+            "shortlist": 5,
+            "offre": 6,
+            "embauché": 7,
+        }
+        current_priority = status_priority.get(candidate.status, 0)
+        new_priority = status_priority.get(new_status, 0)
+        
+        # Mettre à jour seulement si le nouveau statut est plus avancé
+        if new_priority > current_priority:
+            candidate.status = new_status
+            session.add(candidate)
+    
     session.add(application)
     session.commit()
     session.refresh(application)

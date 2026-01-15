@@ -20,6 +20,7 @@ const PUBLIC_ROUTES = [
   '/',
   '/auth',
   '/login', // Legacy - redirige vers /auth/login
+  '/register-company', // Inscription d'entreprise
 ]
 
 export function middleware(request: NextRequest) {
@@ -40,6 +41,12 @@ export function middleware(request: NextRequest) {
   // Redirection legacy : /login -> /auth/login
   if (pathname === '/login') {
     return NextResponse.redirect(new URL('/auth/login', request.url))
+  }
+
+  // Autoriser l'accès aux routes publiques sans authentification
+  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname.startsWith(route))
+  if (isPublicRoute) {
+    return NextResponse.next()
   }
 
   // Autoriser l'accès à la page de login admin sécurisée sans authentification

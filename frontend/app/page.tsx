@@ -152,7 +152,7 @@ export default function LandingPage() {
         'Recherche intelligente dans la base de candidats',
         'Export des données en un clic'
       ],
-      color: 'from-emerald-500 to-teal-500',
+      color: 'from-[#F7941D] to-[#FDBA4D]',
       delay: '100'
     },
     {
@@ -191,7 +191,7 @@ export default function LandingPage() {
         'Validation et feedback en ligne',
         'Historique des shortlists partagées'
       ],
-      color: 'from-teal-500 to-emerald-500',
+      color: 'from-[#F7941D] to-[#FDBA4D]',
       delay: '400'
     },
     {
@@ -217,7 +217,7 @@ export default function LandingPage() {
         'Vue d\'ensemble en temps réel',
         'Alertes et notifications intelligentes'
       ],
-      color: 'from-emerald-500 to-teal-500',
+      color: 'from-[#F7941D] to-[#FDBA4D]',
       delay: '600'
     },
     {
@@ -254,7 +254,7 @@ export default function LandingPage() {
       title: 'Gain de Temps Exceptionnel',
       description: 'Automatisez vos processus et économisez jusqu\'à 40% de votre temps de recrutement. Concentrez-vous sur ce qui compte vraiment : trouver les meilleurs talents.',
       stat: '40%',
-      color: 'from-emerald-500 to-teal-500',
+      color: 'from-[#F7941D] to-[#FDBA4D]',
       details: [
         'Automatisation des tâches répétitives',
         'Templates de communication pré-remplis',
@@ -306,7 +306,7 @@ export default function LandingPage() {
       title: 'Réduction des Coûts',
       description: 'Optimisez vos dépenses de recrutement en réduisant les coûts par embauche et en maximisant le ROI de vos investissements.',
       stat: '-35%',
-      color: 'from-emerald-500 to-teal-500',
+      color: 'from-[#F7941D] to-[#FDBA4D]',
       details: [
         'Réduction des coûts par recrutement',
         'Optimisation des sources de candidats',
@@ -396,7 +396,7 @@ export default function LandingPage() {
       description: 'Pilotez votre équipe avec des données en temps réel et des insights actionnables',
       detailedDescription: 'Prenez des décisions éclairées grâce à des tableaux de bord complets. Suivez les performances de votre équipe, validez les besoins stratégiques et optimisez vos processus de recrutement.',
       icon: BarChart3,
-      color: 'from-emerald-600 via-teal-600 to-emerald-700',
+      color: 'from-emerald-600 via-orange-500 to-teal-600',
       features: [
         'Tableaux de bord KPI en temps réel',
         'Validation et approbation des besoins',
@@ -430,7 +430,7 @@ export default function LandingPage() {
       description: 'Validez vos candidats en toute simplicité et suivez vos recrutements en temps réel',
       detailedDescription: 'Accédez facilement aux shortlists partagées, consultez les profils détaillés, donnez votre feedback et suivez l\'avancement de vos recrutements. Une interface simple et intuitive pour une validation rapide.',
       icon: Building2,
-      color: 'from-emerald-500 via-teal-500 to-emerald-600',
+      color: 'from-emerald-500 via-orange-500 to-teal-500',
       features: [
         'Consultation des shortlists partagées',
         'Validation rapide des candidats',
@@ -504,11 +504,9 @@ export default function LandingPage() {
           <div className="flex items-center justify-between h-14 lg:h-16">
             <div className="flex items-center">
               <Link href="/" className="flex items-center space-x-2 group">
-                <div className="bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 p-2 rounded-lg shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <Briefcase className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
-                </div>
-                <span className="text-lg lg:text-xl font-bold bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 bg-clip-text text-transparent">
-                  Yemma-Gates
+                <span className="text-lg lg:text-xl font-bold">
+                  <span className="text-emerald-600">Yemma</span>
+                  <span className="text-orange-500">-Gates</span>
                 </span>
               </Link>
             </div>
@@ -525,19 +523,16 @@ export default function LandingPage() {
               </a>
               <Link 
                 href="/auth/login" 
-                className="px-3 py-1.5 text-sm text-emerald-600 font-medium hover:text-emerald-700 transition-colors"
+                className="px-3 py-1.5 text-sm text-gray-700 hover:text-emerald-600 transition-colors font-medium"
               >
                 Connexion
               </Link>
               <Link 
-                href="/auth/choice" 
-                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-lg font-semibold text-sm hover:shadow-xl transition-all transform hover:scale-105 relative overflow-hidden group"
+                href="/register-company" 
+                className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-semibold text-sm hover:bg-emerald-700 hover:shadow-xl transition-all transform hover:scale-105 flex items-center group"
               >
-                <span className="relative z-10 flex items-center">
-                  Commencer
-                  <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover:translate-x-1 transition-transform" />
-                </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-teal-600 via-emerald-700 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                Inscription Entreprise
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>
 
@@ -559,14 +554,14 @@ export default function LandingPage() {
               <a href="#benefits" className="block text-sm text-gray-700 hover:text-emerald-600 transition-colors py-1.5">
                 Avantages
               </a>
-              <Link href="/auth/login" className="block text-sm text-emerald-600 font-medium py-1.5">
+              <Link href="/auth/login" className="block text-sm text-gray-700 hover:text-emerald-600 transition-colors font-medium py-1.5">
                 Connexion
               </Link>
               <Link 
-                href="/auth/choice" 
-                className="block px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg font-semibold text-sm text-center"
+                href="/register-company" 
+                className="block px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-semibold text-sm text-center hover:bg-emerald-700 transition-colors"
               >
-                Commencer
+                Inscription Entreprise
               </Link>
             </div>
           )}
@@ -576,22 +571,22 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section ref={heroRef} className="relative pt-24 pb-12 lg:pt-28 lg:pb-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
         {/* Animated Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50">
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-orange-50 to-teal-50">
           <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-          <div className="absolute top-40 right-10 w-72 h-72 bg-teal-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
-          <div className="absolute -bottom-8 left-1/2 w-72 h-72 bg-emerald-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+          <div className="absolute top-40 right-10 w-72 h-72 bg-orange-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
+          <div className="absolute -bottom-8 left-1/2 w-72 h-72 bg-teal-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
         </div>
 
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="text-center max-w-4xl mx-auto" data-animate id="hero">
-            <div className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 rounded-full text-xs font-medium mb-4 animate-fade-in-up">
+            <div className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-emerald-100 via-orange-100 to-teal-100 text-emerald-700 rounded-full text-xs font-medium mb-4 animate-fade-in-up">
               <Sparkles className="w-3.5 h-3.5 mr-1.5 animate-pulse" />
               Plateforme de recrutement nouvelle génération
             </div>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 mb-4 leading-tight animate-fade-in-up animation-delay-200">
               Recrutez plus vite,
               <br />
-              <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 bg-clip-text text-transparent animate-gradient">
+              <span className="bg-gradient-to-r from-emerald-600 via-orange-500 to-teal-600 bg-clip-text text-transparent animate-gradient">
                 recrutez mieux
               </span>
             </h1>
@@ -602,20 +597,17 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-10 animate-fade-in-up animation-delay-600">
               <Link
                 href="/auth/choice"
-                className="group relative px-6 py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-xl font-bold text-base shadow-xl hover:shadow-emerald-500/50 transition-all transform hover:scale-105 overflow-hidden"
+                className="group relative px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-base shadow-xl hover:bg-emerald-700 hover:shadow-emerald-500/50 transition-all transform hover:scale-105 flex items-center"
               >
-                <span className="relative z-10 flex items-center">
-                  <Rocket className="w-4 h-4 mr-2" />
-                  Commencer gratuitement
-                  <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-teal-600 via-emerald-700 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <Rocket className="w-4 h-4 mr-2" />
+                Commencer gratuitement
+                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
               </Link>
               <a
                 href="#features"
-                className="group px-6 py-3 bg-white text-gray-700 rounded-xl font-semibold text-base border-2 border-gray-200 hover:border-emerald-300 transition-all shadow-md hover:shadow-lg flex items-center space-x-2"
+                className="group px-6 py-3 bg-white text-gray-700 rounded-xl font-semibold text-base border-2 border-gray-200 hover:border-orange-300 transition-all shadow-md hover:shadow-lg flex items-center space-x-2"
               >
-                <Play className="w-4 h-4 text-emerald-600" />
+                <Play className="w-4 h-4 text-[#F7941D]" />
                 <span>Voir la démo</span>
               </a>
             </div>
@@ -629,7 +621,7 @@ export default function LandingPage() {
                 <div className="text-sm text-gray-600 font-medium">Candidats gérés</div>
               </div>
               <div className="text-center transform hover:scale-110 transition-transform">
-                <div className="text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent mb-1">
+                <div className="text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-[#F7941D] to-[#FDBA4D] bg-clip-text text-transparent mb-1">
                   {counters.jobs}+
                 </div>
                 <div className="text-sm text-gray-600 font-medium">Besoins traités</div>
@@ -666,92 +658,202 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
-            {features.map((feature, index) => {
-              const Icon = feature.icon
-              const elementId = `feature-${index}`
-              const isVisible = visibleSections.has(elementId) || visibleSections.has('features-header')
-              return (
-                <div
-                  key={index}
-                  data-animate
-                  data-animate-id={elementId}
-                  id={elementId}
-                  className={`p-5 lg:p-6 rounded-2xl border-2 border-gray-100 hover:border-transparent hover:shadow-xl transition-all duration-500 transform hover:-translate-y-2 bg-white group ${
-                    isVisible ? 'animate-fade-in-up' : 'opacity-100'
-                  }`}
-                  style={{ animationDelay: `${feature.delay}ms` }}
-                >
-                  <div className={`bg-gradient-to-br ${feature.color} w-12 h-12 rounded-xl flex items-center justify-center mb-4 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-lg`}>
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="text-lg lg:text-xl font-bold text-gray-900 mb-2 group-hover:text-emerald-600 transition-colors">
-                    {feature.title}
-                  </h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">{feature.description}</p>
-                  <div className="mt-4 flex items-center text-emerald-600 font-semibold text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                    En savoir plus
-                    <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
-                  </div>
-                </div>
-              )
-            })}
+          {/* Scrolling Features Animation */}
+          <div className="space-y-4">
+            {/* First row: scroll from right to left */}
+            <div className="overflow-hidden">
+              <div className="flex animate-scroll-right">
+                {/* Duplicate features for seamless loop */}
+                {[...features, ...features].map((feature, index) => {
+                  const Icon = feature.icon
+                  return (
+                    <div
+                      key={`right-${index}`}
+                      className={`flex-shrink-0 w-56 mx-2 p-4 rounded-xl border-2 border-gray-100 hover:shadow-lg transition-all duration-500 transform hover:-translate-y-1 bg-white group ${
+                        feature.color.includes('emerald') ? 'hover:border-emerald-500 hover:bg-emerald-50' :
+                        feature.color.includes('F7941D') || feature.color.includes('orange') ? 'hover:border-orange-500 hover:bg-orange-50' :
+                        feature.color.includes('teal') ? 'hover:border-teal-500 hover:bg-teal-50' : 'hover:border-emerald-500 hover:bg-emerald-50'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-md ${
+                        feature.color.includes('emerald') ? 'bg-emerald-500' :
+                        feature.color.includes('F7941D') || feature.color.includes('orange') ? 'bg-orange-500' :
+                        feature.color.includes('teal') ? 'bg-teal-500' : 'bg-emerald-500'
+                      }`}>
+                        <Icon className="w-5 h-5 text-white" />
+                      </div>
+                      <h3 className={`text-base font-bold text-gray-900 mb-1.5 transition-colors ${
+                        feature.color.includes('emerald') ? 'group-hover:text-emerald-600' :
+                        feature.color.includes('F7941D') || feature.color.includes('orange') ? 'group-hover:text-orange-600' :
+                        feature.color.includes('teal') ? 'group-hover:text-teal-600' : 'group-hover:text-emerald-600'
+                      }`}>
+                        {feature.title}
+                      </h3>
+                      <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{feature.description}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Second row: scroll from left to right */}
+            <div className="overflow-hidden">
+              <div className="flex animate-scroll-left">
+                {/* Duplicate features in reverse for seamless loop */}
+                {[...features].reverse().concat([...features].reverse()).map((feature, index) => {
+                  const Icon = feature.icon
+                  return (
+                    <div
+                      key={`left-${index}`}
+                      className={`flex-shrink-0 w-56 mx-2 p-4 rounded-xl border-2 border-gray-100 hover:shadow-lg transition-all duration-500 transform hover:-translate-y-1 bg-white group ${
+                        feature.color.includes('emerald') ? 'hover:border-emerald-500 hover:bg-emerald-50' :
+                        feature.color.includes('F7941D') || feature.color.includes('orange') ? 'hover:border-orange-500 hover:bg-orange-50' :
+                        feature.color.includes('teal') ? 'hover:border-teal-500 hover:bg-teal-50' : 'hover:border-emerald-500 hover:bg-emerald-50'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-md ${
+                        feature.color.includes('emerald') ? 'bg-emerald-500' :
+                        feature.color.includes('F7941D') || feature.color.includes('orange') ? 'bg-orange-500' :
+                        feature.color.includes('teal') ? 'bg-teal-500' : 'bg-emerald-500'
+                      }`}>
+                        <Icon className="w-5 h-5 text-white" />
+                      </div>
+                      <h3 className={`text-base font-bold text-gray-900 mb-1.5 transition-colors ${
+                        feature.color.includes('emerald') ? 'group-hover:text-emerald-600' :
+                        feature.color.includes('F7941D') || feature.color.includes('orange') ? 'group-hover:text-orange-600' :
+                        feature.color.includes('teal') ? 'group-hover:text-teal-600' : 'group-hover:text-emerald-600'
+                      }`}>
+                        {feature.title}
+                      </h3>
+                      <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{feature.description}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Benefits Section */}
-      <section id="benefits" className="py-12 lg:py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-gray-50 via-emerald-50 to-teal-50 relative overflow-hidden">
-        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-        <div className="max-w-7xl mx-auto relative z-10">
-          <div className="text-center mb-10" data-animate data-animate-id="benefits-header" id="benefits-header">
-            <div className="inline-block px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium mb-3">
-              Résultats Mesurables
-            </div>
-            <h2 className="text-3xl lg:text-4xl font-extrabold text-gray-900 mb-3">
+      <section id="benefits" className="py-20 lg:py-28 px-4 sm:px-6 lg:px-8 bg-gray-50/30 relative overflow-hidden">
+        {/* Subtle animated background */}
+        <div className="absolute inset-0 opacity-40">
+          <div className="absolute top-0 left-0 w-72 h-72 bg-emerald-100 rounded-full mix-blend-multiply filter blur-3xl animate-blob-float"></div>
+          <div className="absolute top-0 right-0 w-72 h-72 bg-orange-100 rounded-full mix-blend-multiply filter blur-3xl animate-blob-float animation-delay-2000"></div>
+          <div className="absolute bottom-0 left-1/2 w-72 h-72 bg-teal-100 rounded-full mix-blend-multiply filter blur-3xl animate-blob-float animation-delay-4000"></div>
+        </div>
+        
+        <div className="max-w-6xl mx-auto relative z-10">
+          <div className="text-center mb-16 lg:mb-20" data-animate data-animate-id="benefits-header" id="benefits-header">
+            <h2 className="text-4xl lg:text-5xl font-bold text-emerald-600 mb-4 tracking-tight transform transition-all duration-700 hover:scale-105">
               Pourquoi choisir Yemma-Gates ?
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg lg:text-xl text-gray-500 max-w-2xl mx-auto font-light">
               Des résultats concrets et mesurables pour votre équipe
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
+          <div className="space-y-0">
             {benefits.map((benefit, index) => {
               const Icon = benefit.icon
               const elementId = `benefit-${index}`
               const isVisible = visibleSections.has(elementId) || visibleSections.has('benefits-header')
+              
+              // Map gradient colors to solid colors (sobre)
+              const getSolidColor = (gradientColor: string) => {
+                if (gradientColor.includes('F7941D') || gradientColor.includes('orange')) {
+                  return 'orange-500'
+                } else if (gradientColor.includes('emerald')) {
+                  return 'emerald-500'
+                } else if (gradientColor.includes('teal')) {
+                  return 'teal-500'
+                }
+                return 'emerald-500'
+              }
+              
+              const solidColor = getSolidColor(benefit.color)
+              const colorClasses = {
+                'orange-500': {
+                  bg: 'bg-orange-500',
+                  text: 'text-orange-500',
+                  border: 'border-orange-500',
+                  dot: 'bg-orange-400'
+                },
+                'emerald-500': {
+                  bg: 'bg-emerald-500',
+                  text: 'text-emerald-500',
+                  border: 'border-emerald-500',
+                  dot: 'bg-emerald-400'
+                },
+                'teal-500': {
+                  bg: 'bg-teal-500',
+                  text: 'text-teal-500',
+                  border: 'border-teal-500',
+                  dot: 'bg-teal-400'
+                }
+              }
+              
+              const colors = colorClasses[solidColor as keyof typeof colorClasses] || colorClasses['emerald-500']
+              
               return (
                 <div
                   key={index}
                   data-animate
                   data-animate-id={elementId}
                   id={elementId}
-                  className={`bg-white p-5 lg:p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-500 transform hover:-translate-y-2 group ${
-                    isVisible ? 'animate-fade-in-up' : 'opacity-100'
+                  className={`group py-8 lg:py-12 border-b border-gray-200 last:border-b-0 transition-all duration-700 hover:bg-white/50 hover:border-l-4 ${colors.border} hover:pl-4 lg:hover:pl-6 ${
+                    isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
                   }`}
-                  style={{ animationDelay: `${index * 100}ms` }}
+                  style={{ animationDelay: `${index * 100}ms`, transitionDelay: `${index * 50}ms` }}
                 >
-                  <div className="text-center mb-4">
-                    <div className={`bg-gradient-to-br ${benefit.color} w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-lg`}>
-                      <Icon className="w-7 h-7 text-white" />
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 lg:gap-12">
+                    {/* Left: Icon and Stat */}
+                    <div className="flex items-center gap-6 lg:gap-8 flex-shrink-0">
+                      <div className={`${colors.bg} w-12 h-12 lg:w-14 lg:h-14 rounded-lg flex items-center justify-center transform transition-all duration-500 group-hover:scale-110 group-hover:rotate-6 group-hover:shadow-lg`}>
+                        <Icon className="w-6 h-6 lg:w-7 lg:h-7 text-white transform transition-transform duration-500 group-hover:scale-110" />
+                      </div>
+                      <div className="flex items-baseline gap-3">
+                        <span className={`${colors.text} text-4xl lg:text-5xl font-light transform transition-all duration-500 group-hover:scale-110`}>
+                          {benefit.stat}
+                        </span>
+                      </div>
                     </div>
-                    <div className={`text-3xl lg:text-4xl font-extrabold bg-gradient-to-r ${benefit.color} bg-clip-text text-transparent mb-2`}>
-                      {benefit.stat}
+
+                    {/* Center: Title and Description */}
+                    <div className="flex-1 lg:max-w-2xl">
+                      <h3 
+                        className={`text-xl lg:text-2xl font-medium mb-3 tracking-tight transform transition-all duration-500 group-hover:translate-x-2 ${
+                          solidColor === 'orange-500' ? 'text-gray-900 group-hover:text-orange-500' :
+                          solidColor === 'emerald-500' ? 'text-gray-900 group-hover:text-emerald-500' :
+                          'text-gray-900 group-hover:text-teal-500'
+                        }`}
+                      >
+                        {benefit.title}
+                      </h3>
+                      <p className="text-base lg:text-lg text-gray-600 leading-relaxed font-light transform transition-all duration-500 group-hover:text-gray-700">
+                        {benefit.description}
+                      </p>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">{benefit.title}</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed mb-3">{benefit.description}</p>
+
+                    {/* Right: Details (hidden on mobile, shown on desktop) */}
+                    {benefit.details && (
+                      <div className="hidden lg:block flex-shrink-0 w-64">
+                        <ul className="space-y-2">
+                          {benefit.details.slice(0, 2).map((detail, idx) => (
+                            <li 
+                              key={idx} 
+                              className="flex items-start text-sm text-gray-500 transform transition-all duration-500 group-hover:translate-x-1"
+                              style={{ transitionDelay: `${idx * 100}ms` }}
+                            >
+                              <span className={`${colors.dot} w-1.5 h-1.5 rounded-full mt-2 mr-3 flex-shrink-0 transform transition-all duration-500 group-hover:scale-150`}></span>
+                              <span className="leading-relaxed group-hover:text-gray-600 transition-colors duration-300">{detail}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                  {benefit.details && (
-                    <ul className="space-y-1.5 border-t border-gray-100 pt-3">
-                      {benefit.details.map((detail, idx) => (
-                        <li key={idx} className="flex items-start text-xs text-gray-600">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-green-500 mr-1.5 mt-0.5 flex-shrink-0" />
-                          <span>{detail}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
               )
             })}
@@ -760,30 +862,26 @@ export default function LandingPage() {
       </section>
 
       {/* Roles Section */}
-      <section id="roles" className="py-12 lg:py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-gray-900 via-emerald-900 to-teal-900 relative overflow-hidden">
+      <section id="roles" className="py-8 lg:py-10 px-4 sm:px-6 lg:px-8 bg-gray-50 relative overflow-hidden">
         {/* Animated Background Elements */}
-        <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
-        <div className="absolute top-20 left-10 w-96 h-96 bg-emerald-500/20 rounded-full mix-blend-screen filter blur-3xl animate-blob-float"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-teal-500/20 rounded-full mix-blend-screen filter blur-3xl animate-blob-float animation-delay-2000"></div>
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="absolute top-20 left-10 w-96 h-96 bg-emerald-200/40 rounded-full mix-blend-screen filter blur-3xl animate-blob-float"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-200/40 rounded-full mix-blend-screen filter blur-3xl animate-blob-float animation-delay-2000"></div>
         
         <div className="max-w-7xl mx-auto relative z-10">
-          <div className="text-center mb-12" data-animate id="roles-header">
-            <div className="inline-block px-3 py-1.5 bg-white/20 text-white rounded-full text-xs font-medium mb-4 animate-fade-in-up animate-float-subtle">
+          <div className="text-center mb-6" data-animate id="roles-header">
+            <div className="inline-block px-3 py-1.5 bg-emerald-100 text-gray-800 rounded-full text-xs font-medium mb-3 animate-fade-in-up animate-float-subtle">
               Espaces Dédiés
             </div>
-            <h2 className="text-3xl lg:text-4xl font-extrabold text-white mb-4 animate-fade-in-up animation-delay-200">
+            <h2 className="text-2xl lg:text-3xl font-extrabold text-emerald-600 mb-2 animate-fade-in-up animation-delay-200">
               Une interface pour chaque rôle
             </h2>
-            <p className="text-lg text-white/90 max-w-3xl mx-auto mb-2 animate-fade-in-up animation-delay-400">
-              Chaque rôle a ses propres défis et besoins. C'est pourquoi nous avons conçu des espaces entièrement personnalisés, 
-              optimisés pour votre quotidien et vos objectifs spécifiques.
-            </p>
-            <p className="text-base text-white/70 max-w-2xl mx-auto animate-fade-in-up animation-delay-600">
-              Découvrez comment chaque interface s'adapte parfaitement à votre fonction et maximise votre productivité.
+            <p className="text-sm lg:text-base text-gray-700 max-w-2xl mx-auto animate-fade-in-up animation-delay-400">
+              Des espaces personnalisés optimisés pour votre quotidien et vos objectifs spécifiques.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
             {roles.map((role, index) => {
               const Icon = role.icon
               const elementId = `role-${index}`
@@ -794,147 +892,74 @@ export default function LandingPage() {
                   data-animate
                   data-animate-id={elementId}
                   id={elementId}
-                  className={`relative p-5 lg:p-6 rounded-2xl text-white overflow-hidden group hover:shadow-2xl transition-all duration-700 transform hover:scale-[1.02] hover:-translate-y-2 ${
+                  className={`relative p-4 lg:p-5 rounded-xl text-white overflow-hidden group hover:shadow-xl transition-all duration-500 transform hover:scale-[1.02] hover:-translate-y-1 ${
                     isVisible ? 'animate-role-card-in' : 'opacity-0'
+                  } ${
+                    role.id === 'recruteur' ? 'bg-emerald-600' :
+                    role.id === 'manager' ? 'bg-emerald-600' :
+                    role.id === 'client' ? 'bg-emerald-500' :
+                    role.id === 'administrateur' ? 'bg-orange-500' : 'bg-emerald-600'
                   }`}
                   style={{
-                    background: role.gradient,
-                    animationDelay: `${index * 200}ms`
+                    animationDelay: `${index * 150}ms`
                   }}
                 >
                   {/* Animated background glow */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/0 via-white/5 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 group-hover:scale-150 group-hover:opacity-50 transition-all duration-1000"></div>
-                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24 group-hover:scale-125 group-hover:opacity-30 transition-all duration-1000"></div>
+                  <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   
                   <div className="relative z-10">
-                    <div className="bg-white/20 backdrop-blur-sm w-14 h-14 rounded-xl flex items-center justify-center mb-4 transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-500 shadow-lg group-hover:shadow-xl group-hover:bg-white/30 animate-icon-float">
-                      <Icon className="w-7 h-7 transform group-hover:scale-110 transition-transform duration-300" />
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="bg-white/20 backdrop-blur-sm w-12 h-12 rounded-lg flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shadow-lg">
+                        <Icon className="w-6 h-6 transform group-hover:scale-110 transition-transform duration-300" />
+                      </div>
                     </div>
-                    <h3 className="text-2xl font-bold mb-2 transform group-hover:translate-x-1 transition-transform duration-300">{role.title}</h3>
-                    <p className="text-white/90 mb-3 text-sm lg:text-base font-medium">{role.description}</p>
-                    {role.detailedDescription && (
-                      <p className="text-white/80 mb-4 text-xs lg:text-sm leading-relaxed">{role.detailedDescription}</p>
-                    )}
+                    <h3 className="text-xl font-bold mb-2">{role.title}</h3>
+                    <p className="text-white/90 mb-3 text-xs leading-relaxed">{role.description}</p>
                     
-                    <div className="mb-4">
-                      <h4 className="text-white font-semibold text-sm mb-3 flex items-center transform group-hover:translate-x-1 transition-transform duration-300">
-                        <Briefcase className="w-4 h-4 mr-2 animate-pulse-slow" />
-                        Fonctionnalités principales
-                      </h4>
-                      <ul className="space-y-1.5 mb-4">
-                        {role.features.slice(0, 4).map((feature, idx) => (
+                    <div className="mb-3">
+                      <ul className="space-y-1">
+                        {role.features.slice(0, 3).map((feature, idx) => (
                           <li 
                             key={idx} 
-                            className="flex items-start text-white/90 text-xs transform group-hover:translate-x-1 transition-all duration-300"
-                            style={{ transitionDelay: `${idx * 50}ms` }}
+                            className="flex items-start text-white/90 text-[11px] leading-tight"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-2 mt-0.5 flex-shrink-0 transform group-hover:scale-110 transition-transform duration-200" />
-                            <span className="group-hover:text-white transition-colors duration-200">{feature}</span>
+                            <CheckCircle2 className="w-3 h-3 mr-1.5 mt-0.5 flex-shrink-0" />
+                            <span>{feature}</span>
                           </li>
                         ))}
+                        {role.features.length > 3 && (
+                          <li className="text-white/70 text-[10px] mt-1">
+                            +{role.features.length - 3} autres fonctionnalités
+                          </li>
+                        )}
                       </ul>
-                      {role.features.length > 4 && (
-                        <details className="group/details">
-                          <summary className="text-white/80 text-xs cursor-pointer hover:text-white transition-all duration-200 flex items-center transform hover:translate-x-1">
-                            <ChevronDown className="w-3 h-3 mr-1 group-open/details:rotate-180 transition-transform duration-300" />
-                            Voir {role.features.length - 4} fonctionnalités supplémentaires
-                          </summary>
-                          <ul className="space-y-1.5 mt-2 ml-5 animate-fade-in">
-                            {role.features.slice(4).map((feature, idx) => (
-                              <li 
-                                key={idx + 4} 
-                                className="flex items-start text-white/80 text-xs transform hover:translate-x-1 hover:text-white/90 transition-all duration-200"
-                                style={{ animationDelay: `${idx * 50}ms` }}
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5 mr-2 mt-0.5 flex-shrink-0 transform hover:scale-110 transition-transform duration-200" />
-                                <span>{feature}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      )}
                     </div>
 
-                    {role.stats && role.stats.length > 0 && (
-                      <div className="mb-4 pt-4 border-t border-white/20">
-                        <h4 className="text-white font-semibold text-xs mb-3 flex items-center transform group-hover:translate-x-1 transition-transform duration-300">
-                          <BarChart className="w-3.5 h-3.5 mr-2 animate-pulse-slow" />
-                          En chiffres
-                        </h4>
-                        <div className="grid grid-cols-3 gap-2">
-                          {role.stats.map((stat, idx) => {
-                            const StatIcon = stat.icon
-                            return (
-                              <div 
-                                key={idx} 
-                                className="text-center bg-white/10 rounded-lg px-2 py-2 backdrop-blur-sm transform group-hover:scale-105 transition-all duration-300 hover:bg-white/20 cursor-default"
-                                style={{ transitionDelay: `${idx * 100}ms` }}
-                              >
-                                <StatIcon className="w-3.5 h-3.5 text-white/80 mx-auto mb-1 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300" />
-                                <div className="text-white font-bold text-xs transform group-hover:scale-110 transition-transform duration-300">{stat.value}</div>
-                                <div className="text-white/70 text-[10px] leading-tight group-hover:text-white/90 transition-colors duration-300">{stat.label}</div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
                     {role.advantages && role.advantages.length > 0 && (
-                      <div className="mb-4 pt-4 border-t border-white/20">
-                        <h4 className="text-white font-semibold text-sm mb-3 flex items-center transform group-hover:translate-x-1 transition-transform duration-300">
-                          <Trophy className="w-4 h-4 mr-2 animate-pulse-slow" />
-                          Avantages clés
-                        </h4>
-                        <div className="grid grid-cols-1 gap-2">
-                          {role.advantages.map((advantage, idx) => {
+                      <div className="mb-3 pt-2 border-t border-white/20">
+                        <div className="flex flex-wrap gap-1.5">
+                          {role.advantages.slice(0, 2).map((advantage, idx) => {
                             const AdvantageIcon = advantage.icon
                             return (
                               <div 
                                 key={idx} 
-                                className="flex items-center text-white/90 text-xs bg-white/10 rounded-lg px-3 py-2 backdrop-blur-sm transform group-hover:translate-x-2 hover:bg-white/20 transition-all duration-300 cursor-default"
-                                style={{ transitionDelay: `${idx * 100}ms` }}
+                                className="flex items-center text-white/90 text-[10px] bg-white/10 rounded-md px-2 py-1 backdrop-blur-sm"
                               >
-                                <AdvantageIcon className="w-4 h-4 mr-2 flex-shrink-0 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300" />
-                                <span className="group-hover:text-white transition-colors duration-300">{advantage.text}</span>
+                                <AdvantageIcon className="w-3 h-3 mr-1 flex-shrink-0" />
+                                <span className="truncate max-w-[80px]">{advantage.text}</span>
                               </div>
                             )
                           })}
                         </div>
-                      </div>
-                    )}
-
-                    {role.useCases && role.useCases.length > 0 && (
-                      <div className="mb-5 pt-4 border-t border-white/20">
-                        <h4 className="text-white font-semibold text-sm mb-3 flex items-center transform group-hover:translate-x-1 transition-transform duration-300">
-                          <Target className="w-4 h-4 mr-2 animate-pulse-slow" />
-                          Cas d'usage
-                        </h4>
-                        <ul className="space-y-1.5">
-                          {role.useCases.map((useCase, idx) => (
-                            <li 
-                              key={idx} 
-                              className="flex items-start text-white/80 text-xs transform group-hover:translate-x-2 hover:text-white/90 transition-all duration-300"
-                              style={{ transitionDelay: `${idx * 80}ms` }}
-                            >
-                              <ArrowRight className="w-3 h-3 mr-2 mt-0.5 flex-shrink-0 text-white/60 transform group-hover:translate-x-1 group-hover:text-white transition-all duration-300" />
-                              <span>{useCase}</span>
-                            </li>
-                          ))}
-                        </ul>
                       </div>
                     )}
 
                     <Link
                       href={`/auth/login?role=${encodeURIComponent(role.id)}`}
-                      className="inline-flex items-center px-5 py-2.5 bg-white text-gray-900 rounded-lg font-bold text-sm hover:bg-gray-100 transition-all transform hover:scale-105 hover:shadow-2xl shadow-lg w-full justify-center group/button relative overflow-hidden"
+                      className="inline-flex items-center justify-center px-4 py-2 bg-white text-gray-900 rounded-lg font-semibold text-xs hover:bg-gray-100 transition-all transform hover:scale-105 shadow-md w-full group/button"
                     >
-                      <span className="relative z-10 flex items-center">
-                        Accéder à l'espace {role.title}
-                        <ArrowRight className="w-4 h-4 ml-2 transform group-hover/button:translate-x-1 transition-transform duration-300" />
-                      </span>
-                      <div className="absolute inset-0 bg-gradient-to-r from-white via-gray-50 to-white opacity-0 group-hover/button:opacity-100 group-hover/button:animate-shimmer transition-opacity duration-500"></div>
+                      Accéder
+                      <ArrowRight className="w-3 h-3 ml-1.5 transform group-hover/button:translate-x-1 transition-transform duration-300" />
                     </Link>
                   </div>
                 </div>
@@ -945,7 +970,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-12 lg:py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 relative overflow-hidden">
+      <section className="py-12 lg:py-16 px-4 sm:px-6 lg:px-8 bg-emerald-600 relative overflow-hidden">
         <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
         <div className="max-w-4xl mx-auto text-center relative z-10" data-animate id="cta">
           <Trophy className="w-12 h-12 text-white mx-auto mb-4 animate-bounce" />
@@ -957,12 +982,18 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
             <Link
-              href="/auth/choice"
-              className="group px-8 py-4 bg-white text-emerald-600 rounded-xl font-bold text-base shadow-xl hover:shadow-white/50 transition-all transform hover:scale-105 flex items-center space-x-2"
+              href="/register-company"
+              className="group px-8 py-4 bg-white text-emerald-600 rounded-xl font-bold text-base shadow-xl hover:shadow-white/50 transition-all transform hover:scale-105 flex items-center space-x-2 hover:text-orange-600"
             >
-              <Rocket className="w-5 h-5" />
-              <span>Commencer gratuitement</span>
+              <Building2 className="w-5 h-5" />
+              <span>Inscription Entreprise</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </Link>
+            <Link
+              href="/auth/choice"
+              className="px-8 py-4 bg-white/10 backdrop-blur-sm text-white rounded-xl font-semibold text-base border-2 border-white/30 hover:bg-white/20 transition-all"
+            >
+              Se connecter
             </Link>
             <a
               href="#features"
@@ -994,7 +1025,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-5 lg:gap-6 mb-6">
             <div>
               <div className="flex items-center space-x-2 mb-3">
-                <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-1.5 rounded-lg">
+                <div className="bg-gradient-to-br from-emerald-600 via-orange-500 to-teal-600 p-1.5 rounded-lg">
                   <Briefcase className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-lg font-bold text-white">Yemma-Gates</span>
@@ -1182,6 +1213,28 @@ export default function LandingPage() {
         }
         .animate-shimmer {
           animation: shimmer 1.5s ease-in-out infinite;
+        }
+        @keyframes scroll-right {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+        .animate-scroll-right {
+          animation: scroll-right 40s linear infinite;
+        }
+        @keyframes scroll-left {
+          0% {
+            transform: translateX(-50%);
+          }
+          100% {
+            transform: translateX(0);
+          }
+        }
+        .animate-scroll-left {
+          animation: scroll-left 40s linear infinite;
         }
         .bg-grid-pattern {
           background-image: 

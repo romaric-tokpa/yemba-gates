@@ -183,6 +183,40 @@ async def tenant_middleware(request: Request, call_next):
     """
     Middleware FastAPI pour identifier et isoler les tenants
     """
+    # IMPORTANT: Laisser passer les requêtes OPTIONS (preflight CORS) sans traitement
+    # Le middleware CORS gérera ces requêtes avant que ce middleware ne soit appelé
+    # Mais on s'assure quand même de ne pas bloquer les requêtes OPTIONS
+    if request.method == "OPTIONS":
+        # Laisser le middleware CORS gérer cette requête
+        response = await call_next(request)
+        # S'assurer que les headers CORS sont présents
+        # Note: On ne peut pas utiliser "*" avec allow_credentials=True, il faut spécifier explicitement
+        origin = request.headers.get("origin")
+        if origin:
+            # Vérifier si l'origine est autorisée (liste des origines autorisées)
+            allowed_origins = [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:3001",
+                "http://0.0.0.0:3000",
+                "http://0.0.0.0:3001",
+            ]
+            # Ajouter les origines depuis la variable d'environnement
+            import os
+            allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+            if allowed_origins_env:
+                allowed_origins.extend([o.strip() for o in allowed_origins_env.split(",") if o.strip()])
+            
+            if origin in allowed_origins or os.getenv("ENVIRONMENT", "development") == "development":
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+                # Spécifier explicitement les headers autorisés (ne pas utiliser "*" avec credentials)
+                response.headers["Access-Control-Allow-Headers"] = "authorization, content-type, x-tenant-subdomain, x-requested-with"
+                response.headers["Access-Control-Expose-Headers"] = "*"
+        return response
+    
     tenant_id = None
     
     # 1. Essayer d'identifier le tenant depuis le token JWT (si authentifié)
@@ -216,14 +250,21 @@ async def tenant_middleware(request: Request, call_next):
     
     # 3. Si toujours pas de tenant, vérifier si c'est une route publique
     if not tenant_id:
+        # Normaliser le chemin en enlevant le préfixe /api s'il est présent
+        path = request.url.path
+        if path.startswith("/api"):
+            path = path[4:]  # Enlever "/api"
+        
         # Routes publiques qui n'ont pas besoin de tenant
-        public_routes = ["/docs", "/openapi.json", "/health", "/auth/login", "/auth/register"]
-        if any(request.url.path.startswith(route) for route in public_routes):
+        public_routes = ["/docs", "/openapi.json", "/health", "/auth/login", "/auth/register", "/auth/register-company"]
+        if any(path.startswith(route) for route in public_routes):
             # Pour les routes publiques, on continue sans tenant
+            logger.info(f"✅ [TENANT] Route publique détectée: {request.url.path} (normalisé: {path})")
             response = await call_next(request)
             return response
         else:
             # Pour les autres routes, un tenant est requis
+            logger.warning(f"⚠️ [TENANT] Route protégée sans tenant: {request.url.path} (normalisé: {path})")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Tenant non identifié. Veuillez vous connecter."

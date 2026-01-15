@@ -21,9 +21,9 @@ function getApiUrl(): string {
     const protocol = window.location.protocol
     const port = window.location.port
     
-    // PRIORITÉ 1: Si on est sur localhost ou 127.0.0.1, TOUJOURS utiliser localhost:8000
+    // PRIORITÉ 1: Si on est sur localhost, 127.0.0.1 ou 0.0.0.0, TOUJOURS utiliser localhost:8000
     // Même si le port est différent (3000, 80, etc.), on utilise toujours le backend direct
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
       return 'http://localhost:8000'
     }
     
@@ -52,7 +52,7 @@ function getApiUrlSafe(): string {
   // FORCER localhost:8000 en développement local
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
       return 'http://localhost:8000'
     }
   }
@@ -349,6 +349,63 @@ export async function logout() {
   if (typeof window !== 'undefined') {
     window.location.href = '/auth/choice'
   }
+}
+
+export interface CompanyRegisterData {
+  company_name: string
+  subdomain?: string
+  contact_email: string
+  contact_phone?: string
+  country?: string
+  industry?: string
+  company_size?: string
+  admin_email: string
+  admin_password: string
+  admin_first_name: string
+  admin_last_name: string
+  admin_phone?: string
+}
+
+export async function registerCompany(data: CompanyRegisterData): Promise<LoginResponse> {
+  const response = await fetch(`${API_URL()}/api/auth/register-company`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    let errorMessage = 'Erreur lors de l\'inscription'
+    try {
+      const error = await response.json()
+      const detail = error.detail || error.message || errorMessage
+      
+      // Traduire les messages d'erreur en français
+      const errorTranslations: Record<string, string> = {
+        'Le sous-domaine doit contenir au moins 3 caractères alphanumériques': 'Le sous-domaine doit contenir au moins 3 caractères alphanumériques',
+        'Le sous-domaine est déjà utilisé': 'Ce sous-domaine est déjà utilisé. Veuillez en choisir un autre.',
+        'Un utilisateur avec cet email existe déjà': 'Un utilisateur avec cet email existe déjà',
+        'Base de données par défaut non trouvée': 'Erreur de configuration serveur. Contactez le support.',
+        'Impossible de se connecter à la base de données': 'Erreur de connexion à la base de données',
+      }
+      
+      errorMessage = errorTranslations[detail] || detail
+    } catch (e) {
+      // Si la réponse n'est pas du JSON, utiliser le statut
+      if (response.status === 400) {
+        errorMessage = 'Données invalides. Vérifiez vos informations.'
+      } else if (response.status === 500) {
+        errorMessage = 'Erreur serveur. Veuillez réessayer plus tard.'
+      }
+    }
+    throw new Error(errorMessage)
+  }
+
+  const responseData = await response.json()
+  
+  // Le token et les infos utilisateur seront sauvegardés dans la page
+  return responseData
 }
 
 export async function getCurrentUser(): Promise<UserInfo> {

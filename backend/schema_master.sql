@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS companies (
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     contact_email VARCHAR(255),
     contact_phone VARCHAR(50),
+    country VARCHAR(100),
+    industry VARCHAR(100),
+    size VARCHAR(50),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     trial_ends_at TIMESTAMP,
@@ -38,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_companies_status ON companies(status);
 CREATE TABLE IF NOT EXISTS tenant_databases (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,
-    db_name VARCHAR(100) NOT NULL UNIQUE,
+    db_name VARCHAR(100) NOT NULL,
     db_host VARCHAR(255) NOT NULL DEFAULT 'localhost',
     db_port INTEGER NOT NULL DEFAULT 5432,
     db_user VARCHAR(100),

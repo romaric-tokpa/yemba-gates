@@ -57,7 +57,8 @@ class User(SQLModel, table=True):
     department: str | None = None
     is_active: bool = Field(default=True)
     # Multi-tenant: company_id pour isoler les données par entreprise
-    company_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), index=True))
+    # Note: Pas de ForeignKey car la table companies est dans la base MASTER, pas dans la base tenant
+    company_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), index=True))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

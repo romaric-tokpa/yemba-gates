@@ -77,27 +77,44 @@ def get_allowed_origins():
                 logger.info(f"✅ CORS configuré avec {len(origins)} origine(s) autorisée(s)")
                 return origins
             else:
-                logger.warning("⚠️  ALLOWED_ORIGINS est défini mais vide, autorisation de toutes les origines (non sécurisé!)")
-                return ["*"]
+                logger.warning("⚠️  ALLOWED_ORIGINS est défini mais vide, utilisation des origines par défaut")
+                # Origines par défaut en production
+                return ["http://localhost:3000", "http://localhost:3001", "http://0.0.0.0:3000", "http://0.0.0.0:3001"]
         else:
-            # Si la variable n'est pas définie en production, accepter toutes les origines
-            # avec un avertissement (non idéal pour la sécurité mais évite les erreurs CORS)
-            logger.warning("⚠️  ALLOWED_ORIGINS non défini en production, autorisation de toutes les origines (non sécurisé!)")
+            # Si la variable n'est pas définie en production, utiliser des origines par défaut
+            logger.warning("⚠️  ALLOWED_ORIGINS non défini en production, utilisation des origines par défaut")
             logger.warning("💡 Configurez ALLOWED_ORIGINS dans vos variables d'environnement pour la sécurité")
-            return ["*"]
+            return ["http://localhost:3000", "http://localhost:3001", "http://0.0.0.0:3000", "http://0.0.0.0:3001"]
     else:
-        # En développement, accepter toutes les origines
-        return ["*"]
+        # En développement, accepter toutes les origines communes
+        # Note: On ne peut pas utiliser ["*"] avec allow_credentials=True
+        # Donc on liste les origines courantes en développement
+        default_origins = [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+            "http://0.0.0.0:3000",
+            "http://0.0.0.0:3001",
+        ]
+        # Ajouter les origines de la variable d'environnement si définies
+        if ALLOWED_ORIGINS_ENV:
+            additional_origins = [origin.strip() for origin in ALLOWED_ORIGINS_ENV.split(",") if origin.strip()]
+            default_origins.extend(additional_origins)
+        return default_origins
 
 allowed_origins = get_allowed_origins()
+logger.info(f"🌐 CORS configuré avec les origines: {allowed_origins}")
 
 # Middleware CORS (doit être avant le middleware tenant)
+# IMPORTANT: On ne peut pas utiliser allow_headers=["*"] avec allow_credentials=True
+# Il faut spécifier explicitement les headers autorisés
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["authorization", "content-type", "x-tenant-subdomain", "x-requested-with", "accept", "origin"],
     expose_headers=["*"],
     max_age=3600,  # Cache les pré-requêtes OPTIONS pendant 1 heure
 )
@@ -107,21 +124,21 @@ app.add_middleware(
 app.middleware("http")(tenant_middleware)
 
 
-# Inclusion des routers
-app.include_router(auth.router)
-app.include_router(jobs.router)
-app.include_router(candidates.router)
-app.include_router(kpi.router)
-app.include_router(shortlists.router)
-app.include_router(notifications.router)
-app.include_router(interviews.router)
-app.include_router(offers.router)
-app.include_router(onboarding.router)
-app.include_router(history.router)
-app.include_router(applications.router)
-app.include_router(client_interview_requests.router)
-app.include_router(teams.router)
-app.include_router(admin.router)
+# Inclusion des routers avec le préfixe /api
+app.include_router(auth.router, prefix="/api")
+app.include_router(jobs.router, prefix="/api")
+app.include_router(candidates.router, prefix="/api")
+app.include_router(kpi.router, prefix="/api")
+app.include_router(shortlists.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
+app.include_router(interviews.router, prefix="/api")
+app.include_router(offers.router, prefix="/api")
+app.include_router(onboarding.router, prefix="/api")
+app.include_router(history.router, prefix="/api")
+app.include_router(applications.router, prefix="/api")
+app.include_router(client_interview_requests.router, prefix="/api")
+app.include_router(teams.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 
 # Servir les fichiers statiques (photos, CVs, etc.)
 static_dir = Path("static")

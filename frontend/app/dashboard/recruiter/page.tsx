@@ -1,200 +1,248 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getJobs, getInterviews, getKPISummary, type JobResponse, type InterviewResponse, type KPISummary } from '@/lib/api'
-import { LayoutDashboard, Briefcase, Calendar, Users, TrendingUp } from 'lucide-react'
+import { apiGet } from '@/lib/api-client'
+import { useAuth } from '@/context/AuthContext'
+import KPICard from '@/components/KPICard'
+import { 
+  Briefcase, Users, CheckCircle, Clock, 
+  TrendingUp, Calendar, FileText, Target,
+  MessageSquare, Zap
+} from 'lucide-react'
 import Link from 'next/link'
 
+interface RecruiterKPIs {
+  volume_productivity?: {
+    total_candidates_sourced?: number
+    total_cvs_processed?: number
+    total_interviews_conducted?: number
+  }
+  quality_selection?: {
+    qualified_candidates_rate?: number
+    shortlist_acceptance_rate?: number
+    average_candidate_score?: number
+  }
+  time_process?: {
+    time_to_hire?: number
+  }
+  engagement_conversion?: {
+    offer_acceptance_rate?: number
+  }
+  recruiter_performance?: {
+    jobs_managed?: number
+    feedbacks_on_time_rate?: number
+  }
+}
+
 export default function RecruiterDashboard() {
-  const [activeJobs, setActiveJobs] = useState<JobResponse[]>([])
-  const [todayInterviews, setTodayInterviews] = useState<InterviewResponse[]>([])
-  const [kpis, setKpis] = useState<KPISummary | null>(null)
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const [kpis, setKpis] = useState<RecruiterKPIs | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadDashboardData()
-  }, [])
+    if (!authLoading && isAuthenticated) {
+      loadKPIs()
+    }
+  }, [authLoading, isAuthenticated])
 
-  const loadDashboardData = async () => {
+  const loadKPIs = async () => {
     try {
       setIsLoading(true)
-      const [jobs, interviews, kpiData] = await Promise.all([
-        getJobs().catch(() => []),
-        getInterviews().catch(() => []),
-        getKPISummary().catch(() => null)
-      ])
-
-      // Filtrer les jobs actifs
-      const active = jobs.filter(job => job.status === 'en_cours' || job.status === 'validé')
-      setActiveJobs(active.slice(0, 5))
-
-      // Filtrer les entretiens d'aujourd'hui
-      const today = new Date().toISOString().split('T')[0]
-      const todayInt = interviews.filter(int => 
-        int.scheduled_at.startsWith(today)
-      )
-      setTodayInterviews(todayInt)
-
-      setKpis(kpiData)
-    } catch (error) {
-      console.error('Erreur lors du chargement:', error)
+      setError(null)
+      const data = await apiGet<RecruiterKPIs>('/api/kpi/recruiter')
+      setKpis(data)
+    } catch (err: any) {
+      console.error('Erreur lors du chargement des KPI:', err)
+      setError(err.message || 'Erreur lors du chargement des données')
     } finally {
       setIsLoading(false)
     }
   }
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="p-6">
-        <div className="text-center py-12 text-gray-500">Chargement...</div>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-gray-600">Chargement de vos données...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800">{error}</p>
+          <button
+            onClick={loadKPIs}
+            className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+          >
+            Réessayer
+          </button>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto w-full">
+      {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard Recruteur</h1>
+        <h1 className="text-3xl font-bold text-[#1F2A44]">Mon Dashboard</h1>
         <p className="text-gray-600 mt-2">Vue d'ensemble de vos activités de recrutement</p>
-      </div>
-
-      {/* Mini-KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Postes actifs</p>
-              <p className="text-2xl font-bold text-gray-900">{activeJobs.length}</p>
-            </div>
-            <Briefcase className="w-8 h-8 text-blue-600" />
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Candidats actifs</p>
-              <p className="text-2xl font-bold text-gray-900">{kpis?.total_candidates || 0}</p>
-            </div>
-            <Users className="w-8 h-8 text-green-600" />
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Entretiens aujourd'hui</p>
-              <p className="text-2xl font-bold text-gray-900">{todayInterviews.length}</p>
-            </div>
-            <Calendar className="w-8 h-8 text-purple-600" />
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">En shortlist</p>
-              <p className="text-2xl font-bold text-gray-900">{kpis?.candidates_in_shortlist || 0}</p>
-            </div>
-            <TrendingUp className="w-8 h-8 text-orange-600" />
-          </div>
-        </div>
       </div>
 
       {/* Actions rapides */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Link
-          href="/dashboard/recruiter/besoins/nouveau"
-          className="bg-blue-600 text-white rounded-lg p-6 hover:bg-blue-700 transition-colors"
+          href="/recruiter/jobs"
+          className="bg-gradient-to-r from-primary to-primary-600 text-white rounded-xl p-6 hover:shadow-lg transition-all transform hover:scale-[1.02]"
         >
           <Briefcase className="w-6 h-6 mb-2" />
-          <h3 className="font-semibold">Créer un besoin</h3>
-          <p className="text-sm text-blue-100 mt-1">Nouveau poste à pourvoir</p>
+          <h3 className="font-semibold text-lg">Mes postes</h3>
+          <p className="text-sm text-white/90 mt-1">Gérer mes postes actifs</p>
         </Link>
+        
         <Link
-          href="/dashboard/recruiter/candidats"
-          className="bg-green-600 text-white rounded-lg p-6 hover:bg-green-700 transition-colors"
+          href="/recruiter/candidates"
+          className="bg-gradient-to-r from-accent to-accent-600 text-white rounded-xl p-6 hover:shadow-lg transition-all transform hover:scale-[1.02]"
         >
           <Users className="w-6 h-6 mb-2" />
-          <h3 className="font-semibold">Ajouter un candidat</h3>
-          <p className="text-sm text-green-100 mt-1">Nouveau candidat</p>
+          <h3 className="font-semibold text-lg">Mes candidats</h3>
+          <p className="text-sm text-white/90 mt-1">Gérer mes candidats</p>
         </Link>
+        
         <Link
-          href="/dashboard/recruiter/entretiens"
-          className="bg-purple-600 text-white rounded-lg p-6 hover:bg-purple-700 transition-colors"
+          href="/recruiter/interviews"
+          className="bg-gradient-to-r from-secondary to-secondary-600 text-white rounded-xl p-6 hover:shadow-lg transition-all transform hover:scale-[1.02]"
         >
           <Calendar className="w-6 h-6 mb-2" />
-          <h3 className="font-semibold">Planifier un entretien</h3>
-          <p className="text-sm text-purple-100 mt-1">Nouvel entretien</p>
+          <h3 className="font-semibold text-lg">Mes entretiens</h3>
+          <p className="text-sm text-white/90 mt-1">Planifier et suivre</p>
         </Link>
       </div>
 
-      {/* Postes actifs */}
-      <div className="bg-white rounded-lg shadow mb-8">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Postes actifs</h2>
-        </div>
-        <div className="p-6">
-          {activeJobs.length > 0 ? (
-            <div className="space-y-4">
-              {activeJobs.map((job) => (
-                <Link
-                  key={job.id}
-                  href={`/dashboard/recruiter/besoins/${job.id}`}
-                  className="block p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-medium text-gray-900">{job.title}</h3>
-                      <p className="text-sm text-gray-600 mt-1">{job.department || 'Non spécifié'}</p>
-                    </div>
-                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                      {job.status}
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500">Aucun poste actif</p>
-          )}
-        </div>
+      {/* KPI Cards principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <KPICard
+          title="Postes gérés"
+          value={kpis?.recruiter_performance?.jobs_managed || 0}
+          format="number"
+          icon={<Briefcase className="w-6 h-6" />}
+          trend="up"
+        />
+        
+        <KPICard
+          title="Taux Shortlist → Embauche"
+          value={kpis?.quality_selection?.shortlist_acceptance_rate || 0}
+          format="percentage"
+          icon={<Target className="w-6 h-6" />}
+          trend="up"
+        />
+        
+        <KPICard
+          title="Time to Hire Personnel"
+          value={kpis?.time_process?.time_to_hire || 0}
+          format="duration"
+          icon={<Clock className="w-6 h-6" />}
+          trend="down"
+        />
+        
+        <KPICard
+          title="Feedbacks à temps"
+          value={kpis?.recruiter_performance?.feedbacks_on_time_rate || 0}
+          format="percentage"
+          icon={<CheckCircle className="w-6 h-6" />}
+          trend="up"
+        />
       </div>
 
-      {/* Entretiens du jour */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Entretiens aujourd'hui</h2>
-        </div>
-        <div className="p-6">
-          {todayInterviews.length > 0 ? (
-            <div className="space-y-4">
-              {todayInterviews.map((interview) => (
-                <div
-                  key={interview.id}
-                  className="p-4 border border-gray-200 rounded-lg"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-medium text-gray-900">{interview.candidate_name}</h3>
-                      <p className="text-sm text-gray-600 mt-1">{interview.job_title}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(interview.scheduled_at).toLocaleTimeString('fr-FR', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                    </div>
-                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
-                      {interview.interview_type}
-                    </span>
-                  </div>
-                </div>
-              ))}
+      {/* KPI Cards secondaires */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <KPICard
+          title="Candidats traités"
+          value={kpis?.candidates_processed || 0}
+          format="number"
+          icon={<Users className="w-6 h-6" />}
+        />
+        
+        <KPICard
+          title="Entretiens réalisés"
+          value={kpis?.total_interviews_conducted || 0}
+          format="number"
+          icon={<MessageSquare className="w-6 h-6" />}
+        />
+        
+        <KPICard
+          title="Candidats actifs"
+          value={kpis?.active_candidates || 0}
+          format="number"
+          icon={<Zap className="w-6 h-6" />}
+        />
+      </div>
+
+      {/* Activités récentes / Résumé */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Pipeline actif */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-[#1F2A44] flex items-center">
+              <TrendingUp className="w-5 h-5 mr-2 text-primary" />
+              Pipeline actif
+            </h2>
+          </div>
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm text-gray-600">CVs traités</span>
+              <span className="text-2xl font-bold text-[#1F2A44]">
+                {kpis?.volume_productivity?.total_cvs_processed || 0}
+              </span>
             </div>
-          ) : (
-            <p className="text-gray-500">Aucun entretien prévu aujourd'hui</p>
-          )}
+            <Link
+              href="/recruiter/pipeline"
+              className="inline-flex items-center text-sm text-primary hover:text-primary-600 font-medium"
+            >
+              Voir le pipeline complet
+              <FileText className="w-4 h-4 ml-1" />
+            </Link>
+          </div>
+        </div>
+
+        {/* Performance résumé */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-[#1F2A44] flex items-center">
+              <Target className="w-5 h-5 mr-2 text-primary" />
+              Performance globale
+            </h2>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Taux de conversion</span>
+              <span className="text-lg font-semibold text-primary">
+                {kpis?.quality_selection?.shortlist_acceptance_rate ? `${kpis.quality_selection.shortlist_acceptance_rate.toFixed(1)}%` : '-'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Délai moyen</span>
+              <span className="text-lg font-semibold text-[#1F2A44]">
+                {kpis?.time_process?.time_to_hire ? `${kpis.time_process.time_to_hire.toFixed(0)}j` : '-'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Score moyen</span>
+              <span className="text-lg font-semibold text-success">
+                {kpis?.quality_selection?.average_candidate_score ? `${kpis.quality_selection.average_candidate_score.toFixed(1)}/10` : '-'}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   )
 }
-
