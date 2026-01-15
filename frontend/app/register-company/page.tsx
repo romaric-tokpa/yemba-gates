@@ -17,8 +17,8 @@ export default function RegisterCompanyPage() {
   const [formData, setFormData] = useState({
     company_name: '',
     subdomain: '',
-    contact_email: '',
-    contact_phone: '',
+    company_email: '',
+    company_phone: '',
     country: '',
     industry: '',
     company_size: '',
@@ -52,7 +52,7 @@ export default function RegisterCompanyPage() {
       return
     }
 
-    if (!formData.contact_email.trim()) {
+    if (!formData.company_email.trim()) {
       setError('L\'email de contact est obligatoire')
       return
     }
@@ -88,8 +88,8 @@ export default function RegisterCompanyPage() {
       const response = await registerCompany({
         company_name: formData.company_name.trim(),
         subdomain: formData.subdomain.trim() || undefined,
-        contact_email: formData.contact_email.trim(),
-        contact_phone: formData.contact_phone.trim() || undefined,
+        company_email: formData.company_email.trim(),
+        company_phone: formData.company_phone.trim() || undefined,
         country: formData.country.trim() || undefined,
         industry: formData.industry.trim() || undefined,
         company_size: formData.company_size.trim() || undefined,
@@ -255,7 +255,7 @@ export default function RegisterCompanyPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="contact_email" className="block text-sm font-semibold text-gray-700 mb-2">
+                    <label htmlFor="company_email" className="block text-sm font-semibold text-gray-700 mb-2">
                       Email de contact <span className="text-emerald-600">*</span>
                     </label>
                     <div className="relative">
@@ -263,11 +263,11 @@ export default function RegisterCompanyPage() {
                         <Mail className="h-5 w-5 text-gray-400" />
                       </div>
                       <input
-                        id="contact_email"
-                        name="contact_email"
+                        id="company_email"
+                        name="company_email"
                         type="email"
                         required
-                        value={formData.contact_email}
+                        value={formData.company_email}
                         onChange={handleChange}
                         className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-gray-900 placeholder-gray-400"
                         placeholder="contact@entreprise.com"
@@ -276,7 +276,7 @@ export default function RegisterCompanyPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="contact_phone" className="block text-sm font-semibold text-gray-700 mb-2">
+                    <label htmlFor="company_phone" className="block text-sm font-semibold text-gray-700 mb-2">
                       Téléphone de contact <span className="text-gray-400 text-xs font-normal">(optionnel)</span>
                     </label>
                     <div className="relative">
@@ -284,10 +284,10 @@ export default function RegisterCompanyPage() {
                         <Phone className="h-5 w-5 text-gray-400" />
                       </div>
                       <input
-                        id="contact_phone"
-                        name="contact_phone"
+                        id="company_phone"
+                        name="company_phone"
                         type="tel"
-                        value={formData.contact_phone}
+                        value={formData.company_phone}
                         onChange={handleChange}
                         className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-gray-900 placeholder-gray-400"
                         placeholder="+225 XX XX XX XX XX"

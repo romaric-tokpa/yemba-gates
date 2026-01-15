@@ -354,8 +354,8 @@ export async function logout() {
 export interface CompanyRegisterData {
   company_name: string
   subdomain?: string
-  contact_email: string
-  contact_phone?: string
+  company_email: string
+  company_phone?: string
   country?: string
   industry?: string
   company_size?: string
