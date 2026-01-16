@@ -262,16 +262,26 @@ export async function authenticatedFetch(
 }
 
 // API d'authentification
-export async function login(email: string, password: string): Promise<LoginResponse> {
+export async function login(email: string, password: string, subdomain?: string): Promise<LoginResponse> {
   const formData = new URLSearchParams()
   formData.append('username', email)  // Le backend attend 'username' (qui correspond à l'email)
   formData.append('password', password)
 
+  // Récupérer le subdomain depuis localStorage si non fourni
+  const tenantSubdomain = subdomain || (typeof window !== 'undefined' ? localStorage.getItem('tenant_subdomain') : null)
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  }
+
+  // Ajouter le header X-Tenant-Subdomain si disponible
+  if (tenantSubdomain) {
+    headers['X-Tenant-Subdomain'] = tenantSubdomain
+  }
+
   const response = await fetch(`${API_URL()}/api/auth/login`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers,
     body: formData.toString(),
   })
 
@@ -403,7 +413,16 @@ export async function registerCompany(data: CompanyRegisterData): Promise<LoginR
   }
 
   const responseData = await response.json()
-  
+
+  // Stocker le subdomain dans localStorage pour les futures connexions
+  if (typeof window !== 'undefined') {
+    // Utiliser le subdomain de la réponse ou celui envoyé dans la requête
+    const subdomain = responseData.subdomain || data.subdomain
+    if (subdomain) {
+      localStorage.setItem('tenant_subdomain', subdomain)
+    }
+  }
+
   // Le token et les infos utilisateur seront sauvegardés dans la page
   return responseData
 }

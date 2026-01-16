@@ -555,6 +555,7 @@ class RegisterCompanyResponse(BaseModel):
     success: bool
     message: str
     company_id: Optional[str] = None
+    subdomain: Optional[str] = None
     redirect: str = "/login"
     access_token: Optional[str] = None
     user_id: Optional[str] = None
@@ -858,6 +859,7 @@ async def register_company(company_data: CompanyRegister):
                     success=True,
                     message="Entreprise créée avec succès",
                     company_id=str(new_company.id),
+                    subdomain=subdomain,
                     redirect="/login",
                     access_token=access_token,
                     user_id=str(new_admin.id)
